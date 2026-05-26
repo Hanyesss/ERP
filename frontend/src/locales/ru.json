@@ -1,4 +1,23 @@
 {
+  "common": {
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "edit": "Редактировать",
+    "delete": "Удалить",
+    "add": "Добавить",
+    "search": "Поиск",
+    "confirm": "Подтвердить",
+    "yes": "Да",
+    "no": "Нет",
+    "loading": "Загрузка...",
+    "all": "Все",
+    "actions": "Действия"
+  },
+  "nav": {
+    "dashboard": "Главная",
+    "counterparties": "Контрагенты",
+    "logout": "Выйти"
+  },
   "login": {
     "title": "Вход в систему",
     "username": "Логин",
@@ -13,5 +32,28 @@
   },
   "language": {
     "switch": "中文"
+  },
+  "counterparty": {
+    "title": "Контрагенты",
+    "name": "Название",
+    "name_cn": "Название (кит.)",
+    "type": "Тип",
+    "type_client": "Клиент",
+    "type_supplier": "Поставщик",
+    "type_both": "Клиент и поставщик",
+    "default_currency": "Валюта",
+    "phone": "Телефон",
+    "email": "Email",
+    "address": "Адрес",
+    "notes": "Примечания",
+    "contact_info": "Контактная информация",
+    "add_new": "+ Добавить",
+    "edit": "Редактировать",
+    "delete_confirm": "Удалить этого контрагента?",
+    "search_placeholder": "Поиск по названию..."
+  },
+  "validation": {
+    "required": "Обязательное поле",
+    "invalid_email": "Некорректный email"
   }
 }

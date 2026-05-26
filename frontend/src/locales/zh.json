@@ -1,4 +1,23 @@
 {
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "edit": "编辑",
+    "delete": "删除",
+    "add": "添加",
+    "search": "搜索",
+    "confirm": "确认",
+    "yes": "是",
+    "no": "否",
+    "loading": "加载中...",
+    "all": "全部",
+    "actions": "操作"
+  },
+  "nav": {
+    "dashboard": "主页",
+    "counterparties": "往来单位",
+    "logout": "退出"
+  },
   "login": {
     "title": "系统登录",
     "username": "用户名",
@@ -13,5 +32,28 @@
   },
   "language": {
     "switch": "RU"
+  },
+  "counterparty": {
+    "title": "往来单位",
+    "name": "名称",
+    "name_cn": "中文名称",
+    "type": "类型",
+    "type_client": "客户",
+    "type_supplier": "供应商",
+    "type_both": "客户兼供应商",
+    "default_currency": "货币",
+    "phone": "电话",
+    "email": "邮箱",
+    "address": "地址",
+    "notes": "备注",
+    "contact_info": "联系信息",
+    "add_new": "+ 添加",
+    "edit": "编辑",
+    "delete_confirm": "确认删除该往来单位？",
+    "search_placeholder": "按名称搜索..."
+  },
+  "validation": {
+    "required": "必填项",
+    "invalid_email": "邮箱格式不正确"
   }
 }
