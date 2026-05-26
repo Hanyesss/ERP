@@ -3,11 +3,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel
-from app.models.exchange_rate import RateCurrencyEnum, RateSourceEnum
+from app.models.exchange_rate import RateSourceEnum
 
 
 class ExchangeRateCreate(BaseModel):
-    currency: RateCurrencyEnum
+    currency: str  # RUB, USDT, USD
     rate_to_cny: Decimal
     rate_date: date
     source: RateSourceEnum = RateSourceEnum.manual
@@ -15,7 +15,7 @@ class ExchangeRateCreate(BaseModel):
 
 class ExchangeRateResponse(BaseModel):
     id: uuid.UUID
-    currency: RateCurrencyEnum
+    currency: str
     rate_to_cny: Decimal
     rate_date: date
     created_by: uuid.UUID

@@ -1,5 +1,5 @@
 import apiClient from "./client";
-import type { Order, OrderListResponse, OrderFormData } from "../types/order";
+import type { Order, OrderListResponse, OrderFormData, OrderFile } from "../types/order";
 
 export interface OrderListParams {
   search?: string;
@@ -36,3 +36,22 @@ export const closeOrder = (id: string) =>
 
 export const getOrderHistory = (id: string) =>
   apiClient.get<any[]>(`/api/orders/${id}/history`);
+
+// Files
+export const getOrderFiles = (orderId: string) =>
+  apiClient.get<OrderFile[]>(`/api/orders/${orderId}/files`);
+
+export const uploadOrderFile = (orderId: string, file: File, fileType: string) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("file_type", fileType);
+  return apiClient.post<OrderFile>(`/api/orders/${orderId}/files`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const deleteOrderFile = (orderId: string, fileId: string) =>
+  apiClient.delete(`/api/orders/${orderId}/files/${fileId}`);
+
+export const getFileUrl = (filePath: string) =>
+  `${apiClient.defaults.baseURL}/files/${filePath}`;

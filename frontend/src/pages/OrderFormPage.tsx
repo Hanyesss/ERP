@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography, Alert,
-  Space, Row, Col, Statistic, message,
+  Space, Row, Col, Statistic, message, Divider,
 } from "antd";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -12,11 +12,14 @@ import { checkExchangeRates } from "../api/exchangeRates";
 import { getCounterparties } from "../api/counterparties";
 import { getManagers, getBusinessTypes } from "../api/references";
 import OrderItemsEditor from "../components/orders/OrderItemsEditor";
+import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
+import ChargesEditor from "../components/orders/ChargesEditor";
+import OrderFilesTab from "../components/orders/OrderFilesTab";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import type { User } from "../types";
 
 const { Title, Text } = Typography;
-const CURRENCIES = ["CNY", "RUB", "USDT"];
+const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 
 interface Props { user: User }
 
@@ -29,13 +32,13 @@ export default function OrderFormPage({ user }: Props) {
   const [form] = Form.useForm();
   const [rateModalOpen, setRateModalOpen] = useState(false);
 
-  // Watch reactive values
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
   const items: any[] = Form.useWatch("items", form) || [];
+  const charges: any[] = Form.useWatch("charges", form) || [];
   const clientCurrency: string = Form.useWatch("client_currency", form) || "CNY";
+  const businessTypeId: string = Form.useWatch("business_type_id", form);
 
-  // Reference data
   const { data: clients } = useQuery({
     queryKey: ["counterparties-clients"],
     queryFn: () => getCounterparties({ type: "client", page_size: 200 }).then(r => r.data),
@@ -48,15 +51,17 @@ export default function OrderFormPage({ user }: Props) {
     queryKey: ["business-types"],
     queryFn: () => getBusinessTypes().then(r => r.data),
   });
-
-  // Existing order for edit
   const { data: existingOrder } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getOrder(id!).then(r => r.data),
     enabled: isEdit,
   });
 
-  // Auto-generate order number for new
+  const isLogistics = useMemo(() => {
+    const bt = (businessTypes || []).find((b: any) => b.id === businessTypeId);
+    return bt?.code === "logistics";
+  }, [businessTypes, businessTypeId]);
+
   const dateStr = orderDate?.format("YYYY-MM-DD");
   const { data: nextNumber } = useQuery({
     queryKey: ["next-order-number", dateStr],
@@ -64,17 +69,19 @@ export default function OrderFormPage({ user }: Props) {
     enabled: !isEdit && !!dateStr,
   });
 
-  // Determine which non-CNY currencies are used in items
   const usedCurrencies = useMemo(() => {
     const set = new Set<string>();
     (items || []).forEach((item: any) => {
-      if (item?.sale_currency && item.sale_currency !== "CNY") set.add(item.sale_currency);
-      if (item?.cost_currency && item.cost_currency !== "CNY") set.add(item.cost_currency);
+      if (!item) return;
+      [item.sale_currency, item.cost_currency, item.price_per_kg_currency, item.cargo_value_currency]
+        .forEach(c => { if (c && c !== "CNY") set.add(c); });
+    });
+    (charges || []).forEach((charge: any) => {
+      if (charge?.currency && charge.currency !== "CNY") set.add(charge.currency);
     });
     return Array.from(set);
-  }, [items]);
+  }, [items, charges]);
 
-  // Check exchange rates
   const { data: rateCheck } = useQuery({
     queryKey: ["exchange-rates-check", dateStr, usedCurrencies],
     queryFn: () => checkExchangeRates(dateStr!, usedCurrencies).then(r => r.data),
@@ -86,8 +93,23 @@ export default function OrderFormPage({ user }: Props) {
     return { CNY: 1, ...rateCheck.rates };
   }, [rateCheck]);
 
-  // Real-time totals
   const { totalSale, totalCost } = useMemo(() => {
+    if (isLogistics) {
+      // Logistics: sum of charges + weight × price_per_kg
+      let sale = 0;
+      (charges || []).forEach((charge: any) => {
+        if (!charge?.amount) return;
+        const r = rates[charge?.currency ?? "CNY"] ?? null;
+        if (r !== null) sale += Number(charge.amount) * r;
+      });
+      (items || []).forEach((item: any) => {
+        if (!item?.weight_kg || !item?.price_per_kg) return;
+        const r = rates[item?.price_per_kg_currency ?? "CNY"] ?? null;
+        if (r !== null) sale += Number(item.weight_kg) * Number(item.price_per_kg) * r;
+      });
+      return { totalSale: sale, totalCost: 0 };
+    }
+    // Trade / services
     let sale = 0, cost = 0;
     (items || []).forEach((item: any) => {
       if (!item) return;
@@ -98,23 +120,31 @@ export default function OrderFormPage({ user }: Props) {
       if (cr !== null) cost += qty * (Number(item?.cost_price) || 0) * cr;
     });
     return { totalSale: sale, totalCost: cost };
-  }, [items, rates]);
+  }, [items, charges, rates, isLogistics]);
 
-  // Set defaults for new order
+  // Multi-currency totals for logistics
+  const multiTotals = useMemo(() => {
+    if (!isLogistics) return null;
+    return {
+      CNY: totalSale,
+      USD: rates.USD ? totalSale / rates.USD : null,
+      RUB: rates.RUB ? totalSale / rates.RUB : null,
+      USDT: rates.USDT ? totalSale / rates.USDT : null,
+    };
+  }, [isLogistics, totalSale, rates]);
+
   useEffect(() => {
     if (!isEdit) {
       form.setFieldsValue({ order_date: dayjs(), manager_id: user.id, client_currency: "CNY" });
     }
   }, [isEdit, user.id, form]);
 
-  // Set next number
   useEffect(() => {
     if (!isEdit && nextNumber) {
       form.setFieldValue("order_number", nextNumber.order_number);
     }
   }, [nextNumber, isEdit, form]);
 
-  // Populate edit form
   useEffect(() => {
     if (isEdit && existingOrder) {
       form.setFieldsValue({
@@ -125,24 +155,52 @@ export default function OrderFormPage({ user }: Props) {
         manager_id: existingOrder.manager_id,
         client_currency: existingOrder.client_currency,
         notes: existingOrder.notes,
+        recipient: existingOrder.recipient,
+        destination: existingOrder.destination,
+        arrival_date: existingOrder.arrival_date ? dayjs(existingOrder.arrival_date) : null,
+        tracking_number: existingOrder.tracking_number,
         items: existingOrder.items.map(i => ({
           name: i.name, name_cn: i.name_cn,
-          quantity: Number(i.quantity), unit: i.unit,
-          cost_price: Number(i.cost_price), cost_currency: i.cost_currency,
+          quantity: i.quantity != null ? Number(i.quantity) : undefined,
+          unit: i.unit,
+          cost_price: i.cost_price != null ? Number(i.cost_price) : undefined,
+          cost_currency: i.cost_currency,
           supplier_id: i.supplier_id,
-          sale_price: Number(i.sale_price), sale_currency: i.sale_currency,
+          sale_price: i.sale_price != null ? Number(i.sale_price) : undefined,
+          sale_currency: i.sale_currency,
+          weight_kg: i.weight_kg != null ? Number(i.weight_kg) : undefined,
+          volume_m3: i.volume_m3 != null ? Number(i.volume_m3) : undefined,
+          price_per_kg: i.price_per_kg != null ? Number(i.price_per_kg) : undefined,
+          price_per_kg_currency: i.price_per_kg_currency,
+          cargo_value: i.cargo_value != null ? Number(i.cargo_value) : undefined,
+          cargo_value_currency: i.cargo_value_currency,
+          places_count: i.places_count,
         })),
+        charges: (() => {
+          const CHARGE_TYPES = ["delivery","insurance_percent","insurance_cost","china_delivery","extra_packing","loaders"];
+          const byType: Record<string, any> = {};
+          (existingOrder.charges || []).forEach(c => { byType[c.charge_type] = c; });
+          return CHARGE_TYPES.map(type => ({
+            charge_type: type,
+            amount: byType[type] ? Number(byType[type].amount) : undefined,
+            currency: byType[type]?.currency || "USD",
+          }));
+        })(),
       });
     }
   }, [existingOrder, isEdit, form]);
 
-  // Auto-set client currency when client changes
   useEffect(() => {
     if (clientId && clients) {
-      const client = clients.items.find(c => c.id === clientId);
-      if (client) form.setFieldValue("client_currency", client.default_currency);
+      const client = clients.items.find((c: any) => c.id === clientId);
+      if (client) {
+        form.setFieldValue("client_currency", client.default_currency);
+        if (isLogistics && !form.getFieldValue("recipient")) {
+          form.setFieldValue("recipient", client.name);
+        }
+      }
     }
-  }, [clientId, clients, form]);
+  }, [clientId, clients, form, isLogistics]);
 
   const createMutation = useMutation({
     mutationFn: createOrder,
@@ -157,27 +215,38 @@ export default function OrderFormPage({ user }: Props) {
   });
 
   const handleSubmit = (values: any) => {
-    if (rateCheck && rateCheck.missing.length > 0) {
-      message.error(t("order.missing_rate_warning", { currencies: rateCheck.missing.join(", "), date: dateStr }));
+    const missingRates = rateCheck?.missing ?? [];
+    if (missingRates.length > 0) {
+      message.error(t("order.missing_rate_warning", { currencies: missingRates.join(", "), date: dateStr }));
       return;
     }
+
+    // Filter out empty charges
+    const charges = (values.charges || []).filter((c: any) => c?.amount != null && c?.amount > 0);
+
     const payload = {
       ...values,
       order_date: values.order_date?.format("YYYY-MM-DD"),
+      arrival_date: values.arrival_date?.format("YYYY-MM-DD") || null,
+      charges,
       items: (values.items || []).map((item: any) => ({
         ...item,
-        quantity: Number(item.quantity),
-        cost_price: Number(item.cost_price),
-        sale_price: Number(item.sale_price),
+        quantity: item.quantity != null ? Number(item.quantity) : undefined,
+        cost_price: item.cost_price != null ? Number(item.cost_price) : undefined,
+        sale_price: item.sale_price != null ? Number(item.sale_price) : undefined,
+        weight_kg: item.weight_kg != null ? Number(item.weight_kg) : undefined,
+        volume_m3: item.volume_m3 != null ? Number(item.volume_m3) : undefined,
+        price_per_kg: item.price_per_kg != null ? Number(item.price_per_kg) : undefined,
+        cargo_value: item.cargo_value != null ? Number(item.cargo_value) : undefined,
       })),
     };
     if (isEdit) updateMutation.mutate(payload);
     else createMutation.mutate(payload);
   };
 
-  const clientOptions = (clients?.items || []).map(c => ({ value: c.id, label: c.name }));
-  const managerOptions = (managers || []).map(m => ({ value: m.id, label: m.full_name }));
-  const btOptions = (businessTypes || []).map(bt => ({ value: bt.id, label: bt.name }));
+  const clientOptions = (clients?.items || []).map((c: any) => ({ value: c.id, label: c.name }));
+  const managerOptions = (managers || []).map((m: any) => ({ value: m.id, label: m.full_name }));
+  const btOptions = (businessTypes || []).map((bt: any) => ({ value: bt.id, label: bt.name }));
   const missingRates = rateCheck?.missing ?? [];
 
   return (
@@ -204,14 +273,13 @@ export default function OrderFormPage({ user }: Props) {
           type="warning"
           style={{ marginBottom: 16 }}
           message={t("order.missing_rate_warning", { currencies: missingRates.join(", "), date: dateStr })}
-          action={
-            <Button size="small" onClick={() => setRateModalOpen(true)}>{t("order.add_rate")}</Button>
-          }
+          action={<Button size="small" onClick={() => setRateModalOpen(true)}>{t("order.add_rate")}</Button>}
           showIcon
         />
       )}
 
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        {/* Main fields */}
         <Card title={t("order.tab_main")} style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={6}>
@@ -253,8 +321,37 @@ export default function OrderFormPage({ user }: Props) {
           </Row>
         </Card>
 
+        {/* Logistics: route info */}
+        {isLogistics && (
+          <Card title={t("order.routing_info")} style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={6}>
+                <Form.Item name="recipient" label={t("order.recipient")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={6}>
+                <Form.Item name="destination" label={t("order.destination")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={4}>
+                <Form.Item name="arrival_date" label={t("order.arrival_date")}>
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col span={4}>
+                <Form.Item name="tracking_number" label={t("order.tracking_number")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+        )}
+
+        {/* Items */}
         <Card
-          title={t("order.items")}
+          title={isLogistics ? t("order.cargo_details") : t("order.items")}
           style={{ marginBottom: 16 }}
           extra={
             <Space size="large">
@@ -266,31 +363,68 @@ export default function OrderFormPage({ user }: Props) {
             </Space>
           }
         >
-          <OrderItemsEditor form={form} rates={rates} clientCurrency={clientCurrency} />
+          {isLogistics ? (
+            <LogisticsItemsEditor form={form} rates={rates} />
+          ) : (
+            <OrderItemsEditor form={form} rates={rates} clientCurrency={clientCurrency} />
+          )}
 
-          <Row gutter={24} style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
-            <Col>
-              <Statistic title={`${t("order.total_sale")} (CNY)`} value={totalSale.toFixed(2)} />
-            </Col>
-            <Col>
-              <Statistic title={`${t("order.total_cost")} (CNY)`} value={totalCost.toFixed(2)} />
-            </Col>
-            <Col>
-              <Statistic
-                title={`${t("order.margin")} (CNY)`}
-                value={(totalSale - totalCost).toFixed(2)}
-                valueStyle={{ color: totalSale - totalCost >= 0 ? "#3f8600" : "#cf1322" }}
-              />
-            </Col>
-            <Col>
-              <Statistic
-                title={t("order.margin_pct")}
-                value={totalSale > 0 ? (((totalSale - totalCost) / totalSale) * 100).toFixed(1) : "0"}
-                suffix="%"
-              />
-            </Col>
-          </Row>
+          {/* Totals */}
+          {isLogistics && multiTotals ? (
+            <>
+              <Divider style={{ margin: "12px 0" }} />
+              <Row gutter={24}>
+                {(["CNY", "USD", "RUB", "USDT"] as const).map(cur => (
+                  <Col key={cur}>
+                    <Statistic
+                      title={`${t("order.total_sale")} (${cur})`}
+                      value={multiTotals[cur] != null ? multiTotals[cur]!.toFixed(2) : "—"}
+                      valueStyle={rates[cur] == null && cur !== "CNY" ? { color: "#cf1322" } : undefined}
+                    />
+                  </Col>
+                ))}
+              </Row>
+            </>
+          ) : !isLogistics ? (
+            <Row gutter={24} style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
+              <Col><Statistic title={`${t("order.total_sale")} (CNY)`} value={totalSale.toFixed(2)} /></Col>
+              <Col><Statistic title={`${t("order.total_cost")} (CNY)`} value={totalCost.toFixed(2)} /></Col>
+              <Col>
+                <Statistic
+                  title={`${t("order.margin")} (CNY)`}
+                  value={(totalSale - totalCost).toFixed(2)}
+                  valueStyle={{ color: totalSale - totalCost >= 0 ? "#3f8600" : "#cf1322" }}
+                />
+              </Col>
+              <Col>
+                <Statistic
+                  title={t("order.margin_pct")}
+                  value={totalSale > 0 ? (((totalSale - totalCost) / totalSale) * 100).toFixed(1) : "0"}
+                  suffix="%"
+                />
+              </Col>
+            </Row>
+          ) : null}
         </Card>
+
+        {/* Logistics: cost breakdown */}
+        {isLogistics && (
+          <Card title={t("order.cost_breakdown")} style={{ marginBottom: 16 }}>
+            <ChargesEditor form={form} rates={rates} />
+          </Card>
+        )}
+
+        {/* Files section (edit mode only) */}
+        {isEdit && (
+          <Card title={t("order.cargo_photo")} style={{ marginBottom: 16 }}>
+            <OrderFilesTab orderId={id!} />
+          </Card>
+        )}
+        {!isEdit && (
+          <Card title={t("order.cargo_photo")} style={{ marginBottom: 16 }}>
+            <Text type="secondary">{t("order.files_after_save")}</Text>
+          </Card>
+        )}
       </Form>
 
       <ExchangeRateForm

@@ -59,7 +59,11 @@ export default function ExchangeRateForm({ open, defaultDate, onClose }: Props) 
     >
       <Form form={form} layout="vertical">
         <Form.Item name="currency" label={t("exchange_rate.currency")} rules={[{ required: true }]}>
-          <Select options={[{ value: "RUB", label: "RUB" }, { value: "USDT", label: "USDT" }]} />
+          <Select options={[
+            { value: "RUB", label: "RUB" },
+            { value: "USDT", label: "USDT" },
+            { value: "USD", label: "USD" },
+          ]} />
         </Form.Item>
         <Form.Item name="rate_to_cny" label={t("exchange_rate.rate")} rules={[{ required: true }]}>
           <InputNumber min={0} precision={8} step={0.001} style={{ width: "100%" }} placeholder="0.085" />

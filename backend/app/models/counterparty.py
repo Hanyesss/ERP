@@ -18,6 +18,7 @@ class CurrencyEnum(str, PyEnum):
     CNY = "CNY"
     RUB = "RUB"
     USDT = "USDT"
+    USD = "USD"
 
 
 class Counterparty(Base, TimestampMixin):

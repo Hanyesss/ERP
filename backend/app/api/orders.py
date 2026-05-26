@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.orm import aliased
 
 from app.database import get_db
@@ -12,6 +12,7 @@ from app.core.deps import get_current_user
 from app.models.user import User, UserRole
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_item import OrderItem
+from app.models.order_charge import OrderCharge
 from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.business_type import BusinessType
 from app.models.exchange_rate import ExchangeRate
@@ -19,14 +20,14 @@ from app.models.company import Company
 from app.models.audit_log import AuditActionEnum
 from app.schemas.order import (
     OrderCreate, OrderUpdate, OrderResponse, OrderListItem,
-    OrderListResponse, OrderItemResponse,
+    OrderListResponse, OrderItemResponse, OrderChargeResponse,
 )
 from app.utils.audit import write_audit
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_default_company(db: AsyncSession) -> Company:
     result = await db.execute(select(Company).where(Company.is_active == True).limit(1))
@@ -79,7 +80,7 @@ async def _load_order_detail(db: AsyncSession, order_id: uuid.UUID) -> OrderResp
         raise HTTPException(404, "Order not found")
     order = row[0]
 
-    # Load items with supplier names
+    # Items with supplier names
     items_stmt = (
         select(OrderItem, Counterparty.name.label("supplier_name"))
         .outerjoin(Counterparty, OrderItem.supplier_id == Counterparty.id)
@@ -89,56 +90,123 @@ async def _load_order_detail(db: AsyncSession, order_id: uuid.UUID) -> OrderResp
     item_rows = (await db.execute(items_stmt)).all()
     items = [
         OrderItemResponse(
-            id=r[0].id,
-            name=r[0].name,
-            name_cn=r[0].name_cn,
-            quantity=r[0].quantity,
-            unit=r[0].unit,
-            cost_price=r[0].cost_price,
-            cost_currency=r[0].cost_currency,
-            supplier_id=r[0].supplier_id,
-            supplier_name=r[1],
-            sale_price=r[0].sale_price,
-            sale_currency=r[0].sale_currency,
-            sale_rate_to_cny=r[0].sale_rate_to_cny,
-            cost_rate_to_cny=r[0].cost_rate_to_cny,
+            id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
+            quantity=r[0].quantity, unit=r[0].unit,
+            cost_price=r[0].cost_price, cost_currency=r[0].cost_currency,
+            supplier_id=r[0].supplier_id, supplier_name=r[1],
+            sale_price=r[0].sale_price, sale_currency=r[0].sale_currency,
+            sale_rate_to_cny=r[0].sale_rate_to_cny, cost_rate_to_cny=r[0].cost_rate_to_cny,
+            weight_kg=r[0].weight_kg, volume_m3=r[0].volume_m3, density_kg_m3=r[0].density_kg_m3,
+            price_per_kg=r[0].price_per_kg, price_per_kg_currency=r[0].price_per_kg_currency,
+            cargo_value=r[0].cargo_value, cargo_value_currency=r[0].cargo_value_currency,
+            places_count=r[0].places_count,
         )
         for r in item_rows
     ]
 
+    # Charges
+    charge_rows = (await db.execute(
+        select(OrderCharge).where(OrderCharge.order_id == order_id).order_by(OrderCharge.id)
+    )).scalars().all()
+    charges = [
+        OrderChargeResponse(
+            id=c.id, charge_type=c.charge_type, amount=c.amount, currency=c.currency,
+            amount_cny=c.amount_cny, rate_to_cny=c.rate_to_cny, notes=c.notes,
+        )
+        for c in charge_rows
+    ]
+
     return OrderResponse(
-        id=order.id,
-        order_number=order.order_number,
-        order_date=order.order_date,
-        client_id=order.client_id,
-        client_name=row.client_name,
-        business_type_id=order.business_type_id,
-        business_type_name=row.business_type_name,
-        business_type_name_cn=row.business_type_name_cn,
-        business_type_code=row.business_type_code,
-        manager_id=order.manager_id,
-        manager_name=row.manager_name,
-        status=order.status,
-        client_currency=order.client_currency,
-        total_sale_cny=order.total_sale_cny,
-        total_cost_cny=order.total_cost_cny,
-        payment_status=order.payment_status,
-        supplier_payment_status=order.supplier_payment_status,
-        notes=order.notes,
-        created_at=order.created_at,
-        items=items,
+        id=order.id, order_number=order.order_number, order_date=order.order_date,
+        client_id=order.client_id, client_name=row.client_name,
+        business_type_id=order.business_type_id, business_type_name=row.business_type_name,
+        business_type_name_cn=row.business_type_name_cn, business_type_code=row.business_type_code,
+        manager_id=order.manager_id, manager_name=row.manager_name,
+        status=order.status, client_currency=order.client_currency,
+        total_sale_cny=order.total_sale_cny, total_cost_cny=order.total_cost_cny,
+        payment_status=order.payment_status, supplier_payment_status=order.supplier_payment_status,
+        notes=order.notes, recipient=order.recipient, destination=order.destination,
+        arrival_date=order.arrival_date, tracking_number=order.tracking_number,
+        created_at=order.created_at, items=items, charges=charges,
     )
 
 
-def _calc_totals(items_data, rates: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
+def _collect_currencies(items_data, charges_data) -> set[str]:
+    needed: set[str] = set()
+    for item in items_data:
+        for field in (item.sale_currency, item.cost_currency,
+                      item.price_per_kg_currency, item.cargo_value_currency):
+            if field and field != "CNY":
+                needed.add(field)
+    for charge in charges_data:
+        if charge.currency and charge.currency != "CNY":
+            needed.add(charge.currency)
+    return needed
+
+
+def _calc_trade_totals(items_data, rates: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
     total_sale = Decimal("0")
     total_cost = Decimal("0")
     for item in items_data:
-        sr = rates.get(item.sale_currency, Decimal("1"))
-        cr = rates.get(item.cost_currency, Decimal("1"))
-        total_sale += item.quantity * item.sale_price * sr
-        total_cost += item.quantity * item.cost_price * cr
+        if item.quantity is None:
+            continue
+        sr = rates.get(item.sale_currency or "CNY", Decimal("1"))
+        cr = rates.get(item.cost_currency or "CNY", Decimal("1"))
+        total_sale += (item.quantity * (item.sale_price or Decimal("0"))) * sr
+        total_cost += (item.quantity * (item.cost_price or Decimal("0"))) * cr
     return total_sale.quantize(Decimal("0.01")), total_cost.quantize(Decimal("0.01"))
+
+
+def _calc_logistics_totals(items_data, charges_data, rates: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
+    total_sale = Decimal("0")
+    for item in items_data:
+        if item.weight_kg and item.price_per_kg:
+            r = rates.get(item.price_per_kg_currency or "CNY", Decimal("1"))
+            total_sale += item.weight_kg * item.price_per_kg * r
+    for charge in charges_data:
+        r = rates.get(charge.currency or "CNY", Decimal("1"))
+        total_sale += charge.amount * r
+    return total_sale.quantize(Decimal("0.01")), Decimal("0")
+
+
+async def _save_items_and_charges(
+    db: AsyncSession, order_id: uuid.UUID, order_date: date,
+    items_data, charges_data, is_logistics: bool,
+) -> dict[str, Decimal]:
+    rates = await _get_rates(db, order_date, _collect_currencies(items_data, charges_data))
+
+    for item_data in items_data:
+        density = None
+        if item_data.weight_kg and item_data.volume_m3 and item_data.volume_m3 != 0:
+            density = (item_data.weight_kg / item_data.volume_m3).quantize(Decimal("0.01"))
+
+        db.add(OrderItem(
+            id=uuid.uuid4(),
+            order_id=order_id,
+            name=item_data.name, name_cn=item_data.name_cn,
+            quantity=item_data.quantity, unit=item_data.unit,
+            cost_price=item_data.cost_price, cost_currency=item_data.cost_currency,
+            supplier_id=item_data.supplier_id,
+            sale_price=item_data.sale_price, sale_currency=item_data.sale_currency,
+            sale_rate_to_cny=rates.get(item_data.sale_currency or "CNY", Decimal("1")) if item_data.sale_currency else None,
+            cost_rate_to_cny=rates.get(item_data.cost_currency or "CNY", Decimal("1")) if item_data.cost_currency else None,
+            weight_kg=item_data.weight_kg, volume_m3=item_data.volume_m3, density_kg_m3=density,
+            price_per_kg=item_data.price_per_kg, price_per_kg_currency=item_data.price_per_kg_currency,
+            cargo_value=item_data.cargo_value, cargo_value_currency=item_data.cargo_value_currency,
+            places_count=item_data.places_count,
+        ))
+
+    for charge_data in charges_data:
+        r = rates.get(charge_data.currency or "CNY", Decimal("1"))
+        db.add(OrderCharge(
+            id=uuid.uuid4(), order_id=order_id,
+            charge_type=charge_data.charge_type, amount=charge_data.amount,
+            currency=charge_data.currency,
+            amount_cny=(charge_data.amount * r).quantize(Decimal("0.01")),
+            rate_to_cny=r, notes=charge_data.notes,
+        ))
+
+    return rates
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -206,7 +274,6 @@ async def list_orders(
         stmt = stmt.where(Order.order_date <= date_to)
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
-
     stmt = stmt.order_by(Order.order_date.desc(), Order.order_number.desc())
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(stmt)).all()
@@ -220,8 +287,7 @@ async def list_orders(
             manager_id=r.manager_id, manager_name=r.manager_name,
             status=r.status, client_currency=r.client_currency,
             total_sale_cny=r.total_sale_cny, total_cost_cny=r.total_cost_cny,
-            payment_status=r.payment_status,
-            supplier_payment_status=r.supplier_payment_status,
+            payment_status=r.payment_status, supplier_payment_status=r.supplier_payment_status,
         )
         for r in rows
     ]
@@ -251,11 +317,8 @@ async def get_order_history(
     rows = result.all()
     return [
         {
-            "id": str(r[0].id),
-            "action": r[0].action,
-            "user_name": r[1],
-            "changes": r[0].changes,
-            "created_at": r[0].created_at.isoformat(),
+            "id": str(r[0].id), "action": r[0].action, "user_name": r[1],
+            "changes": r[0].changes, "created_at": r[0].created_at.isoformat(),
         }
         for r in rows
     ]
@@ -278,22 +341,15 @@ async def create_order(
 ):
     company = await _get_default_company(db)
 
-    # Validate uniqueness
     if (await db.execute(select(Order.id).where(Order.order_number == body.order_number))).scalar_one_or_none():
         raise HTTPException(409, f"Order number '{body.order_number}' already exists")
 
-    # Validate client
-    client_result = await db.execute(select(Counterparty).where(Counterparty.id == body.client_id))
-    client = client_result.scalar_one_or_none()
+    client = (await db.execute(select(Counterparty).where(Counterparty.id == body.client_id))).scalar_one_or_none()
     if not client or client.type not in (CounterpartyType.client, CounterpartyType.both):
-        raise HTTPException(422, "Client must be a counterparty of type 'client' or 'both'")
+        raise HTTPException(422, "Client must be counterparty of type 'client' or 'both'")
 
-    # Collect currencies for exchange rate lookup
-    needed_currencies = {item.sale_currency for item in body.items if item.sale_currency != "CNY"}
-    needed_currencies |= {item.cost_currency for item in body.items if item.cost_currency != "CNY"}
-    rates = await _get_rates(db, body.order_date, needed_currencies)
-
-    total_sale, total_cost = _calc_totals(body.items, rates)
+    bt = (await db.execute(select(BusinessType).where(BusinessType.id == body.business_type_id))).scalar_one_or_none()
+    is_logistics = bt and bt.code == "logistics"
 
     order = Order(
         id=uuid.uuid4(),
@@ -305,32 +361,30 @@ async def create_order(
         order_date=body.order_date,
         status=OrderStatus.new,
         client_currency=body.client_currency,
-        total_sale_cny=total_sale,
-        total_cost_cny=total_cost,
+        total_sale_cny=Decimal("0"),
+        total_cost_cny=Decimal("0"),
         payment_status=PaymentStatus.unpaid,
         supplier_payment_status=PaymentStatus.unpaid,
         notes=body.notes,
+        recipient=body.recipient or (client.name if is_logistics else None),
+        destination=body.destination,
+        arrival_date=body.arrival_date,
+        tracking_number=body.tracking_number,
         created_by=current_user.id,
     )
     db.add(order)
     await db.flush()
 
-    for item_data in body.items:
-        db.add(OrderItem(
-            id=uuid.uuid4(),
-            order_id=order.id,
-            name=item_data.name,
-            name_cn=item_data.name_cn,
-            quantity=item_data.quantity,
-            unit=item_data.unit,
-            cost_price=item_data.cost_price,
-            cost_currency=item_data.cost_currency,
-            supplier_id=item_data.supplier_id,
-            sale_price=item_data.sale_price,
-            sale_currency=item_data.sale_currency,
-            sale_rate_to_cny=rates.get(item_data.sale_currency, Decimal("1")),
-            cost_rate_to_cny=rates.get(item_data.cost_currency, Decimal("1")),
-        ))
+    rates = await _save_items_and_charges(db, order.id, body.order_date, body.items, body.charges, is_logistics)
+    await db.flush()
+
+    if is_logistics:
+        total_sale, total_cost = _calc_logistics_totals(body.items, body.charges, rates)
+    else:
+        total_sale, total_cost = _calc_trade_totals(body.items, rates)
+
+    order.total_sale_cny = total_sale
+    order.total_cost_cny = total_cost
 
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.create,
                       {"order_number": order.order_number, "total_sale_cny": str(total_sale)})
@@ -355,42 +409,34 @@ async def update_order(
     old_data = {"order_number": order.order_number, "status": order.status}
     update_data = body.model_dump(exclude_unset=True)
 
-    if "items" in update_data:
-        items_data = update_data.pop("items") or []
-        # Delete existing items
-        existing = (await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))).scalars().all()
-        for item in existing:
-            await db.delete(item)
+    # Determine business type
+    bt_id = update_data.get("business_type_id", order.business_type_id)
+    bt = (await db.execute(select(BusinessType).where(BusinessType.id == bt_id))).scalar_one_or_none()
+    is_logistics = bt and bt.code == "logistics"
+
+    items_data = update_data.pop("items", None)
+    charges_data = update_data.pop("charges", None)
+
+    if items_data is not None or charges_data is not None:
+        # Delete existing items and charges
+        await db.execute(delete(OrderItem).where(OrderItem.order_id == order_id))
+        await db.execute(delete(OrderCharge).where(OrderCharge.order_id == order_id))
         await db.flush()
 
-        # Determine order_date for rate lookup
+        from app.schemas.order import OrderItemCreate, OrderChargeCreate
+        items_list = [OrderItemCreate(**i) if isinstance(i, dict) else i for i in (items_data or [])]
+        charges_list = [OrderChargeCreate(**c) if isinstance(c, dict) else c for c in (charges_data or [])]
+
         order_date = update_data.get("order_date", order.order_date)
-        needed_currencies = {i["sale_currency"] for i in items_data if i.get("sale_currency", "CNY") != "CNY"}
-        needed_currencies |= {i["cost_currency"] for i in items_data if i.get("cost_currency", "CNY") != "CNY"}
-        rates = await _get_rates(db, order_date, needed_currencies)
-
-        for item_data in items_data:
-            from app.schemas.order import OrderItemCreate
-            item = OrderItemCreate(**item_data) if isinstance(item_data, dict) else item_data
-            db.add(OrderItem(
-                id=uuid.uuid4(),
-                order_id=order_id,
-                name=item.name, name_cn=item.name_cn,
-                quantity=item.quantity, unit=item.unit,
-                cost_price=item.cost_price, cost_currency=item.cost_currency,
-                supplier_id=item.supplier_id,
-                sale_price=item.sale_price, sale_currency=item.sale_currency,
-                sale_rate_to_cny=rates.get(item.sale_currency, Decimal("1")),
-                cost_rate_to_cny=rates.get(item.cost_currency, Decimal("1")),
-            ))
-
+        rates = await _save_items_and_charges(db, order_id, order_date, items_list, charges_list, is_logistics)
         await db.flush()
-        # Recalculate totals
-        new_items = (await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))).scalars().all()
-        total_sale = sum(i.quantity * i.sale_price * i.sale_rate_to_cny for i in new_items)
-        total_cost = sum(i.quantity * i.cost_price * i.cost_rate_to_cny for i in new_items)
-        order.total_sale_cny = Decimal(str(total_sale)).quantize(Decimal("0.01"))
-        order.total_cost_cny = Decimal(str(total_cost)).quantize(Decimal("0.01"))
+
+        if is_logistics:
+            total_sale, total_cost = _calc_logistics_totals(items_list, charges_list, rates)
+        else:
+            total_sale, total_cost = _calc_trade_totals(items_list, rates)
+        order.total_sale_cny = total_sale
+        order.total_cost_cny = total_cost
 
     for field, value in update_data.items():
         setattr(order, field, value)
@@ -431,9 +477,7 @@ async def close_order(
         raise HTTPException(422, f"Cannot close order with status '{order.status}'")
     if current_user.role not in (UserRole.admin, UserRole.manager):
         raise HTTPException(403, "Only admin or manager can close orders")
-
     order.status = OrderStatus.closed
-    await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update,
-                      {"status": "closed"})
+    await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update, {"status": "closed"})
     await db.commit()
     return await _load_order_detail(db, order.id)

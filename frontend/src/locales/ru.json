@@ -1,21 +1,4 @@
 {
-  "common": {
-    "save": "Сохранить",
-    "cancel": "Отмена",
-    "edit": "Редактировать",
-    "delete": "Удалить",
-    "add": "Добавить",
-    "search": "Поиск",
-    "confirm": "Подтвердить",
-    "yes": "Да",
-    "no": "Нет",
-    "loading": "Загрузка...",
-    "all": "Все",
-    "actions": "Действия",
-    "close": "Закрыть",
-    "open": "Открыть",
-    "back": "Назад"
-  },
   "nav": {
     "dashboard": "Главная",
     "counterparties": "Контрагенты",
@@ -106,7 +89,35 @@
     "payments_stub": "Платежи появятся в следующем модуле.",
     "expenses_stub": "Расходы появятся в следующем модуле.",
     "files_stub": "Загрузка файлов появится позже.",
-    "page_totals": "Итого по странице"
+    "files_after_save": "Файлы можно будет загрузить после сохранения заказа.",
+    "page_totals": "Итого по странице",
+    "recipient": "Получатель",
+    "destination": "Пункт назначения",
+    "arrival_date": "Дата прибытия",
+    "tracking_number": "Трек-номер",
+    "places_count": "Мест",
+    "routing_info": "Маршрут и доставка",
+    "cargo_details": "Детали груза",
+    "cost_breakdown": "Статьи стоимости",
+    "cargo_photo": "Файлы и фото груза",
+    "weight_kg": "Вес (кг)",
+    "volume_m3": "Объём (м³)",
+    "density": "Плотность",
+    "price_per_kg": "Цена/кг",
+    "cargo_value": "Стоимость груза",
+    "charge_delivery": "Стоимость доставки",
+    "charge_insurance_percent": "Процент страховки",
+    "charge_insurance_cost": "Стоимость страховки",
+    "charge_china_delivery": "Перевозка по Китаю",
+    "charge_extra_packing": "Дополнительная упаковка",
+    "charge_loaders": "Грузчики (погрузка/разгрузка)",
+    "file_type_invoice": "Инвойс",
+    "file_type_packing": "Упаковочный лист",
+    "file_type_cargo_photo": "Фото груза",
+    "file_type_other": "Другое",
+    "upload_file": "Загрузить файл",
+    "no_files": "Файлы не загружены",
+    "delete_file_confirm": "Удалить этот файл?"
   },
   "business_type": {
     "trade": "Торговля",
@@ -124,8 +135,31 @@
     "source_manual": "Вручную",
     "source_auto": "Автоматически"
   },
+  "common": {
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "edit": "Редактировать",
+    "delete": "Удалить",
+    "add": "Добавить",
+    "search": "Поиск",
+    "confirm": "Подтвердить",
+    "yes": "Да",
+    "no": "Нет",
+    "loading": "Загрузка...",
+    "all": "Все",
+    "actions": "Действия",
+    "close": "Закрыть",
+    "open": "Открыть",
+    "back": "Назад",
+    "amount": "Сумма",
+    "created_by": "Кто добавил",
+    "created_at": "Дата добавления",
+    "coming_soon": "Раздел появится в следующем модуле"
+  },
   "validation": {
     "required": "Обязательное поле",
-    "invalid_email": "Некорректный email"
+    "invalid_email": "Некорректный email",
+    "file_too_large": "Файл слишком большой (макс. 10 МБ)",
+    "file_type_not_allowed": "Тип файла не разрешён (только JPEG, PNG, WebP, PDF)"
   }
 }

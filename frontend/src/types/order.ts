@@ -1,32 +1,80 @@
 export type OrderStatus = "new" | "active" | "closed" | "cancelled";
 export type PaymentStatus = "unpaid" | "partial" | "paid";
 
+export interface OrderCharge {
+  id: string;
+  charge_type: string;
+  amount: number;
+  currency: string;
+  amount_cny: number;
+  rate_to_cny: number;
+  notes?: string;
+}
+
 export interface OrderItem {
   id: string;
   name: string;
   name_cn?: string;
-  quantity: number;
+  quantity?: number;
   unit?: string;
-  cost_price: number;
-  cost_currency: string;
+  cost_price?: number;
+  cost_currency?: string;
   supplier_id?: string;
   supplier_name?: string;
-  sale_price: number;
-  sale_currency: string;
-  sale_rate_to_cny: number;
-  cost_rate_to_cny: number;
+  sale_price?: number;
+  sale_currency?: string;
+  sale_rate_to_cny?: number;
+  cost_rate_to_cny?: number;
+  // Logistics
+  weight_kg?: number;
+  volume_m3?: number;
+  density_kg_m3?: number;
+  price_per_kg?: number;
+  price_per_kg_currency?: string;
+  cargo_value?: number;
+  cargo_value_currency?: string;
+  places_count?: number;
 }
 
 export interface OrderItemFormData {
   name: string;
   name_cn?: string;
-  quantity: number;
+  // Trade
+  quantity?: number;
   unit?: string;
-  cost_price: number;
-  cost_currency: string;
+  cost_price?: number;
+  cost_currency?: string;
   supplier_id?: string;
-  sale_price: number;
-  sale_currency: string;
+  sale_price?: number;
+  sale_currency?: string;
+  // Logistics
+  weight_kg?: number;
+  volume_m3?: number;
+  price_per_kg?: number;
+  price_per_kg_currency?: string;
+  cargo_value?: number;
+  cargo_value_currency?: string;
+  places_count?: number;
+}
+
+export interface OrderChargeFormData {
+  charge_type: string;
+  amount?: number;
+  currency: string;
+  notes?: string;
+}
+
+export interface OrderFile {
+  id: string;
+  order_id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+  file_size_bytes?: number;
+  mime_type?: string;
+  uploaded_by: string;
+  uploaded_by_name: string;
+  uploaded_at: string;
 }
 
 export interface Order {
@@ -47,8 +95,13 @@ export interface Order {
   payment_status: PaymentStatus;
   supplier_payment_status: PaymentStatus;
   notes?: string;
+  recipient?: string;
+  destination?: string;
+  arrival_date?: string;
+  tracking_number?: string;
   created_at: string;
   items: OrderItem[];
+  charges: OrderCharge[];
 }
 
 export interface OrderListItem {
@@ -88,4 +141,9 @@ export interface OrderFormData {
   client_currency: string;
   notes?: string;
   items: OrderItemFormData[];
+  charges: OrderChargeFormData[];
+  recipient?: string;
+  destination?: string;
+  arrival_date?: string;
+  tracking_number?: string;
 }

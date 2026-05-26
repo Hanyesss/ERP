@@ -14,7 +14,11 @@
     "actions": "操作",
     "close": "关闭",
     "open": "打开",
-    "back": "返回"
+    "back": "返回",
+    "amount": "金额",
+    "created_by": "创建人",
+    "created_at": "创建时间",
+    "coming_soon": "该功能将在下一模块中添加"
   },
   "nav": {
     "dashboard": "主页",
@@ -106,7 +110,35 @@
     "payments_stub": "付款功能将在下一模块中添加。",
     "expenses_stub": "费用功能将在下一模块中添加。",
     "files_stub": "文件上传功能即将推出。",
-    "page_totals": "本页合计"
+    "files_after_save": "保存订单后可上传文件。",
+    "page_totals": "本页合计",
+    "recipient": "收货人",
+    "destination": "目的地",
+    "arrival_date": "到达日期",
+    "tracking_number": "跟踪号",
+    "places_count": "件数",
+    "routing_info": "路线与运输",
+    "cargo_details": "货物明细",
+    "cost_breakdown": "费用明细",
+    "cargo_photo": "文件与货物照片",
+    "weight_kg": "重量(kg)",
+    "volume_m3": "体积(m³)",
+    "density": "密度",
+    "price_per_kg": "每公斤价格",
+    "cargo_value": "货物价值",
+    "charge_delivery": "运费",
+    "charge_insurance_percent": "保险费率",
+    "charge_insurance_cost": "保险费",
+    "charge_china_delivery": "中国境内运输",
+    "charge_extra_packing": "额外包装",
+    "charge_loaders": "装卸工",
+    "file_type_invoice": "发票",
+    "file_type_packing": "装箱单",
+    "file_type_cargo_photo": "货物照片",
+    "file_type_other": "其他",
+    "upload_file": "上传文件",
+    "no_files": "暂无文件",
+    "delete_file_confirm": "确认删除此文件？"
   },
   "business_type": {
     "trade": "贸易",
@@ -126,6 +158,8 @@
   },
   "validation": {
     "required": "必填项",
-    "invalid_email": "邮箱格式不正确"
+    "invalid_email": "邮箱格式不正确",
+    "file_too_large": "文件过大（最大10MB）",
+    "file_type_not_allowed": "不支持该文件类型（仅允许JPEG、PNG、WebP、PDF）"
   }
 }

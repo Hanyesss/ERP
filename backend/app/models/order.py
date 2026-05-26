@@ -27,6 +27,7 @@ class OrderCurrencyEnum(str, PyEnum):
     CNY = "CNY"
     RUB = "RUB"
     USDT = "USDT"
+    USD = "USD"
 
 
 class Order(Base, TimestampMixin):
@@ -46,4 +47,9 @@ class Order(Base, TimestampMixin):
     payment_status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus, name="paymentstatus"), default=PaymentStatus.unpaid, nullable=False)
     supplier_payment_status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus, name="paymentstatus"), default=PaymentStatus.unpaid, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Logistics-specific fields
+    recipient: Mapped[str | None] = mapped_column(Text, nullable=True)
+    destination: Mapped[str | None] = mapped_column(Text, nullable=True)
+    arrival_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

@@ -13,6 +13,7 @@ from app.models.base import TimestampMixin
 class RateCurrencyEnum(str, PyEnum):
     RUB = "RUB"
     USDT = "USDT"
+    USD = "USD"
 
 
 class RateSourceEnum(str, PyEnum):

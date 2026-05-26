@@ -5,6 +5,7 @@ from app.config import settings
 from app.api.auth import router as auth_router
 from app.api.counterparties import router as counterparties_router
 from app.api.orders import router as orders_router
+from app.api.order_files import router as order_files_router, files_router
 from app.api.exchange_rates import router as exchange_rates_router
 from app.api.references import router as references_router
 
@@ -21,6 +22,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(counterparties_router)
 app.include_router(orders_router)
+app.include_router(order_files_router)
+app.include_router(files_router)
 app.include_router(exchange_rates_router)
 app.include_router(references_router)
 
