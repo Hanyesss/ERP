@@ -1,0 +1,17 @@
+{
+  "login": {
+    "title": "Вход в систему",
+    "username": "Логин",
+    "password": "Пароль",
+    "submit": "Войти",
+    "welcome": "Добро пожаловать в ERP",
+    "error": "Неверный логин или пароль"
+  },
+  "dashboard": {
+    "welcome": "Добро пожаловать",
+    "logout": "Выйти"
+  },
+  "language": {
+    "switch": "中文"
+  }
+}

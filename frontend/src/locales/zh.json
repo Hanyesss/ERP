@@ -1,0 +1,17 @@
+{
+  "login": {
+    "title": "系统登录",
+    "username": "用户名",
+    "password": "密码",
+    "submit": "登录",
+    "welcome": "欢迎使用ERP系统",
+    "error": "用户名或密码错误"
+  },
+  "dashboard": {
+    "welcome": "欢迎",
+    "logout": "退出"
+  },
+  "language": {
+    "switch": "RU"
+  }
+}
