@@ -44,6 +44,6 @@ class Order(Base, TimestampMixin):
     total_sale_cny: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), nullable=False)
     total_cost_cny: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), nullable=False)
     payment_status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus, name="paymentstatus"), default=PaymentStatus.unpaid, nullable=False)
-    supplier_payment_status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus, name="supplierpaymentstatus", create_constraint=False), default=PaymentStatus.unpaid, nullable=False)
+    supplier_payment_status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus, name="paymentstatus"), default=PaymentStatus.unpaid, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

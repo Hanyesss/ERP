@@ -11,11 +11,16 @@
     "no": "Нет",
     "loading": "Загрузка...",
     "all": "Все",
-    "actions": "Действия"
+    "actions": "Действия",
+    "close": "Закрыть",
+    "open": "Открыть",
+    "back": "Назад"
   },
   "nav": {
     "dashboard": "Главная",
     "counterparties": "Контрагенты",
+    "orders": "Заказы",
+    "exchange_rates": "Курсы валют",
     "logout": "Выйти"
   },
   "login": {
@@ -27,8 +32,7 @@
     "error": "Неверный логин или пароль"
   },
   "dashboard": {
-    "welcome": "Добро пожаловать",
-    "logout": "Выйти"
+    "welcome": "Добро пожаловать"
   },
   "language": {
     "switch": "中文"
@@ -51,6 +55,74 @@
     "edit": "Редактировать",
     "delete_confirm": "Удалить этого контрагента?",
     "search_placeholder": "Поиск по названию..."
+  },
+  "order": {
+    "title": "Заказы",
+    "number": "Номер заказа",
+    "date": "Дата",
+    "client": "Клиент",
+    "business_type": "Вид деятельности",
+    "manager": "Менеджер",
+    "currency": "Валюта клиента",
+    "notes": "Примечания",
+    "items": "Позиции",
+    "item_name": "Наименование",
+    "item_name_cn": "Наим. (кит.)",
+    "item_quantity": "Кол-во",
+    "item_unit": "Ед.",
+    "item_cost_price": "Цена закупки",
+    "item_sale_price": "Цена продажи",
+    "item_supplier": "Поставщик",
+    "item_cost_currency": "Вал. закуп.",
+    "item_sale_currency": "Вал. прод.",
+    "total_sale": "Итого продажа",
+    "total_cost": "Итого закупка",
+    "margin": "Маржа",
+    "margin_pct": "Маржа %",
+    "status_new": "Новый",
+    "status_active": "Активный",
+    "status_closed": "Закрыт",
+    "status_cancelled": "Отменён",
+    "payment_status_unpaid": "Не оплачен",
+    "payment_status_partial": "Частично",
+    "payment_status_paid": "Оплачен",
+    "add_item": "+ Добавить позицию",
+    "remove_item": "Удалить",
+    "create_new": "Создать заказ",
+    "edit": "Редактировать",
+    "close_order": "Закрыть заказ",
+    "cancel_order": "Отменить заказ",
+    "cancel_confirm": "Отменить этот заказ?",
+    "close_confirm": "Закрыть заказ? После закрытия изменения недоступны.",
+    "missing_rate_warning": "Нет курса валюты {{currencies}} на {{date}}. Заказ нельзя сохранить.",
+    "add_rate": "Добавить курс",
+    "tab_main": "Основное",
+    "tab_items": "Позиции",
+    "tab_payments": "Платежи",
+    "tab_expenses": "Расходы",
+    "tab_profit": "Прибыль",
+    "tab_files": "Файлы",
+    "tab_history": "История",
+    "payments_stub": "Платежи появятся в следующем модуле.",
+    "expenses_stub": "Расходы появятся в следующем модуле.",
+    "files_stub": "Загрузка файлов появится позже.",
+    "page_totals": "Итого по странице"
+  },
+  "business_type": {
+    "trade": "Торговля",
+    "logistics": "Логистика",
+    "services": "Услуги"
+  },
+  "exchange_rate": {
+    "title": "Курсы валют",
+    "currency": "Валюта",
+    "rate": "Курс к CNY",
+    "date": "Дата",
+    "source": "Источник",
+    "add_new": "Добавить курс",
+    "already_exists": "Курс для {{currency}} на {{date}} уже существует",
+    "source_manual": "Вручную",
+    "source_auto": "Автоматически"
   },
   "validation": {
     "required": "Обязательное поле",

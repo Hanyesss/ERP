@@ -8,6 +8,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import CounterpartiesPage from "./pages/CounterpartiesPage";
+import OrdersPage from "./pages/OrdersPage";
+import OrderFormPage from "./pages/OrderFormPage";
+import OrderDetailPage from "./pages/OrderDetailPage";
+import ExchangeRatesPage from "./pages/ExchangeRatesPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
@@ -42,6 +46,11 @@ function Inner() {
           >
             <Route path="/dashboard" element={<DashboardPage user={user!} />} />
             <Route path="/counterparties" element={<CounterpartiesPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/new" element={<OrderFormPage user={user!} />} />
+            <Route path="/orders/:id" element={<OrderDetailPage />} />
+            <Route path="/orders/:id/edit" element={<OrderFormPage user={user!} />} />
+            <Route path="/exchange-rates" element={<ExchangeRatesPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

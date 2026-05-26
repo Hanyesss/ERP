@@ -11,11 +11,16 @@
     "no": "否",
     "loading": "加载中...",
     "all": "全部",
-    "actions": "操作"
+    "actions": "操作",
+    "close": "关闭",
+    "open": "打开",
+    "back": "返回"
   },
   "nav": {
     "dashboard": "主页",
     "counterparties": "往来单位",
+    "orders": "订单",
+    "exchange_rates": "汇率",
     "logout": "退出"
   },
   "login": {
@@ -27,8 +32,7 @@
     "error": "用户名或密码错误"
   },
   "dashboard": {
-    "welcome": "欢迎",
-    "logout": "退出"
+    "welcome": "欢迎"
   },
   "language": {
     "switch": "RU"
@@ -51,6 +55,74 @@
     "edit": "编辑",
     "delete_confirm": "确认删除该往来单位？",
     "search_placeholder": "按名称搜索..."
+  },
+  "order": {
+    "title": "订单",
+    "number": "订单号",
+    "date": "日期",
+    "client": "客户",
+    "business_type": "业务类型",
+    "manager": "经理",
+    "currency": "客户货币",
+    "notes": "备注",
+    "items": "明细",
+    "item_name": "品名",
+    "item_name_cn": "中文品名",
+    "item_quantity": "数量",
+    "item_unit": "单位",
+    "item_cost_price": "采购价",
+    "item_sale_price": "销售价",
+    "item_supplier": "供应商",
+    "item_cost_currency": "采购币种",
+    "item_sale_currency": "销售币种",
+    "total_sale": "销售合计",
+    "total_cost": "采购合计",
+    "margin": "毛利",
+    "margin_pct": "毛利率",
+    "status_new": "新建",
+    "status_active": "进行中",
+    "status_closed": "已关闭",
+    "status_cancelled": "已取消",
+    "payment_status_unpaid": "未付款",
+    "payment_status_partial": "部分付款",
+    "payment_status_paid": "已付款",
+    "add_item": "+ 添加明细",
+    "remove_item": "删除",
+    "create_new": "新建订单",
+    "edit": "编辑",
+    "close_order": "关闭订单",
+    "cancel_order": "取消订单",
+    "cancel_confirm": "确认取消此订单？",
+    "close_confirm": "关闭订单后将无法修改，确认关闭？",
+    "missing_rate_warning": "{{date}} 缺少 {{currencies}} 汇率，无法保存。",
+    "add_rate": "添加汇率",
+    "tab_main": "基本信息",
+    "tab_items": "明细",
+    "tab_payments": "付款",
+    "tab_expenses": "费用",
+    "tab_profit": "利润",
+    "tab_files": "文件",
+    "tab_history": "历史记录",
+    "payments_stub": "付款功能将在下一模块中添加。",
+    "expenses_stub": "费用功能将在下一模块中添加。",
+    "files_stub": "文件上传功能即将推出。",
+    "page_totals": "本页合计"
+  },
+  "business_type": {
+    "trade": "贸易",
+    "logistics": "物流",
+    "services": "服务"
+  },
+  "exchange_rate": {
+    "title": "汇率",
+    "currency": "货币",
+    "rate": "对人民币汇率",
+    "date": "日期",
+    "source": "来源",
+    "add_new": "添加汇率",
+    "already_exists": "{{currency}} 在 {{date}} 的汇率已存在",
+    "source_manual": "手动录入",
+    "source_auto": "自动获取"
   },
   "validation": {
     "required": "必填项",

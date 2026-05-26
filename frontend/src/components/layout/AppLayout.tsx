@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Layout, Menu, Button, Typography, Space } from "antd";
-import { TeamOutlined, DashboardOutlined } from "@ant-design/icons";
+import { TeamOutlined, DashboardOutlined, ShoppingOutlined, SwapOutlined } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User } from "../../types";
@@ -35,6 +35,8 @@ export default function AppLayout({ user, onLogout }: Props) {
   const menuItems = [
     { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
     { key: "/counterparties", icon: <TeamOutlined />, label: t("nav.counterparties") },
+    { key: "/orders", icon: <ShoppingOutlined />, label: t("nav.orders") },
+    { key: "/exchange-rates", icon: <SwapOutlined />, label: t("nav.exchange_rates") },
   ];
 
   return (
@@ -45,7 +47,11 @@ export default function AppLayout({ user, onLogout }: Props) {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[
+            location.pathname.startsWith("/orders") ? "/orders" :
+            location.pathname.startsWith("/exchange-rates") ? "/exchange-rates" :
+            location.pathname
+          ]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ border: "none" }}
