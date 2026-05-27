@@ -80,6 +80,22 @@ export default function PurchasesPage() {
       render: v => fmtCny(v),
     },
     {
+      title: t("purchase.paid_amount"),
+      dataIndex: "paid_amount_cny",
+      key: "paid_cny",
+      align: "right",
+      render: (v: number) => <span style={{ color: "#666" }}>{fmtCny(v)}</span>,
+    },
+    {
+      title: t("purchase.remaining_amount"),
+      dataIndex: "remaining_amount_cny",
+      key: "remaining_cny",
+      align: "right",
+      render: (v: number) => (
+        <span style={{ color: v > 0 ? "#cf1322" : "#3f8600" }}>{fmtCny(v)}</span>
+      ),
+    },
+    {
       title: t("purchase.payment_status"),
       dataIndex: "payment_status",
       key: "status",
@@ -157,6 +173,8 @@ export default function PurchasesPage() {
               <strong>{fmtCny(data.page_total_cny)}</strong>
             </Table.Summary.Cell>
             <Table.Summary.Cell index={6} />
+            <Table.Summary.Cell index={7} />
+            <Table.Summary.Cell index={8} />
           </Table.Summary.Row>
         ) : undefined}
       />

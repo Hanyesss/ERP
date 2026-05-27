@@ -38,7 +38,11 @@
     "error": "用户名或密码错误"
   },
   "dashboard": {
-    "welcome": "欢迎"
+    "welcome": "欢迎",
+    "accounts_receivable": "应收账款",
+    "accounts_payable": "应付账款",
+    "unpaid_orders": "待收款订单",
+    "unpaid_purchases": "待付款采购单"
   },
   "language": {
     "switch": "RU"
@@ -116,6 +120,8 @@
     "expenses_stub": "费用功能将在下一模块中添加。",
     "files_stub": "文件上传功能即将推出。",
     "files_after_save": "保存订单后可上传文件。",
+    "paid_amount": "已付CNY",
+    "remaining_amount": "待付CNY",
     "page_totals": "本页合计",
     "recipient": "收货人",
     "destination": "目的地",
@@ -160,6 +166,8 @@
     "currency": "货币",
     "rate_to_cny": "对人民币汇率",
     "notes": "备注",
+    "paid_amount": "已付CNY",
+    "remaining_amount": "待付CNY",
     "add_new": "新建采购单",
     "create_for_order": "新建采购单",
     "search_placeholder": "按编号搜索...",
@@ -222,6 +230,7 @@
     "create_new": "新建付款",
     "create_for_order": "为此订单付款",
     "create_for_purchase": "为此采购单付款",
+    "create_for_remaining": "为余额新建付款",
     "search_placeholder": "按往来单位搜索...",
     "filter_direction": "方向",
     "filter_all": "全部",

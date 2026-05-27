@@ -303,16 +303,31 @@ export default function OrderDetailPage() {
       label: t("tab_payments") || "Платежи",
       children: (
         <div>
-          <Row justify="end" style={{ marginBottom: 12 }}>
-            <Button
-              type="primary"
-              onClick={() => navigate(`/payments/new?counterparty_id=${order.client_id}&direction=in`)}
-            >
-              {t("payment.create_for_order")}
-            </Button>
+          <Row gutter={16} style={{ marginBottom: 16, padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <Col>
+              <Statistic title={t("payment.total")} value={fmtCny(order.total_sale_cny)} suffix="CNY" valueStyle={{ fontSize: 16 }} />
+            </Col>
+            <Col>
+              <Statistic title={t("order.paid_amount")} value={fmtCny(order.paid_amount_cny)} suffix="CNY"
+                valueStyle={{ fontSize: 16, color: "#3f8600" }} />
+            </Col>
+            <Col>
+              <Statistic title={t("order.remaining_amount")} value={fmtCny(order.remaining_amount_cny)} suffix="CNY"
+                valueStyle={{ fontSize: 16, color: order.remaining_amount_cny > 0 ? "#cf1322" : "#3f8600" }} />
+            </Col>
+            <Col flex="auto" style={{ display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
+              {order.payment_status !== "paid" && (
+                <Button
+                  type="primary"
+                  onClick={() => navigate(`/payments/new?counterparty_id=${order.client_id}&direction=in`)}
+                >
+                  {t("payment.create_for_remaining")} ({fmtCny(order.remaining_amount_cny)} CNY)
+                </Button>
+              )}
+            </Col>
           </Row>
           {(orderPayments || []).length === 0 ? (
-            <Text type="secondary">Нет входящих платежей по этому заказу.</Text>
+            <Text type="secondary">{t("payment.no_payments")}</Text>
           ) : (
             <Table
               dataSource={orderPayments || []}
@@ -333,20 +348,6 @@ export default function OrderDetailPage() {
                     </Button>
                   )},
               ]}
-              summary={() => {
-                const totalAlloc = (orderPayments || []).reduce((s: number, p: any) => s + Number(p.alloc_cny), 0);
-                return (
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={3} align="right">
-                      <strong>{t("payment.paid")}:</strong>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={3} align="right">
-                      <strong>{totalAlloc.toLocaleString("ru-RU", {minimumFractionDigits: 2})} CNY</strong>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={4} />
-                  </Table.Summary.Row>
-                );
-              }}
             />
           )}
         </div>

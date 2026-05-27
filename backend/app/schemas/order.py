@@ -157,6 +157,8 @@ class OrderListItem(BaseModel):
     total_cost_cny: Optional[Decimal] = None
     payment_status: str
     supplier_payment_status: Optional[str] = None
+    paid_amount_cny: Decimal = Decimal("0")
+    remaining_amount_cny: Decimal = Decimal("0")
 
 
 class OrderResponseManager(BaseModel):
@@ -176,6 +178,8 @@ class OrderResponseManager(BaseModel):
     client_currency: str
     total_sale_cny: Decimal
     payment_status: str
+    paid_amount_cny: Decimal = Decimal("0")
+    remaining_amount_cny: Decimal = Decimal("0")
     notes: Optional[str] = None
     recipient: Optional[str] = None
     destination: Optional[str] = None
@@ -205,6 +209,8 @@ class OrderResponseFull(BaseModel):
     total_cost_cny: Decimal
     payment_status: str
     supplier_payment_status: str
+    paid_amount_cny: Decimal = Decimal("0")
+    remaining_amount_cny: Decimal = Decimal("0")
     notes: Optional[str] = None
     recipient: Optional[str] = None
     destination: Optional[str] = None

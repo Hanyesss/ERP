@@ -102,6 +102,8 @@ export interface Order {
   total_cost_cny?: number;
   payment_status: PaymentStatus;
   supplier_payment_status?: PaymentStatus;
+  paid_amount_cny: number;
+  remaining_amount_cny: number;
   notes?: string;
   recipient?: string;
   destination?: string;
@@ -129,6 +131,8 @@ export interface OrderListItem {
   total_cost_cny?: number;
   payment_status: PaymentStatus;
   supplier_payment_status?: PaymentStatus;
+  paid_amount_cny: number;
+  remaining_amount_cny: number;
 }
 
 export interface OrderListResponse {

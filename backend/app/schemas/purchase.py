@@ -52,6 +52,8 @@ class PurchaseResponse(BaseModel):
     rate_to_cny: Decimal
     total_amount_cny: Decimal
     payment_status: str
+    paid_amount_cny: Decimal = Decimal("0")
+    remaining_amount_cny: Decimal = Decimal("0")
     notes: Optional[str] = None
     created_at: datetime
     items: List[PurchaseItemResponse] = []
@@ -68,6 +70,8 @@ class PurchaseListItem(BaseModel):
     total_amount_cny: Decimal
     payment_status: str
     items_count: int = 0
+    paid_amount_cny: Decimal = Decimal("0")
+    remaining_amount_cny: Decimal = Decimal("0")
 
 
 class PurchaseListResponse(BaseModel):

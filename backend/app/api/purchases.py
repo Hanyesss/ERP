@@ -15,6 +15,8 @@ from app.models.order_item import OrderItem
 from app.models.order import Order
 from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.company import Company
+from app.models.payment import Payment
+from app.models.purchase_payment_link import PurchasePaymentLink
 from app.models.audit_log import AuditActionEnum
 from app.schemas.purchase import (
     PurchaseCreate, PurchaseUpdate, PurchaseResponse, PurchaseItemResponse,
@@ -63,6 +65,14 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         for r in item_rows
     ]
 
+    paid_row = await db.execute(
+        select(func.coalesce(func.sum(PurchasePaymentLink.amount_cny), Decimal("0")))
+        .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+        .where(PurchasePaymentLink.purchase_id == purchase_id, Payment.is_active == True)
+    )
+    paid_cny = paid_row.scalar_one() or Decimal("0")
+    remaining_cny = max((pur.total_amount_cny or Decimal("0")) - paid_cny, Decimal("0"))
+
     return PurchaseResponse(
         id=pur.id, purchase_number=pur.purchase_number,
         supplier_id=pur.supplier_id, supplier_name=supplier.name if supplier else "",
@@ -70,6 +80,8 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         total_amount=pur.total_amount, rate_to_cny=pur.rate_to_cny,
         total_amount_cny=pur.total_amount_cny,
         payment_status=pur.payment_status,
+        paid_amount_cny=paid_cny,
+        remaining_amount_cny=remaining_cny,
         notes=pur.notes, created_at=pur.created_at,
         items=items,
     )
@@ -101,14 +113,27 @@ async def list_purchases(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_ALLOWED)),
 ):
+    paid_pur_sq = (
+        select(
+            PurchasePaymentLink.purchase_id,
+            func.coalesce(func.sum(PurchasePaymentLink.amount_cny), Decimal("0")).label("paid_cny"),
+        )
+        .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+        .where(Payment.is_active == True)
+        .group_by(PurchasePaymentLink.purchase_id)
+        .subquery()
+    )
+
     stmt = (
         select(
             Purchase,
             Counterparty.name.label("supplier_name"),
             func.count(PurchaseItem.id).label("items_count"),
+            func.max(func.coalesce(paid_pur_sq.c.paid_cny, Decimal("0"))).label("paid_cny"),
         )
         .join(Counterparty, Purchase.supplier_id == Counterparty.id)
         .outerjoin(PurchaseItem, PurchaseItem.purchase_id == Purchase.id)
+        .outerjoin(paid_pur_sq, Purchase.id == paid_pur_sq.c.purchase_id)
         .where(Purchase.is_deleted == False)
         .group_by(Purchase.id, Counterparty.name)
     )
@@ -136,6 +161,8 @@ async def list_purchases(
             purchase_date=r[0].purchase_date, currency=r[0].currency,
             total_amount=r[0].total_amount, total_amount_cny=r[0].total_amount_cny,
             payment_status=r[0].payment_status, items_count=r[2],
+            paid_amount_cny=r[3] or Decimal("0"),
+            remaining_amount_cny=max(r[0].total_amount_cny - (r[3] or Decimal("0")), Decimal("0")),
         )
         for r in rows
     ]

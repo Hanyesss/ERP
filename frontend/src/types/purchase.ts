@@ -21,6 +21,8 @@ export interface Purchase {
   rate_to_cny: number;
   total_amount_cny: number;
   payment_status: PurchasePaymentStatus;
+  paid_amount_cny: number;
+  remaining_amount_cny: number;
   notes?: string;
   created_at: string;
   items: PurchaseItem[];
@@ -37,6 +39,8 @@ export interface PurchaseListItem {
   total_amount_cny: number;
   payment_status: PurchasePaymentStatus;
   items_count: number;
+  paid_amount_cny: number;
+  remaining_amount_cny: number;
 }
 
 export interface PurchaseListResponse {

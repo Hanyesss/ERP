@@ -45,3 +45,13 @@ export const getPaymentsForOrder = (orderId: string) =>
 
 export const getPaymentsForPurchase = (purchaseId: string) =>
   apiClient.get<any[]>(`/api/payments/for-purchase/${purchaseId}`);
+
+export interface DashboardBalances {
+  total_receivable_cny: string;
+  total_payable_cny: string;
+  unpaid_orders_count: number;
+  unpaid_purchases_count: number;
+}
+
+export const getDashboardBalances = () =>
+  apiClient.get<DashboardBalances>("/api/dashboard/balances");

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   Button, Card, Col, Descriptions, Popconfirm, Row,
-  Space, Table, Tabs, Tag, Typography, message,
+  Space, Statistic, Table, Tabs, Tag, Typography, message,
 } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
 import { getPurchase, deletePurchase } from "../api/purchases";
@@ -94,16 +94,32 @@ export default function PurchaseDetailPage() {
       label: t("tab_payments") || "Платежи",
       children: (
         <div>
-          <Row justify="end" style={{ marginBottom: 12 }}>
-            <Button
-              type="primary"
-              onClick={() => navigate(`/payments/new?counterparty_id=${purchase.supplier_id}&direction=out`)}
-            >
-              {t("payment.create_for_purchase")}
-            </Button>
+          <Row gutter={16} style={{ marginBottom: 16, padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <Col>
+              <Statistic title={`${t("payment.total")} CNY`} value={fmtCny(purchase.total_amount_cny)} suffix="CNY"
+                valueStyle={{ fontSize: 16 }} />
+            </Col>
+            <Col>
+              <Statistic title={t("purchase.paid_amount")} value={fmtCny(purchase.paid_amount_cny)} suffix="CNY"
+                valueStyle={{ fontSize: 16, color: "#3f8600" }} />
+            </Col>
+            <Col>
+              <Statistic title={t("purchase.remaining_amount")} value={fmtCny(purchase.remaining_amount_cny)} suffix="CNY"
+                valueStyle={{ fontSize: 16, color: purchase.remaining_amount_cny > 0 ? "#cf1322" : "#3f8600" }} />
+            </Col>
+            <Col flex="auto" style={{ display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
+              {purchase.payment_status !== "paid" && (
+                <Button
+                  type="primary"
+                  onClick={() => navigate(`/payments/new?counterparty_id=${purchase.supplier_id}&direction=out`)}
+                >
+                  {t("payment.create_for_remaining")} ({fmtCny(purchase.remaining_amount_cny)} CNY)
+                </Button>
+              )}
+            </Col>
           </Row>
           {(purchasePayments || []).length === 0 ? (
-            <Text type="secondary">Нет платежей по этой закупке.</Text>
+            <Text type="secondary">{t("payment.no_payments")}</Text>
           ) : (
             <Table
               dataSource={purchasePayments || []}
@@ -124,20 +140,6 @@ export default function PurchaseDetailPage() {
                     </Button>
                   )},
               ]}
-              summary={() => {
-                const totalAlloc = (purchasePayments || []).reduce((s: number, p: any) => s + Number(p.alloc_cny), 0);
-                return (
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={3} align="right">
-                      <strong>{t("payment.paid")}:</strong>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={3} align="right">
-                      <strong>{totalAlloc.toLocaleString("ru-RU", {minimumFractionDigits: 2})} CNY</strong>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={4} />
-                  </Table.Summary.Row>
-                );
-              }}
             />
           )}
         </div>

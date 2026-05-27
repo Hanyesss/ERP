@@ -105,6 +105,24 @@ export default function OrderTable() {
       },
     }] : []),
     {
+      title: t("order.paid_amount"),
+      key: "paid",
+      width: 120,
+      align: "right",
+      render: (_, row) => <Text type="secondary">{fmtCny(row.paid_amount_cny)}</Text>,
+    },
+    {
+      title: t("order.remaining_amount"),
+      key: "remaining",
+      width: 120,
+      align: "right",
+      render: (_, row) => (
+        <Text type={row.remaining_amount_cny > 0 ? "danger" : "success"}>
+          {fmtCny(row.remaining_amount_cny)}
+        </Text>
+      ),
+    },
+    {
       title: t("order.title").slice(0, 6),
       key: "status",
       width: 100,

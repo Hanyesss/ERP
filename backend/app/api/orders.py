@@ -19,6 +19,8 @@ from app.models.exchange_rate import ExchangeRate
 from app.models.company import Company
 from app.models.purchase_item import PurchaseItem
 from app.models.purchase import Purchase
+from app.models.payment import Payment
+from app.models.payment_allocation import PaymentAllocation
 from app.models.audit_log import AuditActionEnum
 from app.schemas.order import (
     OrderCreate, OrderUpdate, OrderListItem, OrderListResponse,
@@ -91,6 +93,14 @@ async def _load_order_detail(
         raise HTTPException(404, "Order not found")
     order = row[0]
 
+    paid_row = await db.execute(
+        select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(PaymentAllocation.order_id == order_id, Payment.is_active == True)
+    )
+    paid_cny = paid_row.scalar_one() or Decimal("0")
+    remaining_cny = max((order.total_sale_cny or Decimal("0")) - paid_cny, Decimal("0"))
+
     # Items with preferred_supplier names
     PreferredAlias = aliased(Counterparty)
     items_stmt = (
@@ -139,6 +149,8 @@ async def _load_order_detail(
             status=order.status, client_currency=order.client_currency,
             total_sale_cny=order.total_sale_cny,
             payment_status=order.payment_status,
+            paid_amount_cny=paid_cny,
+            remaining_amount_cny=remaining_cny,
             notes=order.notes, recipient=order.recipient, destination=order.destination,
             arrival_date=order.arrival_date, tracking_number=order.tracking_number,
             created_at=order.created_at, items=items, charges=charges,
@@ -199,6 +211,8 @@ async def _load_order_detail(
         status=order.status, client_currency=order.client_currency,
         total_sale_cny=order.total_sale_cny, total_cost_cny=order.total_cost_cny,
         payment_status=order.payment_status, supplier_payment_status=order.supplier_payment_status,
+        paid_amount_cny=paid_cny,
+        remaining_amount_cny=remaining_cny,
         notes=order.notes, recipient=order.recipient, destination=order.destination,
         arrival_date=order.arrival_date, tracking_number=order.tracking_number,
         created_at=order.created_at, items=items, charges=charges,
@@ -312,6 +326,17 @@ async def list_orders(
     ClientAlias = aliased(Counterparty)
     ManagerAlias = aliased(User)
 
+    paid_sq = (
+        select(
+            PaymentAllocation.order_id,
+            func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("paid_cny"),
+        )
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(Payment.is_active == True)
+        .group_by(PaymentAllocation.order_id)
+        .subquery()
+    )
+
     stmt = (
         select(
             Order.id, Order.order_number, Order.order_date, Order.status,
@@ -322,10 +347,12 @@ async def list_orders(
             ManagerAlias.full_name.label("manager_name"),
             BusinessType.name.label("business_type_name"),
             BusinessType.code.label("business_type_code"),
+            func.coalesce(paid_sq.c.paid_cny, Decimal("0")).label("paid_amount_cny"),
         )
         .join(ClientAlias, Order.client_id == ClientAlias.id)
         .join(ManagerAlias, Order.manager_id == ManagerAlias.id)
         .join(BusinessType, Order.business_type_id == BusinessType.id)
+        .outerjoin(paid_sq, Order.id == paid_sq.c.order_id)
         .where(Order.status != OrderStatus.cancelled)
     )
 
@@ -361,6 +388,8 @@ async def list_orders(
             total_cost_cny=r.total_cost_cny if is_full else None,
             payment_status=r.payment_status,
             supplier_payment_status=r.supplier_payment_status if is_full else None,
+            paid_amount_cny=r.paid_amount_cny or Decimal("0"),
+            remaining_amount_cny=max(r.total_sale_cny - (r.paid_amount_cny or Decimal("0")), Decimal("0")),
         )
         for r in rows
     ]
