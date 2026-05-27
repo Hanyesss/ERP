@@ -16,6 +16,7 @@ import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
 import ChargesEditor from "../components/orders/ChargesEditor";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
+import CounterpartySelect from "../components/common/CounterpartySelect";
 import type { User } from "../types";
 
 const { Title, Text } = Typography;
@@ -237,7 +238,6 @@ export default function OrderFormPage({ user }: Props) {
     else createMutation.mutate(payload);
   };
 
-  const clientOptions = (clients?.items || []).map((c: any) => ({ value: c.id, label: c.name }));
   const managerOptions = (managers || []).map((m: any) => ({ value: m.id, label: m.full_name }));
   const btOptions = (businessTypes || []).map((bt: any) => ({ value: bt.id, label: bt.name }));
   const missingRates = rateCheck?.missing ?? [];
@@ -287,8 +287,7 @@ export default function OrderFormPage({ user }: Props) {
             </Col>
             <Col span={6}>
               <Form.Item name="client_id" label={t("order.client")} rules={[{ required: true }]}>
-                <Select showSearch options={clientOptions} placeholder={t("order.client")}
-                  filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())} />
+                <CounterpartySelect type="client" placeholder={t("order.client")} />
               </Form.Item>
             </Col>
             <Col span={4}>

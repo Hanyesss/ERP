@@ -8,8 +8,8 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import type { OrderListItem } from "../../types/order";
 import { getOrders, cancelOrder } from "../../api/orders";
-import { getCounterparties } from "../../api/counterparties";
 import { getManagers, getBusinessTypes } from "../../api/references";
+import CounterpartySelect from "../common/CounterpartySelect";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "./OrderStatusTag";
 
 const { Text } = Typography;
@@ -39,11 +39,6 @@ export default function OrderTable() {
   const { data, isLoading } = useQuery({
     queryKey: ["orders", params],
     queryFn: () => getOrders(params).then(r => r.data),
-  });
-
-  const { data: clients } = useQuery({
-    queryKey: ["counterparties-clients"],
-    queryFn: () => getCounterparties({ type: "client", page_size: 200 }).then(r => r.data),
   });
 
   const { data: managers } = useQuery({
@@ -135,7 +130,6 @@ export default function OrderTable() {
   ];
 
   const btOptions = (businessTypes || []).map(bt => ({ value: bt.id, label: bt.name }));
-  const clientOptions = (clients?.items || []).map(c => ({ value: c.id, label: c.name }));
   const managerOptions = (managers || []).map(m => ({ value: m.id, label: m.full_name }));
   const statusOptions = ["new", "active", "closed", "cancelled"].map(s => ({ value: s, label: t(`order.status_${s}`) }));
 
@@ -157,9 +151,13 @@ export default function OrderTable() {
           />
         </Col>
         <Col>
-          <Select allowClear placeholder={t("order.client")} style={{ width: 180 }} options={clientOptions}
-            showSearch filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())}
-            onChange={v => { setClientId(v); setPage(1); }} />
+          <CounterpartySelect
+            type="client"
+            placeholder={t("order.client")}
+            style={{ width: 180 }}
+            allowClear
+            onChange={v => { setClientId(v); setPage(1); }}
+          />
         </Col>
         <Col>
           <Select allowClear placeholder={t("order.business_type")} style={{ width: 140 }} options={btOptions}

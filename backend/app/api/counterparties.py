@@ -36,7 +36,7 @@ async def list_counterparties(
     search: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -48,7 +48,10 @@ async def list_counterparties(
             Counterparty.name_cn.ilike(f"%{search}%"),
         ))
     if type and type != "all":
-        q = q.where(Counterparty.type == type)
+        q = q.where(or_(
+            Counterparty.type == type,
+            Counterparty.type == CounterpartyType.both,
+        ))
 
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar_one()

@@ -6,8 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import { getPurchases } from "../api/purchases";
-import { getCounterparties } from "../api/counterparties";
 import type { PurchaseListItem } from "../types/purchase";
+import CounterpartySelect from "../components/common/CounterpartySelect";
 
 const { Title } = Typography;
 
@@ -38,13 +38,6 @@ export default function PurchasesPage() {
       page, page_size: 20,
     }).then(r => r.data),
   });
-
-  const { data: suppliers } = useQuery({
-    queryKey: ["counterparties-suppliers"],
-    queryFn: () => getCounterparties({ type: "supplier", page_size: 200 }).then(r => r.data),
-  });
-
-  const supplierOptions = (suppliers?.items || []).map(s => ({ value: s.id, label: s.name }));
 
   const columns: ColumnsType<PurchaseListItem> = [
     {
@@ -120,13 +113,11 @@ export default function PurchasesPage() {
           />
         </Col>
         <Col>
-          <Select
-            allowClear
+          <CounterpartySelect
+            type="supplier"
             placeholder={t("purchase.supplier")}
-            options={supplierOptions}
             style={{ width: 200 }}
-            showSearch
-            filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())}
+            allowClear
             onChange={v => { setSupplierId(v); setPage(1); }}
           />
         </Col>

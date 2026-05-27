@@ -2,8 +2,7 @@ import { Form, Input, InputNumber, Select, Button, Row, Col, Typography } from "
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
-import { useQuery } from "@tanstack/react-query";
-import { getCounterparties } from "../../api/counterparties";
+import CounterpartySelect from "../common/CounterpartySelect";
 
 const { Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
@@ -16,13 +15,6 @@ interface Props {
 
 export default function OrderItemsEditor({ form, rates, clientCurrency }: Props) {
   const { t } = useTranslation();
-
-  const { data: suppliers } = useQuery({
-    queryKey: ["counterparties-suppliers"],
-    queryFn: () => getCounterparties({ type: "supplier", page_size: 200 }).then(r => r.data),
-  });
-
-  const supplierOptions = (suppliers?.items || []).map(s => ({ value: s.id, label: s.name }));
 
   return (
     <Form.List name="items">
@@ -79,9 +71,8 @@ export default function OrderItemsEditor({ form, rates, clientCurrency }: Props)
               </Col>
               <Col span={4}>
                 <Form.Item name={[name, "preferred_supplier_id"]} style={{ margin: 0 }}>
-                  <Select
-                    size="small" allowClear options={supplierOptions} showSearch
-                    filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())}
+                  <CounterpartySelect
+                    type="supplier" size="small" allowClear
                     placeholder={t("order.item_preferred_supplier_hint")}
                     style={{ fontSize: 12 }}
                   />

@@ -9,8 +9,8 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { createPurchase, getAvailableForPurchase, getNextPurchaseNumber } from "../api/purchases";
-import { getCounterparties } from "../api/counterparties";
 import { getOrders } from "../api/orders";
+import CounterpartySelect from "../components/common/CounterpartySelect";
 import type { AvailableForPurchaseItem } from "../types/order";
 
 const { Title, Text } = Typography;
@@ -57,11 +57,6 @@ export default function PurchaseFormPage() {
   const { data: orders } = useQuery({
     queryKey: ["orders-list-brief"],
     queryFn: () => getOrders({ page_size: 100 }).then(r => r.data),
-  });
-
-  const { data: suppliers } = useQuery({
-    queryKey: ["counterparties-suppliers"],
-    queryFn: () => getCounterparties({ type: "supplier", page_size: 200 }).then(r => r.data),
   });
 
   const { data: availableItems } = useQuery({
@@ -114,7 +109,6 @@ export default function PurchaseFormPage() {
   };
 
   const orderOptions = (orders?.items || []).map(o => ({ value: o.id, label: `${o.order_number} — ${o.client_name}` }));
-  const supplierOptions = (suppliers?.items || []).map(s => ({ value: s.id, label: s.name }));
 
   const totalAmount = itemRows
     .filter(r => r.selected)
@@ -163,11 +157,7 @@ export default function PurchaseFormPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="supplier_id" label={t("purchase.supplier")} rules={[{ required: true }]}>
-                <Select
-                  options={supplierOptions} showSearch
-                  filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())}
-                  placeholder={t("purchase.supplier")}
-                />
+                <CounterpartySelect type="supplier" placeholder={t("purchase.supplier")} />
               </Form.Item>
             </Col>
             <Col span={12}>
