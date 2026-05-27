@@ -18,6 +18,9 @@ import PurchaseDetailPage from "./pages/PurchaseDetailPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import PaymentFormPage from "./pages/PaymentFormPage";
 import PaymentDetailPage from "./pages/PaymentDetailPage";
+import ExpensesPage from "./pages/ExpensesPage";
+import ExpenseFormPage from "./pages/ExpenseFormPage";
+import ExpenseDetailPage from "./pages/ExpenseDetailPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
@@ -63,6 +66,9 @@ function Inner() {
             <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/payments/new" element={<PaymentFormPage />} />
             <Route path="/payments/:id" element={<PaymentDetailPage />} />
+            <Route path="/expenses" element={<ExpensesPage user={user!} />} />
+            <Route path="/expenses/new" element={<ExpenseFormPage user={user!} />} />
+            <Route path="/expenses/:id" element={<ExpenseDetailPage user={user!} />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

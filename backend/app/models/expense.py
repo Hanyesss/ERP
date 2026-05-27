@@ -44,4 +44,5 @@ class Expense(Base, TimestampMixin):
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     receipt_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

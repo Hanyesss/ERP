@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Layout, Menu, Button, Typography, Space } from "antd";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
-  SwapOutlined, ShoppingCartOutlined, WalletOutlined,
+  SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -66,6 +66,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.payments"),
     },
 
+    {
+      key: "/expenses",
+      icon: <AccountBookOutlined />,
+      label: t("nav.expenses"),
+    },
+
     hasRole(user, "accountant", "admin") && {
       key: "/exchange-rates",
       icon: <SwapOutlined />,
@@ -79,6 +85,8 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/purchases"
     : location.pathname.startsWith("/payments")
     ? "/payments"
+    : location.pathname.startsWith("/expenses")
+    ? "/expenses"
     : location.pathname.startsWith("/exchange-rates")
     ? "/exchange-rates"
     : location.pathname;
