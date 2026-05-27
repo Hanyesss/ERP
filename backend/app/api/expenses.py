@@ -1,8 +1,10 @@
 import uuid
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
@@ -28,6 +30,10 @@ router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 
 _ACCOUNTANT_ROLES = ("accountant", "admin")
 _ALL_ROLES = ("employee", "manager", "purchaser", "accountant", "admin")
+
+UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 
 
 async def _get_default_company(db: AsyncSession) -> Company:
@@ -495,3 +501,80 @@ async def mark_reimbursement_paid(
                       {"reimburse_status": "paid", "paid_date": str(body.paid_date)})
     await db.commit()
     return await _load_expense(db, expense.id)
+
+
+# ── receipt upload ─────────────────────────────────────────────────────────────
+
+@router.post("/{expense_id}/receipt", response_model=ExpenseResponse)
+async def upload_receipt(
+    expense_id: uuid.UUID,
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id, Expense.is_active == True)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+
+    if not current_user.has_role(*_ACCOUNTANT_ROLES) and expense.created_by != current_user.id:
+        raise HTTPException(403, "Access denied")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(422, "File too large (max 10 MB)")
+
+    mime = file.content_type or ""
+    if mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(422, f"File type not allowed: {mime}")
+
+    dest_dir = UPLOADS_DIR / "expenses" / str(expense_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "file").suffix.lower() or ".bin"
+    stored_name = f"{uuid.uuid4()}{ext}"
+    (dest_dir / stored_name).write_bytes(content)
+
+    expense.receipt_url = f"expenses/{expense_id}/{stored_name}"
+    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
+                      {"receipt_uploaded": file.filename})
+    await db.commit()
+    return await _load_expense(db, expense.id)
+
+
+# ── history ────────────────────────────────────────────────────────────────────
+
+@router.get("/{expense_id}/history")
+async def get_expense_history(
+    expense_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+
+    if not current_user.has_role(*_ACCOUNTANT_ROLES) and expense.created_by != current_user.id:
+        raise HTTPException(403, "Access denied")
+
+    from app.models.audit_log import AuditLog
+    rows = (await db.execute(
+        select(AuditLog, User.full_name.label("user_name"))
+        .join(User, AuditLog.user_id == User.id)
+        .where(AuditLog.entity_type == "expense", AuditLog.entity_id == expense_id)
+        .order_by(AuditLog.created_at.desc())
+    )).all()
+
+    return [
+        {
+            "id": str(r[0].id),
+            "action": r[0].action,
+            "user_id": str(r[0].user_id),
+            "user_name": r[1],
+            "changes": r[0].changes,
+            "created_at": r[0].created_at.isoformat(),
+        }
+        for r in rows
+    ]

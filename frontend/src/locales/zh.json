@@ -256,6 +256,7 @@
     "title": "费用",
     "detail_title": "费用详情",
     "create_new": "新增费用",
+    "edit_title": "编辑费用",
     "date": "日期",
     "category": "类别",
     "currency": "货币",
@@ -303,7 +304,17 @@
     "only_reimbursements": "仅报销",
     "only_direct": "仅直接费用",
     "filter_reimburse_status": "报销状态",
-    "delete_confirm": "确认删除此费用？"
+    "delete_confirm": "确认删除此费用？",
+    "tab_main": "基本信息",
+    "tab_history": "修改记录",
+    "receipt": "收据/凭证",
+    "receipt_upload": "上传收据",
+    "receipt_replace": "更换收据",
+    "receipt_view": "查看收据",
+    "receipt_none": "未上传收据",
+    "receipt_uploaded": "收据上传成功",
+    "reimbursement_self_info": "报销将记录在您名下，会计将审核您的申请。",
+    "select_employee_optional": "选择员工（默认为本人）"
   },
   "validation": {
     "required": "必填项",

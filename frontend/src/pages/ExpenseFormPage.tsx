@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
-  Space, Row, Col, InputNumber, Switch, Alert, message,
+  Space, Row, Col, InputNumber, Switch, Alert, message, Skeleton,
 } from "antd";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createExpense } from "../api/expenses";
+import { createExpense, updateExpense, getExpense } from "../api/expenses";
 import { getExpenseCategories, getEmployees } from "../api/references";
 import { getOrders } from "../api/orders";
 import { getExchangeRates } from "../api/exchangeRates";
@@ -17,14 +17,13 @@ import type { User } from "../types";
 const { Title } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 
-const fmtCny = (v: number) =>
-  Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 interface Props { user: User }
 
 export default function ExpenseFormPage({ user }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEdit = !!id;
   const [form] = Form.useForm();
 
   const isAccountant = user.roles?.some(r => ["accountant", "admin"].includes(r));
@@ -34,41 +33,22 @@ export default function ExpenseFormPage({ user }: Props) {
   const [amount, setAmount] = useState(0);
   const [linkType, setLinkType] = useState("none");
   const [isReimbursement, setIsReimbursement] = useState(!isAccountant);
+  const [initialized, setInitialized] = useState(false);
 
   const expenseDate: dayjs.Dayjs | null = Form.useWatch("expense_date", form);
   const dateStr = expenseDate?.format("YYYY-MM-DD");
 
-  useEffect(() => {
-    form.setFieldsValue({
-      expense_date: dayjs(),
-      currency: "CNY",
-      rate_to_cny: 1,
-      link_type: "none",
-      is_reimbursement: !isAccountant,
-    });
-  }, [form, isAccountant]);
+  // Load existing data for edit mode
+  const { data: existing, isLoading: existingLoading } = useQuery({
+    queryKey: ["expense", id],
+    queryFn: () => getExpense(id!).then(r => r.data),
+    enabled: isEdit,
+  });
 
   const { data: ratesData } = useQuery({
     queryKey: ["exchange-rates-list"],
     queryFn: () => getExchangeRates({}).then(r => r.data),
   });
-
-  useEffect(() => {
-    if (currency === "CNY") {
-      setRateToCny(1);
-      form.setFieldValue("rate_to_cny", 1);
-      return;
-    }
-    if (!dateStr || !ratesData) return;
-    const match = (ratesData.items || ratesData || []).find(
-      (r: any) => r.currency === currency && r.rate_date === dateStr
-    );
-    if (match) {
-      const rate = Number(match.rate_to_cny);
-      setRateToCny(rate);
-      form.setFieldValue("rate_to_cny", rate);
-    }
-  }, [currency, dateStr, ratesData, form]);
 
   const { data: categories } = useQuery({
     queryKey: ["expense-categories"],
@@ -87,20 +67,76 @@ export default function ExpenseFormPage({ user }: Props) {
     enabled: linkType === "order",
   });
 
+  // Initialize form
+  useEffect(() => {
+    if (initialized) return;
+    if (isEdit) {
+      if (!existing) return;
+      form.setFieldsValue({
+        expense_date: dayjs(existing.expense_date),
+        category_id: existing.category_id,
+        currency: existing.currency,
+        amount: Number(existing.amount),
+        rate_to_cny: Number(existing.rate_to_cny),
+        link_type: existing.link_type,
+        order_id: existing.order_id,
+        client_id: existing.client_id,
+        description: existing.description,
+        reimburse_to_user_id: existing.reimburse_to_user_id,
+      });
+      setCurrency(existing.currency);
+      setRateToCny(Number(existing.rate_to_cny));
+      setAmount(Number(existing.amount));
+      setLinkType(existing.link_type);
+      setIsReimbursement(existing.is_reimbursement);
+      setInitialized(true);
+    } else {
+      form.setFieldsValue({
+        expense_date: dayjs(),
+        currency: "CNY",
+        rate_to_cny: 1,
+        link_type: "none",
+      });
+      setInitialized(true);
+    }
+  }, [isEdit, existing, form, initialized]);
+
+  // Auto-fetch rate when currency/date changes (only in create mode)
+  useEffect(() => {
+    if (!initialized || isEdit) return;
+    if (currency === "CNY") {
+      setRateToCny(1);
+      form.setFieldValue("rate_to_cny", 1);
+      return;
+    }
+    if (!dateStr || !ratesData) return;
+    const match = (ratesData.items || ratesData || []).find(
+      (r: any) => r.currency === currency && r.rate_date === dateStr
+    );
+    if (match) {
+      const rate = Number(match.rate_to_cny);
+      setRateToCny(rate);
+      form.setFieldValue("rate_to_cny", rate);
+    }
+  }, [currency, dateStr, ratesData, form, initialized, isEdit]);
+
   const amountCny = Number((amount * rateToCny).toFixed(2));
   const missingRate = currency !== "CNY" && rateToCny === 1 && !!dateStr;
 
   const createMutation = useMutation({
     mutationFn: createExpense,
-    onSuccess: (res) => {
-      message.success("✓");
-      navigate(`/expenses/${res.data.id}`);
-    },
+    onSuccess: (res) => { message.success("✓"); navigate(`/expenses/${res.data.id}`); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => updateExpense(id!, data),
+    onSuccess: () => { message.success("✓"); navigate(`/expenses/${id}`); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
   const handleSubmit = (values: any) => {
-    createMutation.mutate({
+    const payload = {
       expense_date: values.expense_date.format("YYYY-MM-DD"),
       category_id: values.category_id,
       currency: values.currency,
@@ -110,10 +146,14 @@ export default function ExpenseFormPage({ user }: Props) {
       order_id: values.link_type === "order" ? values.order_id : undefined,
       client_id: values.link_type === "client" ? values.client_id : undefined,
       description: values.description,
-      receipt_url: values.receipt_url || undefined,
-      is_reimbursement: isReimbursement,
-      reimburse_to_user_id: isReimbursement ? values.reimburse_to_user_id : undefined,
-    });
+      ...(isAccountant && { reimburse_to_user_id: isReimbursement ? values.reimburse_to_user_id : undefined }),
+    };
+
+    if (isEdit) {
+      updateMutation.mutate(payload);
+    } else {
+      createMutation.mutate({ ...payload, is_reimbursement: isReimbursement });
+    }
   };
 
   const categoryOptions = (categories ?? []).map((c: any) => ({
@@ -131,16 +171,24 @@ export default function ExpenseFormPage({ user }: Props) {
     label: e.full_name,
   }));
 
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
+  if (isEdit && existingLoading) return <Skeleton active />;
+
   return (
     <div style={{ maxWidth: 800 }}>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>{t("expense.create_new")}</Title>
+          <Title level={4} style={{ margin: 0 }}>
+            {isEdit ? t("expense.edit_title") : t("expense.create_new")}
+          </Title>
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/expenses")}>{t("common.cancel")}</Button>
-            <Button type="primary" onClick={() => form.submit()} loading={createMutation.isPending}>
+            <Button onClick={() => navigate(isEdit ? `/expenses/${id}` : "/expenses")}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="primary" onClick={() => form.submit()} loading={isPending}>
               {t("common.save")}
             </Button>
           </Space>
@@ -172,7 +220,7 @@ export default function ExpenseFormPage({ user }: Props) {
               <Form.Item name="currency" label={t("expense.currency")} rules={[{ required: true }]}>
                 <Select
                   options={CURRENCIES.map(c => ({ value: c, label: c }))}
-                  onChange={v => setCurrency(v)}
+                  onChange={v => { setCurrency(v); }}
                 />
               </Form.Item>
             </Col>
@@ -257,38 +305,36 @@ export default function ExpenseFormPage({ user }: Props) {
             <Input.TextArea rows={2} />
           </Form.Item>
 
-          <Form.Item name="receipt_url" label={t("expense.receipt_url")}>
-            <Input placeholder="https://..." />
-          </Form.Item>
+          {isAccountant ? (
+            <>
+              {!isEdit && (
+                <Form.Item label={t("expense.is_reimbursement")}>
+                  <Switch
+                    checked={isReimbursement}
+                    onChange={v => setIsReimbursement(v)}
+                    checkedChildren={t("expense.reimbursement")}
+                    unCheckedChildren={t("expense.direct_expense")}
+                  />
+                </Form.Item>
+              )}
 
-          {isAccountant && (
-            <Form.Item label={t("expense.is_reimbursement")}>
-              <Switch
-                checked={isReimbursement}
-                onChange={v => setIsReimbursement(v)}
-                checkedChildren={t("expense.reimbursement")}
-                unCheckedChildren={t("expense.direct_expense")}
-              />
-            </Form.Item>
-          )}
-
-          {isReimbursement && isAccountant && (
-            <Form.Item name="reimburse_to_user_id" label={t("expense.reimburse_to")}>
-              <Select
-                showSearch
-                optionFilterProp="label"
-                options={employeeOptions}
-                placeholder={t("expense.select_employee")}
-                allowClear
-              />
-            </Form.Item>
-          )}
-
-          {isReimbursement && !isAccountant && (
+              {isReimbursement && (
+                <Form.Item name="reimburse_to_user_id" label={t("expense.reimburse_to")}>
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={employeeOptions}
+                    placeholder={t("expense.select_employee_optional")}
+                    allowClear
+                  />
+                </Form.Item>
+              )}
+            </>
+          ) : (
             <Alert
               type="info"
               showIcon
-              message={t("expense.reimbursement_info")}
+              message={t("expense.reimbursement_self_info")}
               style={{ marginTop: 8 }}
             />
           )}

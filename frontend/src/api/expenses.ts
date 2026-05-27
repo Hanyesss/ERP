@@ -48,3 +48,14 @@ export const getMyBalance = () =>
 
 export const getUserBalance = (userId: string) =>
   apiClient.get<ReimbursementBalance>(`/api/expenses/user/${userId}/balance`);
+
+export const uploadReceipt = (id: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return apiClient.post<import("../types/expense").Expense>(`/api/expenses/${id}/receipt`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const getExpenseHistory = (id: string) =>
+  apiClient.get<any[]>(`/api/expenses/${id}/history`);

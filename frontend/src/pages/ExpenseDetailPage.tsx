@@ -1,19 +1,22 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Descriptions, Button, Tag, Typography, Space, Popconfirm,
-  Row, Col, Card, Modal, Form, Input, DatePicker, message, Skeleton,
+  Row, Col, Card, Modal, Form, Input, DatePicker, message,
+  Skeleton, Timeline, Upload, Tabs,
 } from "antd";
 import {
   EditOutlined, DeleteOutlined, CheckOutlined,
-  CloseOutlined, DollarOutlined,
+  CloseOutlined, DollarOutlined, UploadOutlined, FileOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
+import type { UploadRequestOption } from "rc-upload/lib/interface";
 import {
   getExpense, deleteExpense,
   approveReimbursement, rejectReimbursement, markReimbursementPaid,
+  uploadReceipt, getExpenseHistory,
 } from "../api/expenses";
 import type { User } from "../types";
 
@@ -24,6 +27,12 @@ const REIMBURSE_COLORS: Record<string, string> = {
   approved: "blue",
   paid: "green",
   rejected: "red",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  create: "Создано",
+  update: "Изменено",
+  delete: "Удалено",
 };
 
 const fmtCny = (v: number | string) =>
@@ -43,6 +52,7 @@ export default function ExpenseDetailPage({ user }: Props) {
   const [paidOpen, setPaidOpen] = useState(false);
   const [rejectForm] = Form.useForm();
   const [paidForm] = Form.useForm();
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   const { data: expense, isLoading } = useQuery({
     queryKey: ["expense", id],
@@ -50,9 +60,16 @@ export default function ExpenseDetailPage({ user }: Props) {
     enabled: !!id,
   });
 
+  const { data: history } = useQuery({
+    queryKey: ["expense-history", id],
+    queryFn: () => getExpenseHistory(id!).then(r => r.data),
+    enabled: !!id,
+  });
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["expense", id] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
+    qc.invalidateQueries({ queryKey: ["expense-history", id] });
   };
 
   const deleteMutation = useMutation({
@@ -79,6 +96,16 @@ export default function ExpenseDetailPage({ user }: Props) {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
+  const receiptMutation = useMutation({
+    mutationFn: (file: File) => uploadReceipt(id!, file),
+    onSuccess: () => { message.success(t("expense.receipt_uploaded")); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const handleReceiptUpload = ({ file }: UploadRequestOption) => {
+    receiptMutation.mutate(file as File);
+  };
+
   if (isLoading) return <Skeleton active />;
   if (!expense) return null;
 
@@ -86,81 +113,88 @@ export default function ExpenseDetailPage({ user }: Props) {
   const canEdit = isAccountant || (isOwner && expense.reimburse_status !== "paid");
   const canDelete = isAccountant || (isOwner && expense.reimburse_status !== "paid");
 
-  return (
-    <div style={{ maxWidth: 800 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
-          <Title level={4} style={{ margin: 0 }}>{t("expense.detail_title")}</Title>
-        </Col>
-        <Col>
-          <Space>
-            <Button onClick={() => navigate("/expenses")}>{t("common.back")}</Button>
-            {canEdit && (
-              <Button icon={<EditOutlined />} onClick={() => navigate(`/expenses/${id}/edit`)}>
-                {t("common.edit")}
-              </Button>
-            )}
-            {canDelete && (
-              <Popconfirm
-                title={t("expense.delete_confirm")}
-                onConfirm={() => deleteMutation.mutate()}
-                okText={t("common.yes")}
-                cancelText={t("common.no")}
-              >
-                <Button icon={<DeleteOutlined />} danger>
-                  {t("common.delete")}
-                </Button>
-              </Popconfirm>
-            )}
-          </Space>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Descriptions column={2} size="small" bordered>
-          <Descriptions.Item label={t("expense.date")}>{expense.expense_date}</Descriptions.Item>
-          <Descriptions.Item label={t("expense.category")}>
-            {expense.category_name_cn
-              ? `${expense.category_name} / ${expense.category_name_cn}`
-              : expense.category_name}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("expense.amount")}>
-            {fmtCny(expense.amount)} {expense.currency}
-          </Descriptions.Item>
-          <Descriptions.Item label={`${t("expense.amount_cny")} (CNY)`}>
-            {fmtCny(expense.amount_cny)}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("expense.rate_to_cny")}>
-            {expense.rate_to_cny}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("expense.link_type")}>
-            {expense.link_type === "order" && expense.order_number
-              ? <Tag color="blue">{t("expense.link_order")}: {expense.order_number}</Tag>
-              : expense.link_type === "client" && expense.client_name
-              ? <Tag color="purple">{t("expense.link_client")}: {expense.client_name}</Tag>
-              : <Tag>{t("expense.link_none")}</Tag>
-            }
-          </Descriptions.Item>
-          <Descriptions.Item label={t("expense.description")} span={2}>
-            {expense.description}
-          </Descriptions.Item>
-          {expense.receipt_url && (
-            <Descriptions.Item label={t("expense.receipt_url")} span={2}>
-              <a href={expense.receipt_url} target="_blank" rel="noreferrer">{expense.receipt_url}</a>
+  const tabs = [
+    {
+      key: "main",
+      label: t("expense.tab_main"),
+      children: (
+        <>
+          <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label={t("expense.date")}>{expense.expense_date}</Descriptions.Item>
+            <Descriptions.Item label={t("expense.category")}>
+              {expense.category_name_cn
+                ? `${expense.category_name} / ${expense.category_name_cn}`
+                : expense.category_name}
             </Descriptions.Item>
-          )}
-          <Descriptions.Item label={t("common.created_by")}>{expense.created_by_name}</Descriptions.Item>
-          <Descriptions.Item label={t("common.created_at")}>
-            {new Date(expense.created_at).toLocaleString("ru-RU")}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+            <Descriptions.Item label={t("expense.amount")}>
+              {fmtCny(expense.amount)} {expense.currency}
+            </Descriptions.Item>
+            <Descriptions.Item label={`${t("expense.amount_cny")} (CNY)`}>
+              <strong>{fmtCny(expense.amount_cny)}</strong>
+            </Descriptions.Item>
+            <Descriptions.Item label={t("expense.rate_to_cny")}>
+              {expense.rate_to_cny}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("expense.link_type")}>
+              {expense.link_type === "order" && expense.order_number
+                ? <Tag color="blue">{t("expense.link_order")}: {expense.order_number}</Tag>
+                : expense.link_type === "client" && expense.client_name
+                ? <Tag color="purple">{t("expense.link_client")}: {expense.client_name}</Tag>
+                : <Tag>{t("expense.link_none")}</Tag>
+              }
+            </Descriptions.Item>
+            <Descriptions.Item label={t("expense.description")} span={2}>
+              {expense.description}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("common.created_by")}>{expense.created_by_name}</Descriptions.Item>
+            <Descriptions.Item label={t("common.created_at")}>
+              {new Date(expense.created_at).toLocaleString("ru-RU")}
+            </Descriptions.Item>
+          </Descriptions>
 
-      {expense.is_reimbursement && (
-        <Card title={t("expense.reimbursement_section")}>
-          <Descriptions column={2} size="small" bordered>
+          {/* Receipt */}
+          <Card
+            size="small"
+            title={t("expense.receipt")}
+            extra={
+              <Upload
+                customRequest={handleReceiptUpload}
+                showUploadList={false}
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+              >
+                <Button
+                  icon={<UploadOutlined />}
+                  size="small"
+                  loading={receiptMutation.isPending}
+                >
+                  {expense.receipt_url ? t("expense.receipt_replace") : t("expense.receipt_upload")}
+                </Button>
+              </Upload>
+            }
+          >
+            {expense.receipt_url ? (
+              <Space>
+                <FileOutlined />
+                <a href={`/files/${expense.receipt_url}`} target="_blank" rel="noreferrer">
+                  {t("expense.receipt_view")}
+                </a>
+              </Space>
+            ) : (
+              <Text type="secondary">{t("expense.receipt_none")}</Text>
+            )}
+          </Card>
+        </>
+      ),
+    },
+
+    ...(expense.is_reimbursement ? [{
+      key: "reimburse",
+      label: t("expense.reimbursement_section"),
+      children: (
+        <Card>
+          <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
             <Descriptions.Item label={t("expense.reimburse_to")}>
-              {expense.reimburse_to_name ?? t("expense.reimburse_self")}
+              {expense.reimburse_to_name ?? expense.created_by_name}
             </Descriptions.Item>
             <Descriptions.Item label={t("expense.reimburse_status")}>
               <Tag color={REIMBURSE_COLORS[expense.reimburse_status || "pending"]}>
@@ -180,7 +214,7 @@ export default function ExpenseDetailPage({ user }: Props) {
           </Descriptions>
 
           {isAccountant && (
-            <Space style={{ marginTop: 16 }}>
+            <Space>
               {expense.reimburse_status === "pending" && (
                 <>
                   <Popconfirm
@@ -189,11 +223,7 @@ export default function ExpenseDetailPage({ user }: Props) {
                     okText={t("common.yes")}
                     cancelText={t("common.no")}
                   >
-                    <Button
-                      type="primary"
-                      icon={<CheckOutlined />}
-                      loading={approveMutation.isPending}
-                    >
+                    <Button type="primary" icon={<CheckOutlined />} loading={approveMutation.isPending}>
                       {t("expense.approve")}
                     </Button>
                   </Popconfirm>
@@ -218,9 +248,69 @@ export default function ExpenseDetailPage({ user }: Props) {
             </Space>
           )}
         </Card>
-      )}
+      ),
+    }] : []),
 
-      {/* Reject modal */}
+    {
+      key: "history",
+      label: t("expense.tab_history"),
+      children: (
+        <Timeline
+          items={(history || []).map((h: any) => ({
+            children: (
+              <div>
+                <Text strong>{ACTION_LABELS[h.action] ?? h.action}</Text>
+                {" — "}
+                <Text type="secondary">
+                  {h.user_name} · {new Date(h.created_at).toLocaleString("ru-RU")}
+                </Text>
+                {h.changes && Object.keys(h.changes).length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    <pre style={{ fontSize: 11, margin: 0, background: "#f5f5f5", padding: 4, borderRadius: 4 }}>
+                      {JSON.stringify(h.changes, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ),
+          }))}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Col>
+          <Title level={4} style={{ margin: 0 }}>{t("expense.detail_title")}</Title>
+        </Col>
+        <Col>
+          <Space>
+            <Button onClick={() => navigate("/expenses")}>{t("common.back")}</Button>
+            {canEdit && (
+              <Button icon={<EditOutlined />} onClick={() => navigate(`/expenses/${id}/edit`)}>
+                {t("common.edit")}
+              </Button>
+            )}
+            {canDelete && (
+              <Popconfirm
+                title={t("expense.delete_confirm")}
+                onConfirm={() => deleteMutation.mutate()}
+                okText={t("common.yes")}
+                cancelText={t("common.no")}
+              >
+                <Button icon={<DeleteOutlined />} danger loading={deleteMutation.isPending}>
+                  {t("common.delete")}
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        </Col>
+      </Row>
+
+      <Tabs items={tabs} />
+
       <Modal
         open={rejectOpen}
         title={t("expense.reject")}
@@ -237,7 +327,6 @@ export default function ExpenseDetailPage({ user }: Props) {
         </Form>
       </Modal>
 
-      {/* Mark paid modal */}
       <Modal
         open={paidOpen}
         title={t("expense.mark_paid")}

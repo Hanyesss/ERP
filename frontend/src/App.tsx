@@ -69,6 +69,7 @@ function Inner() {
             <Route path="/expenses" element={<ExpensesPage user={user!} />} />
             <Route path="/expenses/new" element={<ExpenseFormPage user={user!} />} />
             <Route path="/expenses/:id" element={<ExpenseDetailPage user={user!} />} />
+            <Route path="/expenses/:id/edit" element={<ExpenseFormPage user={user!} />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

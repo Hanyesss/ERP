@@ -235,6 +235,7 @@
     "title": "Расходы",
     "detail_title": "Расход",
     "create_new": "Добавить расход",
+    "edit_title": "Редактировать расход",
     "date": "Дата",
     "category": "Категория",
     "currency": "Валюта",
@@ -282,7 +283,17 @@
     "only_reimbursements": "Только возмещения",
     "only_direct": "Только прямые",
     "filter_reimburse_status": "Статус возмещения",
-    "delete_confirm": "Удалить этот расход?"
+    "delete_confirm": "Удалить этот расход?",
+    "tab_main": "Основное",
+    "tab_history": "История изменений",
+    "receipt": "Чек / квитанция",
+    "receipt_upload": "Загрузить чек",
+    "receipt_replace": "Заменить чек",
+    "receipt_view": "Открыть чек",
+    "receipt_none": "Чек не загружен",
+    "receipt_uploaded": "Чек успешно загружен",
+    "reimbursement_self_info": "Возмещение будет оформлено на вас. Бухгалтер рассмотрит заявку.",
+    "select_employee_optional": "Выберите сотрудника (по умолчанию — себя)"
   },
   "common": {
     "save": "Сохранить",
