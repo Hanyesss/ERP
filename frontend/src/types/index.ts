@@ -1,9 +1,9 @@
-export type UserRole = "employee" | "manager" | "accountant" | "admin";
+export type UserRole = "employee" | "manager" | "purchaser" | "accountant" | "admin";
 export type UserLang = "ru" | "zh";
 
 export interface User {
   id: string;
   full_name: string;
-  role: UserRole;
+  roles: UserRole[];
   lang: UserLang;
 }

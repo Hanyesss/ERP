@@ -94,7 +94,7 @@ export default function OrderTable() {
       key: "cost",
       width: 130,
       align: "right",
-      render: (_, row) => <Text type="secondary">{fmtCny(row.total_cost_cny)}</Text>,
+      render: (_, row) => <Text type="secondary">{fmtCny(row.total_cost_cny ?? 0)}</Text>,
     },
     {
       title: `${t("order.margin")} (CNY)`,
@@ -102,7 +102,7 @@ export default function OrderTable() {
       width: 120,
       align: "right",
       render: (_, row) => {
-        const m = row.total_sale_cny - row.total_cost_cny;
+        const m = row.total_sale_cny - (row.total_cost_cny ?? 0);
         return <Text type={m >= 0 ? "success" : "danger"}>{fmtCny(m)}</Text>;
       },
     },

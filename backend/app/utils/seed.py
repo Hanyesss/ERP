@@ -26,13 +26,49 @@ EXPENSE_CATEGORIES = [
     {"name": "Прочее", "name_cn": "其他"},
 ]
 
+USERS = [
+    {
+        "login": "admin",
+        "password": "admin123",
+        "full_name": "Администратор",
+        "full_name_cn": "管理员",
+        "roles": ["admin"],
+        "lang": "ru",
+    },
+    {
+        "login": "manager1",
+        "password": "test123",
+        "full_name": "Менеджер Иван",
+        "full_name_cn": "经理伊万",
+        "roles": ["manager"],
+        "lang": "ru",
+    },
+    {
+        "login": "purchaser1",
+        "password": "test123",
+        "full_name": "Закупщик Ли",
+        "full_name_cn": "采购李",
+        "roles": ["purchaser"],
+        "lang": "ru",
+    },
+    {
+        "login": "accountant1",
+        "password": "test123",
+        "full_name": "Бухгалтер Мария",
+        "full_name_cn": "会计玛丽亚",
+        "roles": ["accountant"],
+        "lang": "ru",
+    },
+]
+
 
 async def run_seed() -> None:
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
     Session = async_sessionmaker(engine, expire_on_commit=False)
 
     from app.models.company import Company
-    from app.models.user import User, UserRole, UserLang
+    from app.models.user import User, UserLang
+    from app.models.user_role import UserRoleEntry
     from app.models.business_type import BusinessType
     from app.models.expense_category import ExpenseCategory
 
@@ -63,22 +99,46 @@ async def run_seed() -> None:
             else:
                 print(f"  = ExpenseCategory '{cat['name']}' already exists")
 
-        # Admin user
-        result = await session.execute(select(User).where(User.login == "admin"))
-        if not result.scalar_one_or_none():
-            pw_hash = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
-            session.add(User(
-                id=uuid.uuid4(),
-                login="admin",
-                password_hash=pw_hash,
-                full_name="Администратор",
-                role=UserRole.admin,
-                lang=UserLang.ru,
-                is_active=True,
-            ))
-            print("  + Admin user created")
-        else:
-            print("  = Admin user already exists")
+        await session.flush()
+
+        # Users + roles
+        for u_data in USERS:
+            result = await session.execute(select(User).where(User.login == u_data["login"]))
+            user = result.scalar_one_or_none()
+
+            if not user:
+                pw_hash = bcrypt.hashpw(u_data["password"].encode(), bcrypt.gensalt()).decode()
+                user = User(
+                    id=uuid.uuid4(),
+                    login=u_data["login"],
+                    password_hash=pw_hash,
+                    full_name=u_data["full_name"],
+                    lang=UserLang(u_data["lang"]),
+                    is_active=True,
+                )
+                session.add(user)
+                await session.flush()
+                print(f"  + User '{u_data['login']}' created")
+            else:
+                print(f"  = User '{u_data['login']}' already exists")
+
+            # Add roles if missing
+            for role_name in u_data["roles"]:
+                role_result = await session.execute(
+                    select(UserRoleEntry).where(
+                        UserRoleEntry.user_id == user.id,
+                        UserRoleEntry.role == role_name,
+                    )
+                )
+                if not role_result.scalar_one_or_none():
+                    session.add(UserRoleEntry(
+                        id=uuid.uuid4(),
+                        user_id=user.id,
+                        role=role_name,
+                    ))
+                    print(f"    + Role '{role_name}' added to '{u_data['login']}'")
+                else:
+                    print(f"    = Role '{role_name}' already on '{u_data['login']}'")
 
         await session.commit()
 

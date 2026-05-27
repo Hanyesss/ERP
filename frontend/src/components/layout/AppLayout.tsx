@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { Layout, Menu, Button, Typography, Space } from "antd";
-import { TeamOutlined, DashboardOutlined, ShoppingOutlined, SwapOutlined } from "@ant-design/icons";
+import {
+  TeamOutlined, DashboardOutlined, ShoppingOutlined,
+  SwapOutlined, ShoppingCartOutlined,
+} from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { User } from "../../types";
+import type { User, UserRole } from "../../types";
 import { logout } from "../../api/auth";
 
 const { Header, Sider, Content } = Layout;
@@ -12,6 +15,10 @@ const { Text } = Typography;
 interface Props {
   user: User;
   onLogout: () => void;
+}
+
+function hasRole(user: User, ...roles: UserRole[]): boolean {
+  return roles.some((r) => user.roles?.includes(r));
 }
 
 export default function AppLayout({ user, onLogout }: Props) {
@@ -34,10 +41,39 @@ export default function AppLayout({ user, onLogout }: Props) {
 
   const menuItems = [
     { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
-    { key: "/counterparties", icon: <TeamOutlined />, label: t("nav.counterparties") },
-    { key: "/orders", icon: <ShoppingOutlined />, label: t("nav.orders") },
-    { key: "/exchange-rates", icon: <SwapOutlined />, label: t("nav.exchange_rates") },
-  ];
+
+    hasRole(user, "manager", "purchaser", "accountant", "admin") && {
+      key: "/counterparties",
+      icon: <TeamOutlined />,
+      label: t("nav.counterparties"),
+    },
+
+    hasRole(user, "manager", "purchaser", "accountant", "admin") && {
+      key: "/orders",
+      icon: <ShoppingOutlined />,
+      label: t("nav.orders"),
+    },
+
+    hasRole(user, "purchaser", "accountant", "admin") && {
+      key: "/purchases",
+      icon: <ShoppingCartOutlined />,
+      label: t("nav.purchases"),
+    },
+
+    hasRole(user, "accountant", "admin") && {
+      key: "/exchange-rates",
+      icon: <SwapOutlined />,
+      label: t("nav.exchange_rates"),
+    },
+  ].filter(Boolean) as { key: string; icon: JSX.Element; label: string }[];
+
+  const selectedKey = location.pathname.startsWith("/orders")
+    ? "/orders"
+    : location.pathname.startsWith("/purchases")
+    ? "/purchases"
+    : location.pathname.startsWith("/exchange-rates")
+    ? "/exchange-rates"
+    : location.pathname;
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -47,11 +83,7 @@ export default function AppLayout({ user, onLogout }: Props) {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[
-            location.pathname.startsWith("/orders") ? "/orders" :
-            location.pathname.startsWith("/exchange-rates") ? "/exchange-rates" :
-            location.pathname
-          ]}
+          selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ border: "none" }}

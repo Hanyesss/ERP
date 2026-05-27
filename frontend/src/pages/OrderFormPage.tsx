@@ -73,7 +73,7 @@ export default function OrderFormPage({ user }: Props) {
     const set = new Set<string>();
     (items || []).forEach((item: any) => {
       if (!item) return;
-      [item.sale_currency, item.cost_currency, item.price_per_kg_currency, item.cargo_value_currency]
+      [item.sale_currency, item.price_per_kg_currency, item.cargo_value_currency]
         .forEach(c => { if (c && c !== "CNY") set.add(c); });
     });
     (charges || []).forEach((charge: any) => {
@@ -93,9 +93,8 @@ export default function OrderFormPage({ user }: Props) {
     return { CNY: 1, ...rateCheck.rates };
   }, [rateCheck]);
 
-  const { totalSale, totalCost } = useMemo(() => {
+  const { totalSale } = useMemo(() => {
     if (isLogistics) {
-      // Logistics: sum of charges + weight × price_per_kg
       let sale = 0;
       (charges || []).forEach((charge: any) => {
         if (!charge?.amount) return;
@@ -107,19 +106,16 @@ export default function OrderFormPage({ user }: Props) {
         const r = rates[item?.price_per_kg_currency ?? "CNY"] ?? null;
         if (r !== null) sale += Number(item.weight_kg) * Number(item.price_per_kg) * r;
       });
-      return { totalSale: sale, totalCost: 0 };
+      return { totalSale: sale };
     }
-    // Trade / services
-    let sale = 0, cost = 0;
+    let sale = 0;
     (items || []).forEach((item: any) => {
       if (!item) return;
       const sr = rates[item?.sale_currency ?? "CNY"] ?? null;
-      const cr = rates[item?.cost_currency ?? "CNY"] ?? null;
       const qty = Number(item?.quantity) || 0;
       if (sr !== null) sale += qty * (Number(item?.sale_price) || 0) * sr;
-      if (cr !== null) cost += qty * (Number(item?.cost_price) || 0) * cr;
     });
-    return { totalSale: sale, totalCost: cost };
+    return { totalSale: sale };
   }, [items, charges, rates, isLogistics]);
 
   // Multi-currency totals for logistics
@@ -163,9 +159,7 @@ export default function OrderFormPage({ user }: Props) {
           name: i.name, name_cn: i.name_cn,
           quantity: i.quantity != null ? Number(i.quantity) : undefined,
           unit: i.unit,
-          cost_price: i.cost_price != null ? Number(i.cost_price) : undefined,
-          cost_currency: i.cost_currency,
-          supplier_id: i.supplier_id,
+          preferred_supplier_id: i.preferred_supplier_id,
           sale_price: i.sale_price != null ? Number(i.sale_price) : undefined,
           sale_currency: i.sale_currency,
           weight_kg: i.weight_kg != null ? Number(i.weight_kg) : undefined,
@@ -232,7 +226,6 @@ export default function OrderFormPage({ user }: Props) {
       items: (values.items || []).map((item: any) => ({
         ...item,
         quantity: item.quantity != null ? Number(item.quantity) : undefined,
-        cost_price: item.cost_price != null ? Number(item.cost_price) : undefined,
         sale_price: item.sale_price != null ? Number(item.sale_price) : undefined,
         weight_kg: item.weight_kg != null ? Number(item.weight_kg) : undefined,
         volume_m3: item.volume_m3 != null ? Number(item.volume_m3) : undefined,
@@ -388,21 +381,6 @@ export default function OrderFormPage({ user }: Props) {
           ) : !isLogistics ? (
             <Row gutter={24} style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
               <Col><Statistic title={`${t("order.total_sale")} (CNY)`} value={totalSale.toFixed(2)} /></Col>
-              <Col><Statistic title={`${t("order.total_cost")} (CNY)`} value={totalCost.toFixed(2)} /></Col>
-              <Col>
-                <Statistic
-                  title={`${t("order.margin")} (CNY)`}
-                  value={(totalSale - totalCost).toFixed(2)}
-                  valueStyle={{ color: totalSale - totalCost >= 0 ? "#3f8600" : "#cf1322" }}
-                />
-              </Col>
-              <Col>
-                <Statistic
-                  title={t("order.margin_pct")}
-                  value={totalSale > 0 ? (((totalSale - totalCost) / totalSale) * 100).toFixed(1) : "0"}
-                  suffix="%"
-                />
-              </Col>
             </Row>
           ) : null}
         </Card>

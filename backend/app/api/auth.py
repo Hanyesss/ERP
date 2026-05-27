@@ -1,7 +1,7 @@
-from datetime import timedelta, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.core.security import verify_password, create_access_token
@@ -15,9 +15,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 COOKIE_NAME = "access_token"
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login")
 async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.login == body.login, User.is_active == True))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.role_entries))
+        .where(User.login == body.login, User.is_active == True)
+    )
     user = result.scalar_one_or_none()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -31,7 +35,7 @@ async def login(body: LoginRequest, response: Response, db: AsyncSession = Depen
         max_age=settings.JWT_EXPIRE_MINUTES * 60,
         path="/",
     )
-    return user
+    return UserResponse.from_user(user)
 
 
 @router.post("/logout")
@@ -40,6 +44,6 @@ async def logout(response: Response):
     return {"detail": "Logged out"}
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    return UserResponse.from_user(current_user)

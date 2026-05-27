@@ -1,15 +1,15 @@
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import aliased
 
 from app.database import get_db
-from app.core.deps import get_current_user
-from app.models.user import User, UserRole
+from app.core.deps import get_current_user, require_roles
+from app.models.user import User
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_item import OrderItem
 from app.models.order_charge import OrderCharge
@@ -17,14 +17,21 @@ from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.business_type import BusinessType
 from app.models.exchange_rate import ExchangeRate
 from app.models.company import Company
+from app.models.purchase_item import PurchaseItem
+from app.models.purchase import Purchase
 from app.models.audit_log import AuditActionEnum
 from app.schemas.order import (
-    OrderCreate, OrderUpdate, OrderResponse, OrderListItem,
-    OrderListResponse, OrderItemResponse, OrderChargeResponse,
+    OrderCreate, OrderUpdate, OrderListItem, OrderListResponse,
+    OrderChargeResponse, OrderItemResponseManager, OrderItemResponseFull,
+    OrderResponseManager, OrderResponseFull, PurchaseItemBrief,
+    AvailableForPurchaseItem,
 )
 from app.utils.audit import write_audit
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+_PURCHASER_ROLES = ("purchaser", "accountant", "admin")
+_ALL_EXCEPT_EMPLOYEE = ("manager", "purchaser", "accountant", "admin")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -57,7 +64,11 @@ async def _get_rates(db: AsyncSession, order_date: date, currencies: set[str]) -
     return rates
 
 
-async def _load_order_detail(db: AsyncSession, order_id: uuid.UUID) -> OrderResponse:
+async def _load_order_detail(
+    db: AsyncSession, order_id: uuid.UUID, user: User
+) -> Union[OrderResponseManager, OrderResponseFull]:
+    is_manager_only = user.has_role("manager") and not user.has_role(*_PURCHASER_ROLES)
+
     ClientAlias = aliased(Counterparty)
     ManagerAlias = aliased(User)
 
@@ -80,29 +91,15 @@ async def _load_order_detail(db: AsyncSession, order_id: uuid.UUID) -> OrderResp
         raise HTTPException(404, "Order not found")
     order = row[0]
 
-    # Items with supplier names
+    # Items with preferred_supplier names
+    PreferredAlias = aliased(Counterparty)
     items_stmt = (
-        select(OrderItem, Counterparty.name.label("supplier_name"))
-        .outerjoin(Counterparty, OrderItem.supplier_id == Counterparty.id)
+        select(OrderItem, PreferredAlias.name.label("preferred_supplier_name"))
+        .outerjoin(PreferredAlias, OrderItem.preferred_supplier_id == PreferredAlias.id)
         .where(OrderItem.order_id == order_id)
         .order_by(OrderItem.id)
     )
     item_rows = (await db.execute(items_stmt)).all()
-    items = [
-        OrderItemResponse(
-            id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
-            quantity=r[0].quantity, unit=r[0].unit,
-            cost_price=r[0].cost_price, cost_currency=r[0].cost_currency,
-            supplier_id=r[0].supplier_id, supplier_name=r[1],
-            sale_price=r[0].sale_price, sale_currency=r[0].sale_currency,
-            sale_rate_to_cny=r[0].sale_rate_to_cny, cost_rate_to_cny=r[0].cost_rate_to_cny,
-            weight_kg=r[0].weight_kg, volume_m3=r[0].volume_m3, density_kg_m3=r[0].density_kg_m3,
-            price_per_kg=r[0].price_per_kg, price_per_kg_currency=r[0].price_per_kg_currency,
-            cargo_value=r[0].cargo_value, cargo_value_currency=r[0].cargo_value_currency,
-            places_count=r[0].places_count,
-        )
-        for r in item_rows
-    ]
 
     # Charges
     charge_rows = (await db.execute(
@@ -116,7 +113,84 @@ async def _load_order_detail(db: AsyncSession, order_id: uuid.UUID) -> OrderResp
         for c in charge_rows
     ]
 
-    return OrderResponse(
+    if is_manager_only:
+        items = [
+            OrderItemResponseManager(
+                id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
+                quantity=r[0].quantity, unit=r[0].unit,
+                preferred_supplier_id=r[0].preferred_supplier_id,
+                preferred_supplier_name=r[1],
+                sale_price=r[0].sale_price, sale_currency=r[0].sale_currency,
+                sale_rate_to_cny=r[0].sale_rate_to_cny,
+                weight_kg=r[0].weight_kg, volume_m3=r[0].volume_m3,
+                density_kg_m3=r[0].density_kg_m3,
+                price_per_kg=r[0].price_per_kg, price_per_kg_currency=r[0].price_per_kg_currency,
+                cargo_value=r[0].cargo_value, cargo_value_currency=r[0].cargo_value_currency,
+                places_count=r[0].places_count,
+            )
+            for r in item_rows
+        ]
+        return OrderResponseManager(
+            id=order.id, order_number=order.order_number, order_date=order.order_date,
+            client_id=order.client_id, client_name=row.client_name,
+            business_type_id=order.business_type_id, business_type_name=row.business_type_name,
+            business_type_name_cn=row.business_type_name_cn, business_type_code=row.business_type_code,
+            manager_id=order.manager_id, manager_name=row.manager_name,
+            status=order.status, client_currency=order.client_currency,
+            total_sale_cny=order.total_sale_cny,
+            payment_status=order.payment_status,
+            notes=order.notes, recipient=order.recipient, destination=order.destination,
+            arrival_date=order.arrival_date, tracking_number=order.tracking_number,
+            created_at=order.created_at, items=items, charges=charges,
+        )
+
+    # Purchaser/accountant/admin — load purchase_items per order_item
+    item_ids = [r[0].id for r in item_rows]
+    purchase_item_rows = []
+    if item_ids:
+        pi_stmt = (
+            select(PurchaseItem, Purchase.purchase_number)
+            .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+            .where(PurchaseItem.order_item_id.in_(item_ids), Purchase.is_deleted == False)
+        )
+        purchase_item_rows = (await db.execute(pi_stmt)).all()
+
+    # Group purchase_items by order_item_id
+    pi_by_item: dict[uuid.UUID, list] = {}
+    for pi_row in purchase_item_rows:
+        oi_id = pi_row[0].order_item_id
+        pi_by_item.setdefault(oi_id, []).append(pi_row)
+
+    items = [
+        OrderItemResponseFull(
+            id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
+            quantity=r[0].quantity, unit=r[0].unit,
+            preferred_supplier_id=r[0].preferred_supplier_id,
+            preferred_supplier_name=r[1],
+            sale_price=r[0].sale_price, sale_currency=r[0].sale_currency,
+            sale_rate_to_cny=r[0].sale_rate_to_cny,
+            weight_kg=r[0].weight_kg, volume_m3=r[0].volume_m3,
+            density_kg_m3=r[0].density_kg_m3,
+            price_per_kg=r[0].price_per_kg, price_per_kg_currency=r[0].price_per_kg_currency,
+            cargo_value=r[0].cargo_value, cargo_value_currency=r[0].cargo_value_currency,
+            places_count=r[0].places_count,
+            purchased_quantity=sum(
+                pi[0].quantity for pi in pi_by_item.get(r[0].id, [])
+            ) or Decimal("0"),
+            purchase_items=[
+                PurchaseItemBrief(
+                    id=pi[0].id, purchase_id=pi[0].purchase_id,
+                    purchase_number=pi[1],
+                    quantity=pi[0].quantity, cost_price=pi[0].cost_price,
+                    cost_amount=pi[0].cost_amount,
+                )
+                for pi in pi_by_item.get(r[0].id, [])
+            ],
+        )
+        for r in item_rows
+    ]
+
+    return OrderResponseFull(
         id=order.id, order_number=order.order_number, order_date=order.order_date,
         client_id=order.client_id, client_name=row.client_name,
         business_type_id=order.business_type_id, business_type_name=row.business_type_name,
@@ -134,8 +208,7 @@ async def _load_order_detail(db: AsyncSession, order_id: uuid.UUID) -> OrderResp
 def _collect_currencies(items_data, charges_data) -> set[str]:
     needed: set[str] = set()
     for item in items_data:
-        for field in (item.sale_currency, item.cost_currency,
-                      item.price_per_kg_currency, item.cargo_value_currency):
+        for field in (item.sale_currency, item.price_per_kg_currency, item.cargo_value_currency):
             if field and field != "CNY":
                 needed.add(field)
     for charge in charges_data:
@@ -144,20 +217,18 @@ def _collect_currencies(items_data, charges_data) -> set[str]:
     return needed
 
 
-def _calc_trade_totals(items_data, rates: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
+def _calc_trade_totals(items_data, rates: dict[str, Decimal]) -> Decimal:
+    """Returns total_sale_cny only. Cost is now tracked via purchase_items."""
     total_sale = Decimal("0")
-    total_cost = Decimal("0")
     for item in items_data:
         if item.quantity is None:
             continue
         sr = rates.get(item.sale_currency or "CNY", Decimal("1"))
-        cr = rates.get(item.cost_currency or "CNY", Decimal("1"))
         total_sale += (item.quantity * (item.sale_price or Decimal("0"))) * sr
-        total_cost += (item.quantity * (item.cost_price or Decimal("0"))) * cr
-    return total_sale.quantize(Decimal("0.01")), total_cost.quantize(Decimal("0.01"))
+    return total_sale.quantize(Decimal("0.01"))
 
 
-def _calc_logistics_totals(items_data, charges_data, rates: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
+def _calc_logistics_totals(items_data, charges_data, rates: dict[str, Decimal]) -> Decimal:
     total_sale = Decimal("0")
     for item in items_data:
         if item.weight_kg and item.price_per_kg:
@@ -166,7 +237,7 @@ def _calc_logistics_totals(items_data, charges_data, rates: dict[str, Decimal]) 
     for charge in charges_data:
         r = rates.get(charge.currency or "CNY", Decimal("1"))
         total_sale += charge.amount * r
-    return total_sale.quantize(Decimal("0.01")), Decimal("0")
+    return total_sale.quantize(Decimal("0.01"))
 
 
 async def _save_items_and_charges(
@@ -185,11 +256,9 @@ async def _save_items_and_charges(
             order_id=order_id,
             name=item_data.name, name_cn=item_data.name_cn,
             quantity=item_data.quantity, unit=item_data.unit,
-            cost_price=item_data.cost_price, cost_currency=item_data.cost_currency,
-            supplier_id=item_data.supplier_id,
+            preferred_supplier_id=item_data.preferred_supplier_id,
             sale_price=item_data.sale_price, sale_currency=item_data.sale_currency,
             sale_rate_to_cny=rates.get(item_data.sale_currency or "CNY", Decimal("1")) if item_data.sale_currency else None,
-            cost_rate_to_cny=rates.get(item_data.cost_currency or "CNY", Decimal("1")) if item_data.cost_currency else None,
             weight_kg=item_data.weight_kg, volume_m3=item_data.volume_m3, density_kg_m3=density,
             price_per_kg=item_data.price_per_kg, price_per_kg_currency=item_data.price_per_kg_currency,
             cargo_value=item_data.cargo_value, cargo_value_currency=item_data.cargo_value_currency,
@@ -215,7 +284,7 @@ async def _save_items_and_charges(
 async def get_next_number(
     order_date: date = Query(alias="date"),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
     prefix = f"ORD-{order_date.strftime('%Y%m%d')}-"
     count = (await db.execute(
@@ -236,8 +305,10 @@ async def list_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
+    is_full = current_user.has_role(*_PURCHASER_ROLES)
+
     ClientAlias = aliased(Counterparty)
     ManagerAlias = aliased(User)
 
@@ -286,14 +357,16 @@ async def list_orders(
             business_type_code=r.business_type_code,
             manager_id=r.manager_id, manager_name=r.manager_name,
             status=r.status, client_currency=r.client_currency,
-            total_sale_cny=r.total_sale_cny, total_cost_cny=r.total_cost_cny,
-            payment_status=r.payment_status, supplier_payment_status=r.supplier_payment_status,
+            total_sale_cny=r.total_sale_cny,
+            total_cost_cny=r.total_cost_cny if is_full else None,
+            payment_status=r.payment_status,
+            supplier_payment_status=r.supplier_payment_status if is_full else None,
         )
         for r in rows
     ]
 
     page_sale = sum(r.total_sale_cny for r in rows) or Decimal("0")
-    page_cost = sum(r.total_cost_cny for r in rows) or Decimal("0")
+    page_cost = (sum(r.total_cost_cny for r in rows) or Decimal("0")) if is_full else None
 
     return OrderListResponse(
         items=items, total=total, page=page, page_size=page_size,
@@ -301,11 +374,62 @@ async def list_orders(
     )
 
 
+@router.get("/{order_id}/available-for-purchase", response_model=list[AvailableForPurchaseItem])
+async def get_available_for_purchase(
+    order_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_PURCHASER_ROLES)),
+):
+    """Returns order items with remaining quantity available to purchase."""
+    order = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    PreferredAlias = aliased(Counterparty)
+    items_stmt = (
+        select(OrderItem, PreferredAlias.name.label("preferred_supplier_name"))
+        .outerjoin(PreferredAlias, OrderItem.preferred_supplier_id == PreferredAlias.id)
+        .where(OrderItem.order_id == order_id)
+        .order_by(OrderItem.id)
+    )
+    item_rows = (await db.execute(items_stmt)).all()
+
+    item_ids = [r[0].id for r in item_rows]
+    already_purchased: dict[uuid.UUID, Decimal] = {}
+    if item_ids:
+        pi_rows = (await db.execute(
+            select(PurchaseItem.order_item_id, func.sum(PurchaseItem.quantity).label("total_qty"))
+            .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+            .where(PurchaseItem.order_item_id.in_(item_ids), Purchase.is_deleted == False)
+            .group_by(PurchaseItem.order_item_id)
+        )).all()
+        for row in pi_rows:
+            already_purchased[row[0]] = row[1] or Decimal("0")
+
+    result = []
+    for r in item_rows:
+        item = r[0]
+        if item.quantity is None:
+            continue
+        purchased = already_purchased.get(item.id, Decimal("0"))
+        available = max(item.quantity - purchased, Decimal("0"))
+        result.append(AvailableForPurchaseItem(
+            id=item.id, name=item.name, name_cn=item.name_cn,
+            quantity=item.quantity, unit=item.unit,
+            sale_price=item.sale_price, sale_currency=item.sale_currency,
+            preferred_supplier_id=item.preferred_supplier_id,
+            preferred_supplier_name=r[1],
+            already_purchased=purchased,
+            available_to_purchase=available,
+        ))
+    return result
+
+
 @router.get("/{order_id}/history")
 async def get_order_history(
     order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
     from app.models.audit_log import AuditLog
     result = await db.execute(
@@ -324,20 +448,20 @@ async def get_order_history(
     ]
 
 
-@router.get("/{order_id}", response_model=OrderResponse)
+@router.get("/{order_id}")
 async def get_order(
     order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
-    return await _load_order_detail(db, order_id)
+    return await _load_order_detail(db, order_id, current_user)
 
 
-@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_order(
     body: OrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
     company = await _get_default_company(db)
 
@@ -379,37 +503,36 @@ async def create_order(
     await db.flush()
 
     if is_logistics:
-        total_sale, total_cost = _calc_logistics_totals(body.items, body.charges, rates)
+        total_sale = _calc_logistics_totals(body.items, body.charges, rates)
     else:
-        total_sale, total_cost = _calc_trade_totals(body.items, rates)
+        total_sale = _calc_trade_totals(body.items, rates)
 
     order.total_sale_cny = total_sale
-    order.total_cost_cny = total_cost
+    order.total_cost_cny = Decimal("0")
 
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.create,
                       {"order_number": order.order_number, "total_sale_cny": str(total_sale)})
     await db.commit()
-    return await _load_order_detail(db, order.id)
+    return await _load_order_detail(db, order.id, current_user)
 
 
-@router.patch("/{order_id}", response_model=OrderResponse)
+@router.patch("/{order_id}")
 async def update_order(
     order_id: uuid.UUID,
     body: OrderUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Order not found")
-    if order.status == OrderStatus.closed and current_user.role != UserRole.admin:
+    if order.status == OrderStatus.closed and not current_user.has_role("admin"):
         raise HTTPException(403, "Only admin can modify a closed order")
 
     old_data = {"order_number": order.order_number, "status": order.status}
     update_data = body.model_dump(exclude_unset=True)
 
-    # Determine business type
     bt_id = update_data.get("business_type_id", order.business_type_id)
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == bt_id))).scalar_one_or_none()
     is_logistics = bt and bt.code == "logistics"
@@ -418,7 +541,6 @@ async def update_order(
     charges_data = update_data.pop("charges", None)
 
     if items_data is not None or charges_data is not None:
-        # Delete existing items and charges
         await db.execute(delete(OrderItem).where(OrderItem.order_id == order_id))
         await db.execute(delete(OrderCharge).where(OrderCharge.order_id == order_id))
         await db.flush()
@@ -432,11 +554,9 @@ async def update_order(
         await db.flush()
 
         if is_logistics:
-            total_sale, total_cost = _calc_logistics_totals(items_list, charges_list, rates)
+            order.total_sale_cny = _calc_logistics_totals(items_list, charges_list, rates)
         else:
-            total_sale, total_cost = _calc_trade_totals(items_list, rates)
-        order.total_sale_cny = total_sale
-        order.total_cost_cny = total_cost
+            order.total_sale_cny = _calc_trade_totals(items_list, rates)
 
     for field, value in update_data.items():
         setattr(order, field, value)
@@ -444,14 +564,14 @@ async def update_order(
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update,
                       {"old": old_data, "total_sale_cny": str(order.total_sale_cny)})
     await db.commit()
-    return await _load_order_detail(db, order.id)
+    return await _load_order_detail(db, order.id, current_user)
 
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_order(
     order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
@@ -463,11 +583,11 @@ async def cancel_order(
     await db.commit()
 
 
-@router.post("/{order_id}/close", response_model=OrderResponse)
+@router.post("/{order_id}/close")
 async def close_order(
     order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
@@ -475,9 +595,9 @@ async def close_order(
         raise HTTPException(404, "Order not found")
     if order.status not in (OrderStatus.new, OrderStatus.active):
         raise HTTPException(422, f"Cannot close order with status '{order.status}'")
-    if current_user.role not in (UserRole.admin, UserRole.manager):
+    if not current_user.has_role("admin", "manager"):
         raise HTTPException(403, "Only admin or manager can close orders")
     order.status = OrderStatus.closed
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update, {"status": "closed"})
     await db.commit()
-    return await _load_order_detail(db, order.id)
+    return await _load_order_detail(db, order.id, current_user)

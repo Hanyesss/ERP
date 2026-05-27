@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 
 VALID_CHARGE_TYPES = {"delivery", "insurance_percent", "insurance_cost", "china_delivery", "extra_packing", "loaders"}
@@ -31,9 +31,7 @@ class OrderItemCreate(BaseModel):
     # Trade / services
     quantity: Optional[Decimal] = None
     unit: Optional[str] = None
-    cost_price: Optional[Decimal] = None
-    cost_currency: Optional[str] = None
-    supplier_id: Optional[uuid.UUID] = None
+    preferred_supplier_id: Optional[uuid.UUID] = None
     sale_price: Optional[Decimal] = None
     sale_currency: Optional[str] = None
     # Logistics
@@ -78,20 +76,20 @@ class OrderUpdate(BaseModel):
     tracking_number: Optional[str] = None
 
 
-class OrderItemResponse(BaseModel):
+# ── Item response (role-aware) ─────────────────────────────────────────────────
+
+class OrderItemResponseManager(BaseModel):
+    """What a manager sees: sale data + preferred_supplier name, no cost."""
     id: uuid.UUID
     name: str
     name_cn: Optional[str] = None
     quantity: Optional[Decimal] = None
     unit: Optional[str] = None
-    cost_price: Optional[Decimal] = None
-    cost_currency: Optional[str] = None
-    supplier_id: Optional[uuid.UUID] = None
-    supplier_name: Optional[str] = None
+    preferred_supplier_id: Optional[uuid.UUID] = None
+    preferred_supplier_name: Optional[str] = None
     sale_price: Optional[Decimal] = None
     sale_currency: Optional[str] = None
     sale_rate_to_cny: Optional[Decimal] = None
-    cost_rate_to_cny: Optional[Decimal] = None
     # Logistics
     weight_kg: Optional[Decimal] = None
     volume_m3: Optional[Decimal] = None
@@ -102,8 +100,44 @@ class OrderItemResponse(BaseModel):
     cargo_value_currency: Optional[str] = None
     places_count: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+
+class PurchaseItemBrief(BaseModel):
+    id: uuid.UUID
+    purchase_id: uuid.UUID
+    purchase_number: str
+    quantity: Decimal
+    cost_price: Decimal
+    cost_amount: Decimal
+
+
+class OrderItemResponseFull(BaseModel):
+    """What purchaser/accountant/admin sees: sale + purchase data."""
+    id: uuid.UUID
+    name: str
+    name_cn: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    unit: Optional[str] = None
+    preferred_supplier_id: Optional[uuid.UUID] = None
+    preferred_supplier_name: Optional[str] = None
+    sale_price: Optional[Decimal] = None
+    sale_currency: Optional[str] = None
+    sale_rate_to_cny: Optional[Decimal] = None
+    # Logistics
+    weight_kg: Optional[Decimal] = None
+    volume_m3: Optional[Decimal] = None
+    density_kg_m3: Optional[Decimal] = None
+    price_per_kg: Optional[Decimal] = None
+    price_per_kg_currency: Optional[str] = None
+    cargo_value: Optional[Decimal] = None
+    cargo_value_currency: Optional[str] = None
+    places_count: Optional[int] = None
+    # Purchase data
+    purchased_quantity: Optional[Decimal] = None
+    purchase_items: List[PurchaseItemBrief] = []
+
+
+# Keep for backwards compatibility in orders.py
+OrderItemResponse = OrderItemResponseFull
 
 
 class OrderListItem(BaseModel):
@@ -120,12 +154,40 @@ class OrderListItem(BaseModel):
     status: str
     client_currency: str
     total_sale_cny: Decimal
-    total_cost_cny: Decimal
+    total_cost_cny: Optional[Decimal] = None
     payment_status: str
-    supplier_payment_status: str
+    supplier_payment_status: Optional[str] = None
 
 
-class OrderResponse(BaseModel):
+class OrderResponseManager(BaseModel):
+    """Visible to manager: no cost/margin/supplier_payment_status."""
+    id: uuid.UUID
+    order_number: str
+    order_date: date
+    client_id: uuid.UUID
+    client_name: str
+    business_type_id: uuid.UUID
+    business_type_name: str
+    business_type_name_cn: Optional[str] = None
+    business_type_code: str
+    manager_id: uuid.UUID
+    manager_name: str
+    status: str
+    client_currency: str
+    total_sale_cny: Decimal
+    payment_status: str
+    notes: Optional[str] = None
+    recipient: Optional[str] = None
+    destination: Optional[str] = None
+    arrival_date: Optional[date] = None
+    tracking_number: Optional[str] = None
+    created_at: datetime
+    items: List[OrderItemResponseManager] = []
+    charges: List[OrderChargeResponse] = []
+
+
+class OrderResponseFull(BaseModel):
+    """Visible to purchaser/accountant/admin: all fields."""
     id: uuid.UUID
     order_number: str
     order_date: date
@@ -149,8 +211,12 @@ class OrderResponse(BaseModel):
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
     created_at: datetime
-    items: list[OrderItemResponse] = []
-    charges: list[OrderChargeResponse] = []
+    items: List[OrderItemResponseFull] = []
+    charges: List[OrderChargeResponse] = []
+
+
+# Alias for imports that still use OrderResponse
+OrderResponse = OrderResponseFull
 
 
 class OrderListResponse(BaseModel):
@@ -159,4 +225,19 @@ class OrderListResponse(BaseModel):
     page: int
     page_size: int
     page_total_sale_cny: Decimal
-    page_total_cost_cny: Decimal
+    page_total_cost_cny: Optional[Decimal] = None
+
+
+class AvailableForPurchaseItem(BaseModel):
+    """Order item with how much is still available to purchase."""
+    id: uuid.UUID
+    name: str
+    name_cn: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    unit: Optional[str] = None
+    sale_price: Optional[Decimal] = None
+    sale_currency: Optional[str] = None
+    preferred_supplier_id: Optional[uuid.UUID] = None
+    preferred_supplier_name: Optional[str] = None
+    already_purchased: Decimal = Decimal("0")
+    available_to_purchase: Decimal = Decimal("0")

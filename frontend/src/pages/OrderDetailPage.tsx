@@ -5,11 +5,13 @@ import {
   Button, Card, Col, Descriptions, Divider, Popconfirm, Row,
   Space, Statistic, Table, Tabs, Tag, Timeline, Typography, message,
 } from "antd";
-import { EditOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getOrder, closeOrder, cancelOrder, getOrderHistory } from "../api/orders";
+import { getPurchases } from "../api/purchases";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
+import { useHasAnyRole } from "../hooks/useRole";
 import type { OrderItem, OrderCharge } from "../types/order";
 
 const { Title, Text } = Typography;
@@ -25,6 +27,8 @@ export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
 
+  const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
+
   const { data: order, isLoading } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getOrder(id!).then(r => r.data),
@@ -35,6 +39,12 @@ export default function OrderDetailPage() {
     queryKey: ["order-history", id],
     queryFn: () => getOrderHistory(id!).then(r => r.data),
     enabled: !!id,
+  });
+
+  const { data: purchasesData } = useQuery({
+    queryKey: ["purchases-for-order", id],
+    queryFn: () => getPurchases({ page_size: 100 }).then(r => r.data),
+    enabled: !!id && canSeeCost,
   });
 
   const closeMutation = useMutation({
@@ -60,13 +70,16 @@ export default function OrderDetailPage() {
   if (isLoading || !order) return null;
 
   const isLogistics = order.business_type_code === "logistics";
-  const margin = order.total_sale_cny - order.total_cost_cny;
-  const marginPct = order.total_sale_cny > 0 ? (margin / order.total_sale_cny) * 100 : 0;
+  const margin = canSeeCost && order.total_cost_cny != null
+    ? order.total_sale_cny - order.total_cost_cny
+    : null;
+  const marginPct = margin != null && order.total_sale_cny > 0
+    ? (margin / order.total_sale_cny) * 100
+    : null;
   const canEdit = order.status === "new" || order.status === "active";
   const canClose = order.status === "new" || order.status === "active";
   const canCancel = order.status !== "cancelled" && order.status !== "closed";
 
-  // Collect rates from charges for multi-currency display
   const chargeRateMap: Record<string, number> = { CNY: 1 };
   (order.charges || []).forEach(c => {
     if (c.amount > 0 && c.rate_to_cny > 0) chargeRateMap[c.currency] = Number(c.rate_to_cny);
@@ -74,22 +87,38 @@ export default function OrderDetailPage() {
 
   const tradeItemColumns: ColumnsType<OrderItem> = [
     { title: "№", key: "idx", width: 40, render: (_, __, i) => i + 1 },
-    { title: t("order.item_name"), dataIndex: "name", key: "name" },
-    { title: t("order.item_quantity"), dataIndex: "quantity", key: "quantity", width: 80, align: "right",
+    { title: t("order.item_name"), dataIndex: "name", key: "name",
+      render: (name, row) => (
+        <div>
+          <div>{name}</div>
+          {row.name_cn && <div style={{ color: "#888", fontSize: 11 }}>{row.name_cn}</div>}
+        </div>
+      )
+    },
+    { title: t("order.item_quantity"), dataIndex: "quantity", key: "quantity", width: 90, align: "right",
       render: (v, row) => `${v ?? "—"} ${row.unit || ""}`.trim() },
-    { title: t("order.item_supplier"), dataIndex: "supplier_name", key: "supplier_name" },
-    { title: t("order.item_cost_price"), key: "cost", width: 130, align: "right",
-      render: (_, row) => row.cost_price != null ? `${row.cost_price} ${row.cost_currency}` : "—" },
+    { title: t("order.item_preferred_supplier"), dataIndex: "preferred_supplier_name", key: "pref_supplier",
+      render: v => v ? <Text type="secondary" style={{ fontSize: 12 }}>{v}</Text> : "—" },
     { title: t("order.item_sale_price"), key: "sale", width: 130, align: "right",
       render: (_, row) => row.sale_price != null ? `${row.sale_price} ${row.sale_currency}` : "—" },
     { title: `${t("order.total_sale")} CNY`, key: "sale_cny", width: 120, align: "right",
       render: (_, row) => row.sale_price != null && row.quantity != null && row.sale_rate_to_cny != null
         ? fmtCny(Number(row.quantity) * Number(row.sale_price) * Number(row.sale_rate_to_cny))
         : "—" },
-    { title: `${t("order.total_cost")} CNY`, key: "cost_cny", width: 120, align: "right",
-      render: (_, row) => row.cost_price != null && row.quantity != null && row.cost_rate_to_cny != null
-        ? fmtCny(Number(row.quantity) * Number(row.cost_price) * Number(row.cost_rate_to_cny))
-        : "—" },
+    ...(canSeeCost ? [
+      { title: t("purchase.purchased_qty"), key: "purchased", width: 100, align: "right" as const,
+        render: (_: any, row: OrderItem) => {
+          const pq = row.purchased_quantity;
+          const q = row.quantity;
+          if (pq == null || q == null) return "—";
+          return (
+            <Tag color={Number(pq) >= Number(q) ? "green" : "orange"}>
+              {Number(pq)}/{Number(q)}
+            </Tag>
+          );
+        }
+      },
+    ] : []),
   ];
 
   const logisticsItemColumns: ColumnsType<OrderItem> = [
@@ -107,7 +136,6 @@ export default function OrderDetailPage() {
       render: (_, row) => row.cargo_value != null ? `${row.cargo_value} ${row.cargo_value_currency}` : "—" },
     { title: t("order.places_count"), dataIndex: "places_count", key: "places_count", align: "right",
       render: v => v ?? "—" },
-    { title: t("order.item_supplier"), dataIndex: "supplier_name", key: "supplier_name" },
   ];
 
   const chargeColumns: ColumnsType<OrderCharge> = [
@@ -118,6 +146,14 @@ export default function OrderDetailPage() {
     { title: "CNY", dataIndex: "amount_cny", key: "amount_cny", align: "right",
       render: v => fmtCny(Number(v)) },
   ];
+
+  // Purchases linked to this order (filtered client-side by order items)
+  const orderItemIds = new Set((order.items || []).map(i => i.id));
+  const linkedPurchases = (purchasesData?.items || []).filter(p => {
+    // We can't filter by order on the list API easily, so show all purchases for now
+    // The purchases detail page shows which orders are linked
+    return true;
+  }).slice(0, 10);
 
   const tabItems = [
     {
@@ -140,6 +176,11 @@ export default function OrderDetailPage() {
             <Descriptions.Item label={t("order.payment_status_unpaid")}>
               <PaymentStatusTag status={order.payment_status} />
             </Descriptions.Item>
+            {canSeeCost && order.supplier_payment_status && (
+              <Descriptions.Item label={t("order.supplier_payment_status")}>
+                <PaymentStatusTag status={order.supplier_payment_status} />
+              </Descriptions.Item>
+            )}
             {order.notes && (
               <Descriptions.Item label={t("order.notes")} span={2}>{order.notes}</Descriptions.Item>
             )}
@@ -207,38 +248,38 @@ export default function OrderDetailPage() {
           <Divider style={{ margin: "12px 0" }} />
           <Row gutter={24}>
             {isLogistics ? (
-              // Multi-currency totals for logistics
               Object.entries({ CNY: 1, ...Object.fromEntries(
                 Object.entries(chargeRateMap).filter(([k]) => k !== "CNY")
               )}).map(([cur, rate]) => {
                 const val = Number(rate) > 0 ? order.total_sale_cny / Number(rate) : null;
                 return (
                   <Col key={cur}>
-                    <Statistic
-                      title={`${t("order.total_sale")} (${cur})`}
-                      value={val != null ? fmtCny(val) : "—"}
-                    />
+                    <Statistic title={`${t("order.total_sale")} (${cur})`} value={val != null ? fmtCny(val) : "—"} />
                   </Col>
                 );
               })
             ) : (
               <>
                 <Col><Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} /></Col>
-                <Col><Statistic title={`${t("order.total_cost")} (CNY)`} value={fmtCny(order.total_cost_cny)} /></Col>
-                <Col>
-                  <Statistic
-                    title={`${t("order.margin")} (CNY)`}
-                    value={fmtCny(margin)}
-                    valueStyle={{ color: margin >= 0 ? "#3f8600" : "#cf1322" }}
-                  />
-                </Col>
-                <Col>
-                  <Statistic
-                    title={t("order.margin_pct")}
-                    value={marginPct.toFixed(1)}
-                    suffix="%"
-                  />
-                </Col>
+                {canSeeCost && order.total_cost_cny != null && (
+                  <>
+                    <Col><Statistic title={`${t("order.total_cost")} (CNY)`} value={fmtCny(order.total_cost_cny)} /></Col>
+                    <Col>
+                      <Statistic
+                        title={`${t("order.margin")} (CNY)`}
+                        value={fmtCny(margin)}
+                        valueStyle={{ color: (margin ?? 0) >= 0 ? "#3f8600" : "#cf1322" }}
+                      />
+                    </Col>
+                    <Col>
+                      <Statistic
+                        title={t("order.margin_pct")}
+                        value={marginPct != null ? marginPct.toFixed(1) : "—"}
+                        suffix="%"
+                      />
+                    </Col>
+                  </>
+                )}
               </>
             )}
           </Row>
@@ -259,17 +300,61 @@ export default function OrderDetailPage() {
         </div>
       ),
     },
-    {
+    ...(canSeeCost ? [{
+      key: "purchases",
+      label: t("nav.purchases"),
+      children: (
+        <div>
+          <Row justify="end" style={{ marginBottom: 12 }}>
+            <Button
+              type="primary"
+              icon={<ShoppingCartOutlined />}
+              onClick={() => navigate(`/purchases/new?order_id=${id}`)}
+            >
+              {t("purchase.create_for_order")}
+            </Button>
+          </Row>
+          <Table
+            size="small"
+            pagination={false}
+            dataSource={order.items.filter(i => (i.purchase_items?.length ?? 0) > 0).flatMap(i =>
+              (i.purchase_items || []).map(pi => ({
+                key: pi.id,
+                item_name: i.name,
+                purchase_number: pi.purchase_number,
+                purchase_id: pi.purchase_id,
+                quantity: pi.quantity,
+                cost_price: pi.cost_price,
+                cost_amount: pi.cost_amount,
+              }))
+            )}
+            columns={[
+              { title: t("order.item_name"), dataIndex: "item_name", key: "item_name" },
+              { title: t("purchase.number"), dataIndex: "purchase_number", key: "pur_num",
+                render: (num, row: any) => (
+                  <Button type="link" size="small" onClick={() => navigate(`/purchases/${row.purchase_id}`)}>
+                    {num}
+                  </Button>
+                )
+              },
+              { title: t("order.item_quantity"), dataIndex: "quantity", key: "qty", align: "right" },
+              { title: t("purchase.cost_price"), dataIndex: "cost_price", key: "cost_price", align: "right" },
+              { title: t("purchase.cost_amount_cny"), dataIndex: "cost_amount", key: "cost_amount", align: "right",
+                render: v => fmtCny(v) },
+            ]}
+          />
+        </div>
+      ),
+    }] : []),
+    ...(canSeeCost ? [{
       key: "profit",
       label: t("order.tab_profit"),
       children: (
         <Row gutter={24} style={{ padding: 16 }}>
           {isLogistics ? (
-            <>
-              <Col span={6}>
-                <Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} />
-              </Col>
-            </>
+            <Col span={6}>
+              <Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} />
+            </Col>
           ) : (
             <>
               <Col span={6}>
@@ -282,22 +367,22 @@ export default function OrderDetailPage() {
                 <Statistic
                   title={`${t("order.margin")} (CNY)`}
                   value={fmtCny(margin)}
-                  valueStyle={{ color: margin >= 0 ? "#3f8600" : "#cf1322" }}
+                  valueStyle={{ color: (margin ?? 0) >= 0 ? "#3f8600" : "#cf1322" }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title={t("order.margin_pct")}
-                  value={marginPct.toFixed(1)}
+                  value={marginPct != null ? marginPct.toFixed(1) : "—"}
                   suffix="%"
-                  valueStyle={{ color: marginPct >= 20 ? "#3f8600" : marginPct >= 0 ? "#faad14" : "#cf1322" }}
+                  valueStyle={{ color: (marginPct ?? 0) >= 20 ? "#3f8600" : (marginPct ?? 0) >= 0 ? "#faad14" : "#cf1322" }}
                 />
               </Col>
             </>
           )}
         </Row>
       ),
-    },
+    }] : []),
     {
       key: "history",
       label: t("order.tab_history"),

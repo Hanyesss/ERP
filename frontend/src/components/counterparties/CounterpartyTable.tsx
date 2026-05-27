@@ -14,19 +14,25 @@ const TYPE_COLORS: Record<string, string> = {
   both: "purple",
 };
 
-export default function CounterpartyTable() {
+interface Props {
+  forcedType?: "client" | "supplier";
+}
+
+export default function CounterpartyTable({ forcedType }: Props) {
   const { t } = useTranslation();
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState(forcedType ?? "all");
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Counterparty | null>(null);
 
+  const effectiveType = forcedType ?? typeFilter;
+
   const { data, isLoading } = useQuery({
-    queryKey: ["counterparties", search, typeFilter, page],
-    queryFn: () => getCounterparties({ search: search || undefined, type: typeFilter, page, page_size: 20 }).then(r => r.data),
+    queryKey: ["counterparties", search, effectiveType, page],
+    queryFn: () => getCounterparties({ search: search || undefined, type: effectiveType, page, page_size: 20 }).then(r => r.data),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["counterparties"] });
@@ -125,12 +131,14 @@ export default function CounterpartyTable() {
               onSearch={val => { setSearch(val); setPage(1); }}
               onChange={e => { if (!e.target.value) { setSearch(""); setPage(1); } }}
             />
-            <Select
-              value={typeFilter}
-              onChange={val => { setTypeFilter(val); setPage(1); }}
-              options={typeOptions}
-              style={{ width: 180 }}
-            />
+            {!forcedType && (
+              <Select
+                value={typeFilter}
+                onChange={val => { setTypeFilter(val); setPage(1); }}
+                options={typeOptions}
+                style={{ width: 180 }}
+              />
+            )}
           </Space>
         </Col>
         <Col>
@@ -160,6 +168,7 @@ export default function CounterpartyTable() {
         onClose={() => { setFormOpen(false); setEditing(null); }}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}
+        forcedType={forcedType}
       />
     </div>
   );

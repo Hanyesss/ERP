@@ -11,20 +11,26 @@ export interface OrderCharge {
   notes?: string;
 }
 
+export interface PurchaseItemBrief {
+  id: string;
+  purchase_id: string;
+  purchase_number: string;
+  quantity: number;
+  cost_price: number;
+  cost_amount: number;
+}
+
 export interface OrderItem {
   id: string;
   name: string;
   name_cn?: string;
   quantity?: number;
   unit?: string;
-  cost_price?: number;
-  cost_currency?: string;
-  supplier_id?: string;
-  supplier_name?: string;
+  preferred_supplier_id?: string;
+  preferred_supplier_name?: string;
   sale_price?: number;
   sale_currency?: string;
   sale_rate_to_cny?: number;
-  cost_rate_to_cny?: number;
   // Logistics
   weight_kg?: number;
   volume_m3?: number;
@@ -34,6 +40,9 @@ export interface OrderItem {
   cargo_value?: number;
   cargo_value_currency?: string;
   places_count?: number;
+  // Purchase data (visible to purchaser/accountant/admin)
+  purchased_quantity?: number;
+  purchase_items?: PurchaseItemBrief[];
 }
 
 export interface OrderItemFormData {
@@ -42,9 +51,7 @@ export interface OrderItemFormData {
   // Trade
   quantity?: number;
   unit?: string;
-  cost_price?: number;
-  cost_currency?: string;
-  supplier_id?: string;
+  preferred_supplier_id?: string;
   sale_price?: number;
   sale_currency?: string;
   // Logistics
@@ -85,15 +92,16 @@ export interface Order {
   client_name: string;
   business_type_id: string;
   business_type_name: string;
+  business_type_name_cn?: string;
   business_type_code: string;
   manager_id: string;
   manager_name: string;
   status: OrderStatus;
   client_currency: string;
   total_sale_cny: number;
-  total_cost_cny: number;
+  total_cost_cny?: number;
   payment_status: PaymentStatus;
-  supplier_payment_status: PaymentStatus;
+  supplier_payment_status?: PaymentStatus;
   notes?: string;
   recipient?: string;
   destination?: string;
@@ -118,9 +126,9 @@ export interface OrderListItem {
   status: OrderStatus;
   client_currency: string;
   total_sale_cny: number;
-  total_cost_cny: number;
+  total_cost_cny?: number;
   payment_status: PaymentStatus;
-  supplier_payment_status: PaymentStatus;
+  supplier_payment_status?: PaymentStatus;
 }
 
 export interface OrderListResponse {
@@ -129,7 +137,7 @@ export interface OrderListResponse {
   page: number;
   page_size: number;
   page_total_sale_cny: number;
-  page_total_cost_cny: number;
+  page_total_cost_cny?: number;
 }
 
 export interface OrderFormData {
@@ -146,4 +154,18 @@ export interface OrderFormData {
   destination?: string;
   arrival_date?: string;
   tracking_number?: string;
+}
+
+export interface AvailableForPurchaseItem {
+  id: string;
+  name: string;
+  name_cn?: string;
+  quantity?: number;
+  unit?: string;
+  sale_price?: number;
+  sale_currency?: string;
+  preferred_supplier_id?: string;
+  preferred_supplier_name?: string;
+  already_purchased: number;
+  available_to_purchase: number;
 }

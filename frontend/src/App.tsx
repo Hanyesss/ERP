@@ -12,6 +12,9 @@ import OrdersPage from "./pages/OrdersPage";
 import OrderFormPage from "./pages/OrderFormPage";
 import OrderDetailPage from "./pages/OrderDetailPage";
 import ExchangeRatesPage from "./pages/ExchangeRatesPage";
+import PurchasesPage from "./pages/PurchasesPage";
+import PurchaseFormPage from "./pages/PurchaseFormPage";
+import PurchaseDetailPage from "./pages/PurchaseDetailPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
@@ -51,6 +54,9 @@ function Inner() {
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/orders/:id/edit" element={<OrderFormPage user={user!} />} />
             <Route path="/exchange-rates" element={<ExchangeRatesPage />} />
+            <Route path="/purchases" element={<PurchasesPage />} />
+            <Route path="/purchases/new" element={<PurchaseFormPage />} />
+            <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

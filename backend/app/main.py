@@ -8,6 +8,7 @@ from app.api.orders import router as orders_router
 from app.api.order_files import router as order_files_router, files_router
 from app.api.exchange_rates import router as exchange_rates_router
 from app.api.references import router as references_router
+from app.api.purchases import router as purchases_router
 
 app = FastAPI(title="ERP API", version="1.0.0")
 
@@ -26,6 +27,7 @@ app.include_router(order_files_router)
 app.include_router(files_router)
 app.include_router(exchange_rates_router)
 app.include_router(references_router)
+app.include_router(purchases_router)
 
 
 @app.get("/health")

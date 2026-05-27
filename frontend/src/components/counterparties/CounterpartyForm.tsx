@@ -9,9 +9,10 @@ interface Props {
   onClose: () => void;
   onSubmit: (data: CounterpartyFormData) => void;
   loading?: boolean;
+  forcedType?: "client" | "supplier";
 }
 
-export default function CounterpartyForm({ open, editing, onClose, onSubmit, loading }: Props) {
+export default function CounterpartyForm({ open, editing, onClose, onSubmit, loading, forcedType }: Props) {
   const { t } = useTranslation();
   const [form] = Form.useForm<CounterpartyFormData>();
 
@@ -30,7 +31,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ default_currency: "CNY" });
+        form.setFieldsValue({ default_currency: "CNY", type: forcedType });
       }
     }
   }, [open, editing, form]);
@@ -70,7 +71,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
           <Input />
         </Form.Item>
         <Form.Item name="type" label={t("counterparty.type")} rules={[{ required: true, message: t("validation.required") }]}>
-          <Select options={typeOptions} />
+          <Select options={forcedType ? typeOptions.filter(o => o.value === forcedType) : typeOptions} disabled={!!forcedType && !editing} />
         </Form.Item>
         <Form.Item name="default_currency" label={t("counterparty.default_currency")}>
           <Select options={currencyOptions} />
