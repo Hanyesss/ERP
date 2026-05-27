@@ -4,7 +4,8 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.core.deps import get_current_user
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.models.user_role import UserRoleEntry
 from app.models.business_type import BusinessType
 
 router = APIRouter(prefix="/api/references", tags=["references"])
@@ -17,11 +18,13 @@ async def get_managers(
 ):
     result = await db.execute(
         select(User)
-        .where(User.is_active == True, User.role.in_([UserRole.manager, UserRole.admin]))
+        .join(UserRoleEntry, UserRoleEntry.user_id == User.id)
+        .where(User.is_active == True, UserRoleEntry.role.in_(["manager", "admin"]))
+        .distinct()
         .order_by(User.full_name)
     )
     users = result.scalars().all()
-    return [{"id": str(u.id), "full_name": u.full_name, "role": u.role} for u in users]
+    return [{"id": str(u.id), "full_name": u.full_name} for u in users]
 
 
 @router.get("/business-types")

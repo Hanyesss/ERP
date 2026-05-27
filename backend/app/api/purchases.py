@@ -336,10 +336,10 @@ async def update_purchase(
     for order_id in affected_order_ids:
         await _recalc_order_cost(db, order_id)
 
-    await write_audit(db, current_user.id, "purchase", purchase.id, AuditActionEnum.update,
+    await write_audit(db, current_user.id, "purchase", pur.id, AuditActionEnum.update,
                       {"purchase_number": pur.purchase_number})
     await db.commit()
-    return await _load_purchase(db, purchase.id)
+    return await _load_purchase(db, pur.id)
 
 
 @router.delete("/{purchase_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -370,6 +370,6 @@ async def delete_purchase(
     for order_id in affected_order_ids:
         await _recalc_order_cost(db, order_id)
 
-    await write_audit(db, current_user.id, "purchase", purchase.id, AuditActionEnum.delete,
+    await write_audit(db, current_user.id, "purchase", pur.id, AuditActionEnum.delete,
                       {"purchase_number": pur.purchase_number})
     await db.commit()

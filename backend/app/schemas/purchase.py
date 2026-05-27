@@ -26,6 +26,7 @@ class PurchaseUpdate(BaseModel):
     purchase_date: Optional[date] = None
     currency: Optional[str] = None
     rate_to_cny: Optional[Decimal] = None
+    payment_status: Optional[str] = None
     notes: Optional[str] = None
     items: Optional[List[PurchaseItemCreate]] = None
 
