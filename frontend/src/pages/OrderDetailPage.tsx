@@ -9,6 +9,7 @@ import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined } from
 import type { ColumnsType } from "antd/es/table";
 import { getOrder, closeOrder, cancelOrder, getOrderHistory } from "../api/orders";
 import { getPurchases } from "../api/purchases";
+import { getPaymentsForOrder } from "../api/payments";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import { useHasAnyRole } from "../hooks/useRole";
@@ -45,6 +46,12 @@ export default function OrderDetailPage() {
     queryKey: ["purchases-for-order", id],
     queryFn: () => getPurchases({ page_size: 100 }).then(r => r.data),
     enabled: !!id && canSeeCost,
+  });
+
+  const { data: orderPayments } = useQuery({
+    queryKey: ["payments-for-order", id],
+    queryFn: () => getPaymentsForOrder(id!).then(r => r.data),
+    enabled: !!id,
   });
 
   const closeMutation = useMutation({
@@ -295,8 +302,53 @@ export default function OrderDetailPage() {
       key: "payments",
       label: t("tab_payments") || "Платежи",
       children: (
-        <div style={{ color: "#999", padding: 24, textAlign: "center" }}>
-          {t("order.payments_stub")}
+        <div>
+          <Row justify="end" style={{ marginBottom: 12 }}>
+            <Button
+              type="primary"
+              onClick={() => navigate(`/payments/new?counterparty_id=${order.client_id}&direction=in`)}
+            >
+              {t("payment.create_for_order")}
+            </Button>
+          </Row>
+          {(orderPayments || []).length === 0 ? (
+            <Text type="secondary">Нет входящих платежей по этому заказу.</Text>
+          ) : (
+            <Table
+              dataSource={orderPayments || []}
+              rowKey="id"
+              size="small"
+              pagination={false}
+              columns={[
+                { title: t("payment.date"), dataIndex: "payment_date", key: "date", width: 110 },
+                { title: t("payment.currency"), dataIndex: "currency", key: "cur", width: 80 },
+                { title: t("payment.amount"), key: "amount", align: "right",
+                  render: (_: any, row: any) => `${Number(row.amount).toLocaleString("ru-RU", {minimumFractionDigits: 2})} ${row.currency}` },
+                { title: `${t("payment.alloc_amount")} CNY`, dataIndex: "alloc_cny", key: "alloc_cny", align: "right",
+                  render: (v: string) => Number(v).toLocaleString("ru-RU", {minimumFractionDigits: 2}) },
+                { title: t("common.actions"), key: "actions", width: 60,
+                  render: (_: any, row: any) => (
+                    <Button type="link" size="small" onClick={() => navigate(`/payments/${row.id}`)}>
+                      {t("common.open")}
+                    </Button>
+                  )},
+              ]}
+              summary={() => {
+                const totalAlloc = (orderPayments || []).reduce((s: number, p: any) => s + Number(p.alloc_cny), 0);
+                return (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={3} align="right">
+                      <strong>{t("payment.paid")}:</strong>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={3} align="right">
+                      <strong>{totalAlloc.toLocaleString("ru-RU", {minimumFractionDigits: 2})} CNY</strong>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} />
+                  </Table.Summary.Row>
+                );
+              }}
+            />
+          )}
         </div>
       ),
     },

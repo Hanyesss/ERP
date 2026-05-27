@@ -1,0 +1,47 @@
+import apiClient from "./client";
+import type {
+  Payment, PaymentListResponse, PaymentCreateInput,
+  AllocationInput, OrderPaymentBalance, PurchasePaymentBalance,
+} from "../types/payment";
+
+export interface PaymentListParams {
+  direction?: string;
+  counterparty_id?: string;
+  currency?: string;
+  has_allocations?: boolean;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export const getPayments = (params: PaymentListParams = {}) =>
+  apiClient.get<PaymentListResponse>("/api/payments", { params });
+
+export const getPayment = (id: string) =>
+  apiClient.get<Payment>(`/api/payments/${id}`);
+
+export const createPayment = (data: PaymentCreateInput) =>
+  apiClient.post<Payment>("/api/payments", data);
+
+export const updatePayment = (id: string, data: Partial<PaymentCreateInput>) =>
+  apiClient.patch<Payment>(`/api/payments/${id}`, data);
+
+export const deletePayment = (id: string) =>
+  apiClient.delete(`/api/payments/${id}`);
+
+export const addAllocations = (id: string, allocations: AllocationInput[]) =>
+  apiClient.post<Payment>(`/api/payments/${id}/allocate`, allocations);
+
+export const getOrderPaymentBalance = (orderId: string) =>
+  apiClient.get<OrderPaymentBalance>(`/api/payments/balance/order/${orderId}`);
+
+export const getPurchasePaymentBalance = (purchaseId: string) =>
+  apiClient.get<PurchasePaymentBalance>(`/api/payments/balance/purchase/${purchaseId}`);
+
+export const getPaymentsForOrder = (orderId: string) =>
+  apiClient.get<any[]>(`/api/payments/for-order/${orderId}`);
+
+export const getPaymentsForPurchase = (purchaseId: string) =>
+  apiClient.get<any[]>(`/api/payments/for-purchase/${purchaseId}`);

@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from enum import Enum as PyEnum
-from sqlalchemy import String, Text, Enum, Numeric, Date, ForeignKey
+from sqlalchemy import String, Text, Enum, Numeric, Date, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -19,6 +19,7 @@ class PaymentCurrencyEnum(str, PyEnum):
     CNY = "CNY"
     RUB = "RUB"
     USDT = "USDT"
+    USD = "USD"
 
 
 class Payment(Base, TimestampMixin):
@@ -26,7 +27,10 @@ class Payment(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
-    direction: Mapped[PaymentDirection] = mapped_column(Enum(PaymentDirection, name="paymentdirection"), nullable=False)
+    direction: Mapped[PaymentDirection] = mapped_column(
+        Enum(PaymentDirection, name="paymentdirection", values_callable=lambda e: [x.value for x in e]),
+        nullable=False
+    )
     counterparty_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("counterparties.id"), nullable=False)
     payment_date: Mapped[date] = mapped_column(Date, nullable=False)
     currency: Mapped[PaymentCurrencyEnum] = mapped_column(Enum(PaymentCurrencyEnum, name="paymentcurrencyenum"), nullable=False)
@@ -37,3 +41,4 @@ class Payment(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

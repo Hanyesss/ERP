@@ -11,6 +11,7 @@ import { getOrders, cancelOrder } from "../../api/orders";
 import { getManagers, getBusinessTypes } from "../../api/references";
 import CounterpartySelect from "../common/CounterpartySelect";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "./OrderStatusTag";
+import { useHasAnyRole } from "../../hooks/useRole";
 
 const { Text } = Typography;
 
@@ -20,6 +21,8 @@ export default function OrderTable() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
+  const canSeeMargin = useHasAnyRole("accountant", "admin");
 
   const [search, setSearch] = useState("");
   const [clientId, setClientId] = useState<string | undefined>();
@@ -84,23 +87,23 @@ export default function OrderTable() {
       align: "right",
       render: (_, row) => <Text>{fmtCny(row.total_sale_cny)}</Text>,
     },
-    {
+    ...(canSeeCost ? [{
       title: `${t("order.total_cost")} (CNY)`,
       key: "cost",
       width: 130,
-      align: "right",
-      render: (_, row) => <Text type="secondary">{fmtCny(row.total_cost_cny ?? 0)}</Text>,
-    },
-    {
+      align: "right" as const,
+      render: (_: any, row: OrderListItem) => <Text type="secondary">{fmtCny(row.total_cost_cny ?? 0)}</Text>,
+    }] : []),
+    ...(canSeeMargin ? [{
       title: `${t("order.margin")} (CNY)`,
       key: "margin",
       width: 120,
-      align: "right",
-      render: (_, row) => {
+      align: "right" as const,
+      render: (_: any, row: OrderListItem) => {
         const m = row.total_sale_cny - (row.total_cost_cny ?? 0);
         return <Text type={m >= 0 ? "success" : "danger"}>{fmtCny(m)}</Text>;
       },
-    },
+    }] : []),
     {
       title: t("order.title").slice(0, 6),
       key: "status",
@@ -183,8 +186,12 @@ export default function OrderTable() {
           <Row justify="end" gutter={24}>
             <Col><Text type="secondary">{t("order.page_totals")}:</Text></Col>
             <Col><Text strong>{t("order.total_sale")}: {fmtCny(totalSale)} CNY</Text></Col>
-            <Col><Text>{t("order.total_cost")}: {fmtCny(totalCost)} CNY</Text></Col>
-            <Col><Text type={totalSale - totalCost >= 0 ? "success" : "danger"}>{t("order.margin")}: {fmtCny(totalSale - totalCost)} CNY</Text></Col>
+            {canSeeCost && (
+              <Col><Text>{t("order.total_cost")}: {fmtCny(totalCost)} CNY</Text></Col>
+            )}
+            {canSeeMargin && (
+              <Col><Text type={totalSale - totalCost >= 0 ? "success" : "danger"}>{t("order.margin")}: {fmtCny(totalSale - totalCost)} CNY</Text></Col>
+            )}
           </Row>
         )}
       />

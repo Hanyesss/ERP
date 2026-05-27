@@ -2,11 +2,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  Button, Card, Col, Descriptions, Divider, Popconfirm, Row,
-  Space, Table, Tag, Typography, message,
+  Button, Card, Col, Descriptions, Popconfirm, Row,
+  Space, Table, Tabs, Tag, Typography, message,
 } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
 import { getPurchase, deletePurchase } from "../api/purchases";
+import { getPaymentsForPurchase } from "../api/payments";
 
 const { Title, Text } = Typography;
 
@@ -27,6 +28,12 @@ export default function PurchaseDetailPage() {
     enabled: !!id,
   });
 
+  const { data: purchasePayments } = useQuery({
+    queryKey: ["payments-for-purchase", id],
+    queryFn: () => getPaymentsForPurchase(id!).then(r => r.data),
+    enabled: !!id,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => deletePurchase(id!),
     onSuccess: () => {
@@ -38,6 +45,105 @@ export default function PurchaseDetailPage() {
   });
 
   if (isLoading || !purchase) return null;
+
+  const tabItems = [
+    {
+      key: "items",
+      label: t("purchase.items"),
+      children: (
+        <Table
+          dataSource={purchase.items}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          columns={[
+            { title: t("order.title"), dataIndex: "order_number", key: "order_num" },
+            { title: t("order.item_name"), dataIndex: "order_item_name", key: "name" },
+            { title: t("order.item_quantity"), dataIndex: "quantity", key: "qty", align: "right" as const },
+            {
+              title: `${t("purchase.cost_price")} (${purchase.currency})`,
+              dataIndex: "cost_price", key: "cost_price", align: "right" as const,
+              render: (v: number) => fmtCny(v),
+            },
+            {
+              title: `${t("purchase.total")} (${purchase.currency})`,
+              key: "total", align: "right" as const,
+              render: (_: any, row: any) => fmtCny(Number(row.quantity) * Number(row.cost_price)),
+            },
+            { title: `${t("purchase.cost_amount_cny")} CNY`, dataIndex: "cost_amount", key: "cny", align: "right" as const,
+              render: (v: number) => fmtCny(v) },
+          ]}
+          summary={() => (
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={4} align="right">
+                <strong>{t("purchase.total")} ({purchase.currency}):</strong>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={4} align="right">
+                <strong>{fmtCny(purchase.total_amount)}</strong>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={5} align="right">
+                <strong>{fmtCny(purchase.total_amount_cny)}</strong>
+              </Table.Summary.Cell>
+            </Table.Summary.Row>
+          )}
+        />
+      ),
+    },
+    {
+      key: "payments",
+      label: t("tab_payments") || "Платежи",
+      children: (
+        <div>
+          <Row justify="end" style={{ marginBottom: 12 }}>
+            <Button
+              type="primary"
+              onClick={() => navigate(`/payments/new?counterparty_id=${purchase.supplier_id}&direction=out`)}
+            >
+              {t("payment.create_for_purchase")}
+            </Button>
+          </Row>
+          {(purchasePayments || []).length === 0 ? (
+            <Text type="secondary">Нет платежей по этой закупке.</Text>
+          ) : (
+            <Table
+              dataSource={purchasePayments || []}
+              rowKey="id"
+              size="small"
+              pagination={false}
+              columns={[
+                { title: t("payment.date"), dataIndex: "payment_date", key: "date", width: 110 },
+                { title: t("payment.currency"), dataIndex: "currency", key: "cur", width: 80 },
+                { title: t("payment.amount"), key: "amount", align: "right" as const,
+                  render: (_: any, row: any) => `${Number(row.amount).toLocaleString("ru-RU", {minimumFractionDigits: 2})} ${row.currency}` },
+                { title: `${t("payment.alloc_amount")} CNY`, dataIndex: "alloc_cny", key: "alloc_cny", align: "right" as const,
+                  render: (v: string) => Number(v).toLocaleString("ru-RU", {minimumFractionDigits: 2}) },
+                { title: t("common.actions"), key: "actions", width: 60,
+                  render: (_: any, row: any) => (
+                    <Button type="link" size="small" onClick={() => navigate(`/payments/${row.id}`)}>
+                      {t("common.open")}
+                    </Button>
+                  )},
+              ]}
+              summary={() => {
+                const totalAlloc = (purchasePayments || []).reduce((s: number, p: any) => s + Number(p.alloc_cny), 0);
+                return (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={3} align="right">
+                      <strong>{t("payment.paid")}:</strong>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={3} align="right">
+                      <strong>{totalAlloc.toLocaleString("ru-RU", {minimumFractionDigits: 2})} CNY</strong>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} />
+                  </Table.Summary.Row>
+                );
+              }}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -85,52 +191,7 @@ export default function PurchaseDetailPage() {
         </Descriptions>
       </Card>
 
-      <Card title={t("purchase.items")}>
-        <Table
-          dataSource={purchase.items}
-          rowKey="id"
-          size="small"
-          pagination={false}
-          columns={[
-            { title: t("order.title"), dataIndex: "order_number", key: "order_num",
-              render: (num, row: any) => (
-                <Button type="link" size="small" onClick={() => {
-                  // Navigate to order by finding via order_item_id — we use order_number link
-                }}>
-                  {num}
-                </Button>
-              )
-            },
-            { title: t("order.item_name"), dataIndex: "order_item_name", key: "name" },
-            { title: t("order.item_quantity"), dataIndex: "quantity", key: "qty", align: "right" },
-            {
-              title: `${t("purchase.cost_price")} (${purchase.currency})`,
-              dataIndex: "cost_price", key: "cost_price", align: "right",
-              render: v => fmtCny(v),
-            },
-            {
-              title: `${t("purchase.total")} (${purchase.currency})`,
-              key: "total", align: "right",
-              render: (_, row: any) => fmtCny(Number(row.quantity) * Number(row.cost_price)),
-            },
-            { title: `${t("purchase.cost_amount_cny")} CNY`, dataIndex: "cost_amount", key: "cny", align: "right",
-              render: v => fmtCny(v) },
-          ]}
-          summary={() => (
-            <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={4} align="right">
-                <strong>{t("purchase.total")} ({purchase.currency}):</strong>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={4} align="right">
-                <strong>{fmtCny(purchase.total_amount)}</strong>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={5} align="right">
-                <strong>{fmtCny(purchase.total_amount_cny)}</strong>
-              </Table.Summary.Cell>
-            </Table.Summary.Row>
-          )}
-        />
-      </Card>
+      <Tabs items={tabItems} />
     </div>
   );
 }
