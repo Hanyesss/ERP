@@ -334,7 +334,8 @@ export default function ExpenseFormPage({ user }: Props) {
             <Alert
               type="info"
               showIcon
-              message={t("expense.reimbursement_self_info")}
+              message={`${t("expense.reimburse_to")}: ${user.full_name}`}
+              description={t("expense.reimbursement_self_info")}
               style={{ marginTop: 8 }}
             />
           )}
