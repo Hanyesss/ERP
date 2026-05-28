@@ -23,11 +23,11 @@
   thead th { background: #2c3e50; color: #fff; padding: 7px 6px; font-size: 9pt; text-align: left; }
   tbody tr:nth-child(even) { background: #f8f9fa; }
   tbody td { padding: 7px 6px; font-size: 9pt; vertical-align: top; border-bottom: 1px solid #eee; }
-  .num-col { text-align: right; }
+  .num-col { text-align: right; white-space: nowrap; }
   .center-col { text-align: center; }
 
-  .photo-cell { display: flex; flex-wrap: wrap; gap: 6px; }
-  .photo-thumb { width: 192px; height: 192px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
+  .photo-cell { display: flex; flex-wrap: wrap; gap: 4px; }
+  .photo-thumb { width: 96px; height: 96px; object-fit: cover; border: 1px solid #ddd; border-radius: 3px; }
 
   .spec-text { font-size: 8pt; color: #555; white-space: pre-wrap; max-width: 140px; word-break: break-word; }
 
@@ -83,10 +83,10 @@
       <th style="width:12%">Модель</th>
       <th style="width:18%">Спецификация</th>
       {% if has_photos %}<th style="width:58px">Фото</th>{% endif %}
-      <th style="width:42px;text-align:right">Кол.</th>
-      <th style="width:30px">Ед.</th>
-      <th style="width:9%;text-align:right">Цена ({{ price_currency }})</th>
-      <th style="width:9%;text-align:right">Сумма ({{ price_currency }})</th>
+      <th style="width:40px;text-align:right;white-space:nowrap">Кол.</th>
+      <th style="width:28px;white-space:nowrap">Ед.</th>
+      <th style="width:12%;text-align:right;white-space:nowrap">Цена ({{ price_currency }})</th>
+      <th style="width:12%;text-align:right;white-space:nowrap">Сумма ({{ price_currency }})</th>
     </tr>
   </thead>
   <tbody>
