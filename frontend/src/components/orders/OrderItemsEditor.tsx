@@ -5,12 +5,13 @@ import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
 import CounterpartySelect from "../common/CounterpartySelect";
 import ItemPhotosPicker, { type LocalPhoto } from "./ItemPhotosPicker";
+import ItemPhotosEditor from "./ItemPhotosEditor";
 
 const { Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 
 export interface PendingItemPhotos {
-  [itemIndex: number]: LocalPhoto[];
+  [fieldKey: number]: LocalPhoto[];
 }
 
 interface Props {
@@ -19,6 +20,8 @@ interface Props {
   clientCurrency: string;
   pendingPhotos: PendingItemPhotos;
   onPendingPhotosChange: (photos: PendingItemPhotos) => void;
+  /** Maps Form.List field key → saved item ID (for edit mode) */
+  savedItemIdByKey?: Record<number, string>;
 }
 
 function SpecPopover({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
@@ -58,13 +61,11 @@ function SpecPopover({ value, onChange }: { value?: string; onChange?: (v: strin
 }
 
 export default function OrderItemsEditor({
-  form, rates, clientCurrency, pendingPhotos, onPendingPhotosChange,
+  form, rates, clientCurrency,
+  pendingPhotos, onPendingPhotosChange,
+  savedItemIdByKey = {},
 }: Props) {
   const { t } = useTranslation();
-
-  const setPhotosForIndex = (idx: number, photos: LocalPhoto[]) => {
-    onPendingPhotosChange({ ...pendingPhotos, [idx]: photos });
-  };
 
   return (
     <Form.List name="items">
@@ -90,76 +91,85 @@ export default function OrderItemsEditor({
             ))}
           </Row>
 
-          {fields.map(({ key, name }) => (
-            <Row key={key} gutter={4} align="top" style={{ marginBottom: 8 }}>
-              <Col span={3}>
-                <Form.Item name={[name, "name"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
-                  <Input size="small" placeholder={t("order.item_name")} />
-                </Form.Item>
-              </Col>
-              <Col span={3}>
-                <Form.Item name={[name, "name_cn"]} style={{ margin: 0 }}>
-                  <Input size="small" placeholder="中文名" />
-                </Form.Item>
-              </Col>
-              <Col span={2}>
-                <Form.Item name={[name, "model"]} style={{ margin: 0 }}>
-                  <Input size="small" placeholder={t("order.model")} />
-                </Form.Item>
-              </Col>
-              <Col span={2}>
-                <Form.Item name={[name, "specification"]} style={{ margin: 0 }}>
-                  <SpecPopover />
-                </Form.Item>
-              </Col>
-              <Col span={2}>
-                <Form.Item name={[name, "quantity"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
-                  <InputNumber size="small" min={0} style={{ width: "100%" }} placeholder="0" />
-                </Form.Item>
-              </Col>
-              <Col span={1}>
-                <Form.Item name={[name, "unit"]} style={{ margin: 0 }}>
-                  <Input size="small" placeholder="шт" />
-                </Form.Item>
-              </Col>
-              <Col span={2}>
-                <Form.Item name={[name, "sale_price"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
-                  <InputNumber size="small" min={0} style={{ width: "100%" }} placeholder="0" />
-                </Form.Item>
-              </Col>
-              <Col span={2}>
-                <Form.Item name={[name, "sale_currency"]} style={{ margin: 0 }} initialValue={clientCurrency || "CNY"}>
-                  <Select size="small" options={CURRENCIES.map(c => ({ value: c, label: c }))} />
-                </Form.Item>
-              </Col>
-              <Col span={3}>
-                <Form.Item name={[name, "preferred_supplier_id"]} style={{ margin: 0 }}>
-                  <CounterpartySelect
-                    type="supplier" size="small" allowClear
-                    placeholder={t("order.item_preferred_supplier_hint")}
-                    style={{ fontSize: 12 }}
+          {fields.map(({ key, name }) => {
+            const savedItemId = savedItemIdByKey[key];
+            return (
+              <Row key={key} gutter={4} align="top" style={{ marginBottom: 8 }}>
+                <Col span={3}>
+                  <Form.Item name={[name, "name"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
+                    <Input size="small" placeholder={t("order.item_name")} />
+                  </Form.Item>
+                </Col>
+                <Col span={3}>
+                  <Form.Item name={[name, "name_cn"]} style={{ margin: 0 }}>
+                    <Input size="small" placeholder="中文名" />
+                  </Form.Item>
+                </Col>
+                <Col span={2}>
+                  <Form.Item name={[name, "model"]} style={{ margin: 0 }}>
+                    <Input size="small" placeholder={t("order.model")} />
+                  </Form.Item>
+                </Col>
+                <Col span={2}>
+                  <Form.Item name={[name, "specification"]} style={{ margin: 0 }}>
+                    <SpecPopover />
+                  </Form.Item>
+                </Col>
+                <Col span={2}>
+                  <Form.Item name={[name, "quantity"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
+                    <InputNumber size="small" min={0} style={{ width: "100%" }} placeholder="0" />
+                  </Form.Item>
+                </Col>
+                <Col span={1}>
+                  <Form.Item name={[name, "unit"]} style={{ margin: 0 }}>
+                    <Input size="small" placeholder="шт" />
+                  </Form.Item>
+                </Col>
+                <Col span={2}>
+                  <Form.Item name={[name, "sale_price"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
+                    <InputNumber size="small" min={0} style={{ width: "100%" }} placeholder="0" />
+                  </Form.Item>
+                </Col>
+                <Col span={2}>
+                  <Form.Item name={[name, "sale_currency"]} style={{ margin: 0 }} initialValue={clientCurrency || "CNY"}>
+                    <Select size="small" options={CURRENCIES.map(c => ({ value: c, label: c }))} />
+                  </Form.Item>
+                </Col>
+                <Col span={3}>
+                  <Form.Item name={[name, "preferred_supplier_id"]} style={{ margin: 0 }}>
+                    <CounterpartySelect
+                      type="supplier" size="small" allowClear
+                      placeholder={t("order.item_preferred_supplier_hint")}
+                      style={{ fontSize: 12 }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={3}>
+                  {savedItemId ? (
+                    /* Existing item: show real photos from API, upload/delete immediately */
+                    <ItemPhotosEditor itemId={savedItemId} />
+                  ) : (
+                    /* New item: queue photos locally, upload after order is saved */
+                    <ItemPhotosPicker
+                      photos={pendingPhotos[key] || []}
+                      onChange={photos => onPendingPhotosChange({ ...pendingPhotos, [key]: photos })}
+                    />
+                  )}
+                </Col>
+                <Col span={1}>
+                  <Button
+                    size="small" danger icon={<DeleteOutlined />}
+                    onClick={() => {
+                      remove(name);
+                      const updated = { ...pendingPhotos };
+                      delete updated[key];
+                      onPendingPhotosChange(updated);
+                    }}
                   />
-                </Form.Item>
-              </Col>
-              <Col span={3}>
-                <ItemPhotosPicker
-                  photos={pendingPhotos[name] || []}
-                  onChange={photos => setPhotosForIndex(name, photos)}
-                />
-              </Col>
-              <Col span={1}>
-                <Button
-                  size="small" danger icon={<DeleteOutlined />}
-                  onClick={() => {
-                    remove(name);
-                    const updated = { ...pendingPhotos };
-                    delete updated[name];
-                    onPendingPhotosChange(updated);
-                  }}
-                />
-              </Col>
-            </Row>
-          ))}
+                </Col>
+              </Row>
+            );
+          })}
 
           <Button
             type="dashed" icon={<PlusOutlined />}

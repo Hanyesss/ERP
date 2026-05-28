@@ -37,6 +37,7 @@ export default function OrderFormPage({ user }: Props) {
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [clientPhone, setClientPhone] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingItemPhotos>({});
+  const [savedItemIdByKey, setSavedItemIdByKey] = useState<Record<number, string>>({});
 
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
@@ -156,6 +157,12 @@ export default function OrderFormPage({ user }: Props) {
     if (isEdit && existingOrder) {
       setClientPhone((existingOrder as any).client_phone || null);
       setPendingPhotos({});
+      // Map Form.List key (=index for initial load) → saved item ID
+      const idMap: Record<number, string> = {};
+      (existingOrder.items || []).forEach((item: any, idx: number) => {
+        if (item.id) idMap[idx] = item.id;
+      });
+      setSavedItemIdByKey(idMap);
 
       form.setFieldsValue({
         order_number: existingOrder.order_number,
@@ -475,6 +482,7 @@ export default function OrderFormPage({ user }: Props) {
               clientCurrency={clientCurrency}
               pendingPhotos={pendingPhotos}
               onPendingPhotosChange={setPendingPhotos}
+              savedItemIdByKey={savedItemIdByKey}
             />
           )}
 
