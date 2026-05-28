@@ -262,7 +262,7 @@ async def update_user(
             select(UserRoleEntry).where(UserRoleEntry.user_id == user.id)
         )
         for entry in existing_roles.scalars().all():
-            await db.delete(entry)
+            db.delete(entry)
 
         for role in body.roles:
             db.add(UserRoleEntry(id=uuid.uuid4(), user_id=user.id, role=role))
