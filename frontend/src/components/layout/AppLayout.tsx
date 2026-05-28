@@ -90,6 +90,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       icon: <BarChartOutlined />,
       label: t("nav.reports"),
     },
+
+    hasRole(user, "admin") && {
+      key: "/users",
+      icon: <TeamOutlined />,
+      label: t("nav.users"),
+    },
   ].filter(Boolean) as { key: string; icon: JSX.Element; label: string }[];
 
   const selectedKey = location.pathname.startsWith("/orders")
@@ -106,6 +112,8 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/warehouses"
     : location.pathname.startsWith("/reports")
     ? "/reports"
+    : location.pathname.startsWith("/users")
+    ? "/users"
     : location.pathname;
 
   return (
