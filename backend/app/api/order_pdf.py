@@ -140,6 +140,12 @@ async def download_client_pdf(
     if client_currency == "CNY":
         total_in_currency = total_cny
 
+    # Price currency for column header: dominant sale currency, fallback to client_currency
+    if currency_totals:
+        price_currency = max(currency_totals, key=lambda k: currency_totals[k])
+    else:
+        price_currency = client_currency
+
     # Render template
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
     env.filters["fmt_decimal"] = _fmt_decimal
@@ -155,6 +161,7 @@ async def download_client_pdf(
         client_currency=client_currency,
         items=template_items,
         has_photos=has_photos,
+        price_currency=price_currency,
         total_cny=total_cny,
         total_in_currency=total_in_currency,
         notes=order.notes,

@@ -26,8 +26,8 @@
   .num-col { text-align: right; }
   .center-col { text-align: center; }
 
-  .photo-cell { display: flex; flex-wrap: wrap; gap: 3px; }
-  .photo-thumb { width: 48px; height: 48px; object-fit: cover; border: 1px solid #ddd; border-radius: 2px; }
+  .photo-cell { display: flex; flex-wrap: wrap; gap: 6px; }
+  .photo-thumb { width: 192px; height: 192px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
 
   .spec-text { font-size: 8pt; color: #555; white-space: pre-wrap; max-width: 140px; word-break: break-word; }
 
@@ -85,8 +85,8 @@
       {% if has_photos %}<th style="width:58px">Фото</th>{% endif %}
       <th style="width:42px;text-align:right">Кол.</th>
       <th style="width:30px">Ед.</th>
-      <th style="width:9%;text-align:right">Цена</th>
-      <th style="width:9%;text-align:right">Сумма</th>
+      <th style="width:9%;text-align:right">Цена ({{ price_currency }})</th>
+      <th style="width:9%;text-align:right">Сумма ({{ price_currency }})</th>
     </tr>
   </thead>
   <tbody>
@@ -110,8 +110,8 @@
       {% endif %}
       <td class="num-col">{{ item.quantity | fmt_decimal }}</td>
       <td class="center-col">{{ item.unit or "шт" }}</td>
-      <td class="num-col">{{ item.sale_price | fmt_decimal }} {{ item.sale_currency }}</td>
-      <td class="num-col">{{ item.total | fmt_decimal }} {{ item.sale_currency }}</td>
+      <td class="num-col">{{ item.sale_price | fmt_decimal }}</td>
+      <td class="num-col">{{ item.total | fmt_decimal }}</td>
     </tr>
     {% endfor %}
   </tbody>
