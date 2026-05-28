@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, not_, and_
 from sqlalchemy.orm import aliased
 
 from app.database import get_db
@@ -210,7 +210,11 @@ async def _load_order_detail(
 
     expenses_row = await db.execute(
         select(func.coalesce(func.sum(Expense.amount_cny), Decimal("0")))
-        .where(Expense.order_id == order_id, Expense.is_active == True)
+        .where(
+            Expense.order_id == order_id,
+            Expense.is_active == True,
+            not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
+        )
     )
     expenses_cny = expenses_row.scalar_one() or Decimal("0")
 

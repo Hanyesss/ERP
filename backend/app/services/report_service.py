@@ -5,7 +5,7 @@ from typing import Optional
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case, and_, text
+from sqlalchemy import select, func, case, and_, not_, text
 
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
@@ -86,6 +86,7 @@ async def _calc_pnl_for_period(
         Expense.expense_date >= date_from,
         Expense.expense_date <= date_to,
         Expense.is_active == True,
+        not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
     ]
     exp_rows = await db.execute(
         select(
@@ -249,6 +250,7 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
             Expense.expense_date >= date_from,
             Expense.expense_date <= date_to,
             Expense.is_active == True,
+            not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
         )
         .group_by(orders_subq.c.client_id)
     )
@@ -268,6 +270,7 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
             Expense.expense_date >= date_from,
             Expense.expense_date <= date_to,
             Expense.is_active == True,
+            not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
         )
         .group_by(Expense.client_id)
     )
@@ -405,6 +408,7 @@ async def get_expenses_structure(
         Expense.expense_date >= date_from,
         Expense.expense_date <= date_to,
         Expense.is_active == True,
+        not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
     ]
     if link_type:
         exp_filter.append(Expense.link_type == link_type)

@@ -1,4 +1,4 @@
-import axios from "axios";
+import apiClient from "./client";
 
 export interface Warehouse {
   id: string;
@@ -23,13 +23,13 @@ export interface WarehouseUpdate {
 }
 
 export const getWarehouses = () =>
-  axios.get<Warehouse[]>("/api/warehouses", { withCredentials: true });
+  apiClient.get<Warehouse[]>("/api/warehouses");
 
 export const createWarehouse = (data: WarehouseCreate) =>
-  axios.post<Warehouse>("/api/warehouses", data, { withCredentials: true });
+  apiClient.post<Warehouse>("/api/warehouses", data);
 
 export const updateWarehouse = (id: string, data: WarehouseUpdate) =>
-  axios.patch<Warehouse>(`/api/warehouses/${id}`, data, { withCredentials: true });
+  apiClient.patch<Warehouse>(`/api/warehouses/${id}`, data);
 
 export const deleteWarehouse = (id: string) =>
-  axios.delete(`/api/warehouses/${id}`, { withCredentials: true });
+  apiClient.delete(`/api/warehouses/${id}`);

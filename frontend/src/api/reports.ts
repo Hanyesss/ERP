@@ -1,7 +1,6 @@
-import axios from "axios";
+import apiClient from "./client";
 
 const BASE = "/api/reports";
-const OPTS = { withCredentials: true };
 
 export interface PnLData {
   date_from: string;
@@ -78,32 +77,33 @@ export const getPnL = (params: {
   date_to: string;
   business_type_id?: string;
   warehouse_id?: string;
-}) => axios.get<PnLData>(`${BASE}/pnl`, { params, ...OPTS });
+}) => apiClient.get<PnLData>(`${BASE}/pnl`, { params });
 
 export const getByClient = (params: { date_from: string; date_to: string }) =>
-  axios.get<ByClientRow[]>(`${BASE}/by-client`, { params, ...OPTS });
+  apiClient.get<ByClientRow[]>(`${BASE}/by-client`, { params });
 
 export const getBySupplier = (params: { date_from: string; date_to: string }) =>
-  axios.get<BySupplierRow[]>(`${BASE}/by-supplier`, { params, ...OPTS });
+  apiClient.get<BySupplierRow[]>(`${BASE}/by-supplier`, { params });
 
 export const getExpensesReport = (params: {
   date_from: string;
   date_to: string;
   link_type?: string;
-}) => axios.get<ExpensesData>(`${BASE}/expenses`, { params, ...OPTS });
+}) => apiClient.get<ExpensesData>(`${BASE}/expenses`, { params });
 
 export const getTonnage = (params: {
   date_from: string;
   date_to: string;
   warehouse_id?: string;
   client_id?: string;
-}) => axios.get<TonnageData>(`${BASE}/tonnage`, { params, ...OPTS });
+}) => apiClient.get<TonnageData>(`${BASE}/tonnage`, { params });
 
 function exportUrl(path: string, params: Record<string, any>) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
   ).toString();
-  window.open(`${path}?${qs}`, "_blank");
+  const base = (apiClient.defaults.baseURL || "http://localhost:8000").replace(/\/$/, "");
+  window.open(`${base}${path}?${qs}`, "_blank");
 }
 
 export const exportPnL = (params: { date_from: string; date_to: string; lang: string }) =>

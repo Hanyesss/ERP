@@ -204,6 +204,56 @@ export default function OrderFormPage({ user }: Props) {
     }
   }, [clientId, clients, form, isLogistics]);
 
+  // Auto-fill delivery amount = sum(weight_kg × price_per_kg) per item
+  useEffect(() => {
+    if (!isLogistics) return;
+    const byCurrency: Record<string, number> = {};
+    (items || []).forEach((item: any) => {
+      if (!item?.weight_kg || !item?.price_per_kg) return;
+      const cur = item.price_per_kg_currency || "USD";
+      byCurrency[cur] = (byCurrency[cur] || 0) + Number(item.weight_kg) * Number(item.price_per_kg);
+    });
+    const currencies = Object.keys(byCurrency);
+    if (currencies.length === 0) return;
+    if (currencies.length === 1) {
+      form.setFieldValue(["charges", 0, "amount"], parseFloat(byCurrency[currencies[0]].toFixed(2)));
+      form.setFieldValue(["charges", 0, "currency"], currencies[0]);
+    } else {
+      let total = 0;
+      currencies.forEach(cur => { total += byCurrency[cur] * (rates[cur] || 1); });
+      form.setFieldValue(["charges", 0, "amount"], parseFloat(total.toFixed(2)));
+      form.setFieldValue(["charges", 0, "currency"], "CNY");
+    }
+  }, [items, isLogistics, rates, form]);
+
+  // Auto-fill insurance_cost = total cargo value × insurance_percent / 100 (in cargo currency)
+  useEffect(() => {
+    if (!isLogistics) return;
+    const pct = Number(charges?.[1]?.amount) || 0;
+    if (pct <= 0) return;
+    // Group cargo values by currency (no CNY conversion — keep original currency)
+    const byCurrency: Record<string, number> = {};
+    (items || []).forEach((item: any) => {
+      if (!item?.cargo_value) return;
+      const cur = item.cargo_value_currency || "USD";
+      byCurrency[cur] = (byCurrency[cur] || 0) + Number(item.cargo_value);
+    });
+    const currencies = Object.keys(byCurrency);
+    if (currencies.length === 0) return;
+    if (currencies.length === 1) {
+      // Single currency: keep it as-is
+      const cur = currencies[0];
+      form.setFieldValue(["charges", 2, "amount"], parseFloat((byCurrency[cur] * pct / 100).toFixed(2)));
+      form.setFieldValue(["charges", 2, "currency"], cur);
+    } else {
+      // Mixed currencies: convert all to CNY
+      let totalCny = 0;
+      currencies.forEach(cur => { totalCny += byCurrency[cur] * (rates[cur] || 1); });
+      form.setFieldValue(["charges", 2, "amount"], parseFloat((totalCny * pct / 100).toFixed(2)));
+      form.setFieldValue(["charges", 2, "currency"], "CNY");
+    }
+  }, [items, charges, isLogistics, rates, form]);
+
   const createMutation = useMutation({
     mutationFn: createOrder,
     onSuccess: (res) => { message.success("✓"); navigate(`/orders/${res.data.id}`); },
@@ -411,11 +461,6 @@ export default function OrderFormPage({ user }: Props) {
         {isEdit && (
           <Card title={t("order.cargo_photo")} style={{ marginBottom: 16 }}>
             <OrderFilesTab orderId={id!} />
-          </Card>
-        )}
-        {!isEdit && (
-          <Card title={t("order.cargo_photo")} style={{ marginBottom: 16 }}>
-            <Text type="secondary">{t("order.files_after_save")}</Text>
           </Card>
         )}
       </Form>
