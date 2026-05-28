@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 20mm 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
+  body { font-size: 10pt; color: #222; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .company-block { font-size: 9pt; color: #555; line-height: 1.5; }
+  .doc-title { text-align: center; margin: 20px 0 16px; }
+  .doc-title h1 { font-size: 16pt; font-weight: bold; letter-spacing: 1px; }
+  .doc-title .doc-meta { font-size: 9pt; color: #777; margin-top: 4px; }
+
+  .parties { display: flex; gap: 24px; margin-bottom: 20px; }
+  .party-block { flex: 1; border: 1px solid #ddd; border-radius: 4px; padding: 10px; }
+  .party-block .label { font-size: 8pt; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .party-block .name { font-weight: bold; font-size: 11pt; }
+  .party-block .phone { font-size: 9pt; color: #444; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  thead th { background: #2c3e50; color: #fff; padding: 7px 6px; font-size: 9pt; text-align: left; }
+  tbody tr:nth-child(even) { background: #f8f9fa; }
+  tbody td { padding: 7px 6px; font-size: 9pt; vertical-align: top; border-bottom: 1px solid #eee; }
+  .num-col { text-align: right; }
+  .center-col { text-align: center; }
+
+  .photo-cell { display: flex; flex-wrap: wrap; gap: 3px; }
+  .photo-thumb { width: 48px; height: 48px; object-fit: cover; border: 1px solid #ddd; border-radius: 2px; }
+
+  .spec-text { font-size: 8pt; color: #555; white-space: pre-wrap; max-width: 160px; }
+
+  .totals-block { margin-left: auto; width: 280px; margin-bottom: 20px; }
+  .totals-block table td { border: none; padding: 4px 6px; }
+  .totals-block .total-row td { font-weight: bold; font-size: 11pt; border-top: 2px solid #2c3e50; padding-top: 8px; }
+
+  .notes-block { margin-top: 12px; padding: 10px; background: #f5f5f5; border-left: 3px solid #2c3e50; font-size: 9pt; }
+  .notes-block .label { font-weight: bold; margin-bottom: 4px; }
+
+  .footer { margin-top: 24px; font-size: 8pt; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-block">
+    <strong>{{ company_name }}</strong><br>
+    {% if company_phone %}Тел: {{ company_phone }}<br>{% endif %}
+    {% if company_email %}Email: {{ company_email }}<br>{% endif %}
+  </div>
+  <div style="text-align:right; font-size:9pt; color:#888;">
+    Дата: {{ order_date }}<br>
+    № {{ order_number }}
+  </div>
+</div>
+
+<div class="doc-title">
+  <h1>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</h1>
+  <div class="doc-meta">Заказ № {{ order_number }} от {{ order_date }}</div>
+</div>
+
+<div class="parties">
+  <div class="party-block">
+    <div class="label">Продавец</div>
+    <div class="name">{{ company_name }}</div>
+  </div>
+  <div class="party-block">
+    <div class="label">Покупатель</div>
+    <div class="name">{{ client_name }}</div>
+    {% if client_phone %}<div class="phone">📞 {{ client_phone }}</div>{% endif %}
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:28px">№</th>
+      <th>Наименование</th>
+      <th style="width:80px">Модель</th>
+      <th style="width:150px">Спецификация</th>
+      {% if has_photos %}<th style="width:60px">Фото</th>{% endif %}
+      <th style="width:45px;text-align:right">Кол-во</th>
+      <th style="width:35px">Ед.</th>
+      <th style="width:80px;text-align:right">Цена</th>
+      <th style="width:80px;text-align:right">Сумма</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td class="center-col">{{ loop.index }}</td>
+      <td>
+        <strong>{{ item.name }}</strong>
+        {% if item.name_cn %}<br><span style="font-size:8pt;color:#888;">{{ item.name_cn }}</span>{% endif %}
+      </td>
+      <td>{{ item.model or "" }}</td>
+      <td><span class="spec-text">{{ item.specification or "" }}</span></td>
+      {% if has_photos %}
+      <td>
+        <div class="photo-cell">
+          {% for photo in item.photos %}
+          <img class="photo-thumb" src="{{ photo.abs_path }}" alt="фото" />
+          {% endfor %}
+        </div>
+      </td>
+      {% endif %}
+      <td class="num-col">{{ item.quantity | fmt_decimal }}</td>
+      <td class="center-col">{{ item.unit or "шт" }}</td>
+      <td class="num-col">{{ item.sale_price | fmt_decimal }} {{ item.sale_currency }}</td>
+      <td class="num-col">{{ item.total | fmt_decimal }} {{ item.sale_currency }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="totals-block">
+  <table>
+    {% if client_currency != "CNY" %}
+    <tr>
+      <td>Итого ({{ client_currency }}):</td>
+      <td class="num-col">{{ total_in_currency | fmt_decimal }} {{ client_currency }}</td>
+    </tr>
+    {% endif %}
+    <tr class="total-row">
+      <td>ИТОГО (CNY):</td>
+      <td class="num-col">{{ total_cny | fmt_decimal }} CNY</td>
+    </tr>
+  </table>
+</div>
+
+{% if notes %}
+<div class="notes-block">
+  <div class="label">Примечания:</div>
+  {{ notes }}
+</div>
+{% endif %}
+
+<div class="footer">
+  Документ сформирован автоматически · ERP System · {{ order_date }}
+</div>
+
+</body>
+</html>

@@ -59,7 +59,10 @@ async def list_counterparties(
     q = q.order_by(Counterparty.name).offset((page - 1) * page_size).limit(page_size)
     items = (await db.execute(q)).scalars().all()
 
-    return CounterpartyListResponse(items=list(items), total=total, page=page, page_size=page_size)
+    return CounterpartyListResponse(
+        items=[CounterpartyResponse.from_obj(cp) for cp in items],
+        total=total, page=page, page_size=page_size,
+    )
 
 
 @router.get("/{cp_id}", response_model=CounterpartyResponse)
@@ -69,7 +72,7 @@ async def get_counterparty(
     _: User = Depends(get_current_user),
 ):
     cp = await _get_or_404(db, cp_id)
-    return cp
+    return CounterpartyResponse.from_obj(cp)
 
 
 @router.post("", response_model=CounterpartyResponse, status_code=status.HTTP_201_CREATED)
@@ -94,7 +97,7 @@ async def create_counterparty(
                       {"new": _to_dict(cp)})
     await db.commit()
     await db.refresh(cp)
-    return cp
+    return CounterpartyResponse.from_obj(cp)
 
 
 @router.patch("/{cp_id}", response_model=CounterpartyResponse)
@@ -117,7 +120,7 @@ async def update_counterparty(
                       {"old": old, "new": _to_dict(cp)})
     await db.commit()
     await db.refresh(cp)
-    return cp
+    return CounterpartyResponse.from_obj(cp)
 
 
 @router.delete("/{cp_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -132,7 +132,17 @@
     "file_type_other": "Другое",
     "upload_file": "Загрузить файл",
     "no_files": "Файлы не загружены",
-    "delete_file_confirm": "Удалить этот файл?"
+    "delete_file_confirm": "Удалить этот файл?",
+    "model": "Модель",
+    "specification": "Спецификация",
+    "spec_add": "Добавить спецификацию",
+    "spec_filled": "Спецификация заполнена",
+    "photos": "Фото позиций",
+    "photos_per_item_hint": "Загрузите фотографии для каждой позиции (JPEG, PNG, WebP, до 10 МБ)",
+    "client_phone": "Телефон клиента",
+    "manager_readonly_hint": "Менеджер = тот, кто создал заказ. Нельзя изменить.",
+    "upload_photo_after_save": "Сохраните заказ, чтобы загружать фото",
+    "download_client_pdf": "Скачать PDF для клиента"
   },
   "purchase": {
     "title": "Закупки",
@@ -163,7 +173,9 @@
     "no_items_available": "Нет доступных позиций для закупки",
     "total_amount": "Сумма закупки",
     "logistics_amount_required": "Укажите сумму закупки",
-    "delete_confirm": "Удалить эту закупку?"
+    "delete_confirm": "Удалить эту закупку?",
+    "purchaser": "Закупщик",
+    "purchaser_readonly_hint": "Закупщик = тот, кто создал закупку. Нельзя изменить."
   },
   "role": {
     "employee": "Сотрудник",

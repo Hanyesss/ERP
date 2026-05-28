@@ -55,3 +55,24 @@ export const deleteOrderFile = (orderId: string, fileId: string) =>
 
 export const getFileUrl = (filePath: string) =>
   `${apiClient.defaults.baseURL}/files/${filePath}`;
+
+// Order item photos
+export const getItemPhotos = (itemId: string) =>
+  apiClient.get<any[]>(`/api/order-items/${itemId}/photos`);
+
+export const uploadItemPhoto = (itemId: string, file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient.post<any>(`/api/order-items/${itemId}/photos`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const deleteItemPhoto = (itemId: string, photoId: string) =>
+  apiClient.delete(`/api/order-items/${itemId}/photos/${photoId}`);
+
+export const getItemPhotoUrl = (itemId: string, photoId: string) =>
+  `${apiClient.defaults.baseURL}/api/order-items/${itemId}/photos/${photoId}/file`;
+
+export const downloadClientPdf = (orderId: string) =>
+  apiClient.get(`/api/orders/${orderId}/client-pdf`, { responseType: "blob" });

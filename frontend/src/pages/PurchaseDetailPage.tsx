@@ -195,6 +195,11 @@ export default function PurchaseDetailPage() {
           <Descriptions.Item label={t("purchase.payment_status")}>
             <Tag color={STATUS_COLORS[purchase.payment_status]}>{t(`purchase.status_${purchase.payment_status}`)}</Tag>
           </Descriptions.Item>
+          {(purchase as any).created_by_name && (
+            <Descriptions.Item label={t("purchase.purchaser")}>
+              {(purchase as any).created_by_name}
+            </Descriptions.Item>
+          )}
           {purchase.notes && (
             <Descriptions.Item label={t("purchase.notes")} span={2}>{purchase.notes}</Descriptions.Item>
           )}

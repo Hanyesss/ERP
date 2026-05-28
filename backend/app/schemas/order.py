@@ -25,9 +25,21 @@ class OrderChargeResponse(BaseModel):
     notes: Optional[str] = None
 
 
+class OrderItemPhotoResponse(BaseModel):
+    id: uuid.UUID
+    file_url: str
+    file_name: str
+    file_size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    sort_order: int = 0
+    uploaded_at: datetime
+
+
 class OrderItemCreate(BaseModel):
     name: str
     name_cn: Optional[str] = None
+    model: Optional[str] = None
+    specification: Optional[str] = None
     # Trade / services
     quantity: Optional[Decimal] = None
     unit: Optional[str] = None
@@ -49,7 +61,7 @@ class OrderCreate(BaseModel):
     order_date: date
     client_id: uuid.UUID
     business_type_id: uuid.UUID
-    manager_id: uuid.UUID
+    # manager_id is intentionally excluded — always set to current user in the endpoint
     client_currency: str = "CNY"
     notes: Optional[str] = None
     items: list[OrderItemCreate] = []
@@ -66,7 +78,7 @@ class OrderUpdate(BaseModel):
     order_date: Optional[date] = None
     client_id: Optional[uuid.UUID] = None
     business_type_id: Optional[uuid.UUID] = None
-    manager_id: Optional[uuid.UUID] = None
+    # manager_id intentionally excluded — cannot be changed after creation
     client_currency: Optional[str] = None
     notes: Optional[str] = None
     items: Optional[list[OrderItemCreate]] = None
@@ -85,6 +97,8 @@ class OrderItemResponseManager(BaseModel):
     id: uuid.UUID
     name: str
     name_cn: Optional[str] = None
+    model: Optional[str] = None
+    specification: Optional[str] = None
     quantity: Optional[Decimal] = None
     unit: Optional[str] = None
     preferred_supplier_id: Optional[uuid.UUID] = None
@@ -101,6 +115,7 @@ class OrderItemResponseManager(BaseModel):
     cargo_value: Optional[Decimal] = None
     cargo_value_currency: Optional[str] = None
     places_count: Optional[int] = None
+    photos: List[OrderItemPhotoResponse] = []
 
 
 class PurchaseItemBrief(BaseModel):
@@ -117,6 +132,8 @@ class OrderItemResponseFull(BaseModel):
     id: uuid.UUID
     name: str
     name_cn: Optional[str] = None
+    model: Optional[str] = None
+    specification: Optional[str] = None
     quantity: Optional[Decimal] = None
     unit: Optional[str] = None
     preferred_supplier_id: Optional[uuid.UUID] = None
@@ -136,6 +153,7 @@ class OrderItemResponseFull(BaseModel):
     # Purchase data
     purchased_quantity: Optional[Decimal] = None
     purchase_items: List[PurchaseItemBrief] = []
+    photos: List[OrderItemPhotoResponse] = []
 
 
 # Keep for backwards compatibility in orders.py
@@ -170,6 +188,7 @@ class OrderResponseManager(BaseModel):
     order_date: date
     client_id: uuid.UUID
     client_name: str
+    client_phone: Optional[str] = None
     business_type_id: uuid.UUID
     business_type_name: str
     business_type_name_cn: Optional[str] = None
@@ -201,6 +220,7 @@ class OrderResponseFull(BaseModel):
     order_date: date
     client_id: uuid.UUID
     client_name: str
+    client_phone: Optional[str] = None
     business_type_id: uuid.UUID
     business_type_name: str
     business_type_name_cn: Optional[str] = None

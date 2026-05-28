@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography, Alert,
-  Space, Row, Col, Statistic, message, Divider,
+  Space, Row, Col, Statistic, message, Divider, Tooltip,
 } from "antd";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import OrderItemsEditor from "../components/orders/OrderItemsEditor";
 import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
 import ChargesEditor from "../components/orders/ChargesEditor";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
+import ItemPhotosEditor from "../components/orders/ItemPhotosEditor";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import type { User } from "../types";
@@ -33,6 +34,7 @@ export default function OrderFormPage({ user }: Props) {
 
   const [form] = Form.useForm();
   const [rateModalOpen, setRateModalOpen] = useState(false);
+  const [clientPhone, setClientPhone] = useState<string | null>(null);
 
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
@@ -138,9 +140,9 @@ export default function OrderFormPage({ user }: Props) {
 
   useEffect(() => {
     if (!isEdit) {
-      form.setFieldsValue({ order_date: dayjs(), manager_id: user.id, client_currency: "CNY" });
+      form.setFieldsValue({ order_date: dayjs(), client_currency: "CNY" });
     }
-  }, [isEdit, user.id, form]);
+  }, [isEdit, form]);
 
   useEffect(() => {
     if (!isEdit && nextNumber) {
@@ -150,12 +152,14 @@ export default function OrderFormPage({ user }: Props) {
 
   useEffect(() => {
     if (isEdit && existingOrder) {
+      // Set client phone from loaded order
+      setClientPhone((existingOrder as any).client_phone || null);
+
       form.setFieldsValue({
         order_number: existingOrder.order_number,
         order_date: dayjs(existingOrder.order_date),
         client_id: existingOrder.client_id,
         business_type_id: existingOrder.business_type_id,
-        manager_id: existingOrder.manager_id,
         client_currency: existingOrder.client_currency,
         notes: existingOrder.notes,
         recipient: existingOrder.recipient,
@@ -163,8 +167,10 @@ export default function OrderFormPage({ user }: Props) {
         arrival_date: existingOrder.arrival_date ? dayjs(existingOrder.arrival_date) : null,
         tracking_number: existingOrder.tracking_number,
         warehouse_id: existingOrder.warehouse_id || undefined,
-        items: existingOrder.items.map(i => ({
+        items: existingOrder.items.map((i: any) => ({
           name: i.name, name_cn: i.name_cn,
+          model: i.model,
+          specification: i.specification,
           quantity: i.quantity != null ? Number(i.quantity) : undefined,
           unit: i.unit,
           preferred_supplier_id: i.preferred_supplier_id,
@@ -197,6 +203,7 @@ export default function OrderFormPage({ user }: Props) {
       const client = clients.items.find((c: any) => c.id === clientId);
       if (client) {
         form.setFieldValue("client_currency", client.default_currency);
+        setClientPhone(client.phone || client.contact_info?.phone || null);
         if (isLogistics && !form.getFieldValue("recipient")) {
           form.setFieldValue("recipient", client.name);
         }
@@ -276,8 +283,10 @@ export default function OrderFormPage({ user }: Props) {
     // Filter out empty charges
     const charges = (values.charges || []).filter((c: any) => c?.amount != null && c?.amount > 0);
 
+    // manager_id is excluded — always set server-side to current user
+    const { manager_id: _ignored, ...restValues } = values;
     const payload = {
-      ...values,
+      ...restValues,
       order_date: values.order_date?.format("YYYY-MM-DD"),
       arrival_date: values.arrival_date?.format("YYYY-MM-DD") || null,
       charges,
@@ -295,8 +304,11 @@ export default function OrderFormPage({ user }: Props) {
     else createMutation.mutate(payload);
   };
 
-  const managerOptions = (managers || []).map((m: any) => ({ value: m.id, label: m.full_name }));
   const btOptions = (businessTypes || []).map((bt: any) => ({ value: bt.id, label: bt.name }));
+  // Manager name: for edit — from loaded order; for new — current user
+  const managerName = isEdit
+    ? ((existingOrder as any)?.manager_name || user.full_name)
+    : user.full_name;
   const missingRates = rateCheck?.missing ?? [];
 
   return (
@@ -357,12 +369,19 @@ export default function OrderFormPage({ user }: Props) {
                 <Select options={btOptions} />
               </Form.Item>
             </Col>
-            <Col span={6}>
-              <Form.Item name="manager_id" label={t("order.manager")} rules={[{ required: true }]}>
-                <Select options={managerOptions} />
+            <Col span={5}>
+              <Form.Item label={t("order.manager")} tooltip={t("order.manager_readonly_hint")}>
+                <Input value={managerName} disabled style={{ color: "#888", background: "#fafafa" }} />
               </Form.Item>
             </Col>
-            <Col span={18}>
+            {clientPhone && (
+              <Col span={4}>
+                <Form.Item label={t("order.client_phone")}>
+                  <Input value={clientPhone} disabled style={{ color: "#555", background: "#fafafa" }} />
+                </Form.Item>
+              </Col>
+            )}
+            <Col span={clientPhone ? 15 : 19}>
               <Form.Item name="notes" label={t("order.notes")}>
                 <Input.TextArea rows={2} />
               </Form.Item>
@@ -454,6 +473,23 @@ export default function OrderFormPage({ user }: Props) {
         {isLogistics && (
           <Card title={t("order.cost_breakdown")} style={{ marginBottom: 16 }}>
             <ChargesEditor form={form} rates={rates} />
+          </Card>
+        )}
+
+        {/* Photos per item (trade/services, edit mode only) */}
+        {isEdit && !isLogistics && existingOrder && (
+          <Card title={t("order.photos")} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
+              {t("order.photos_per_item_hint")}
+            </div>
+            {existingOrder.items.map((item: any, idx: number) => (
+              <div key={item.id} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #f0f0f0" }}>
+                <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                  {idx + 1}. {item.name}{item.model ? ` · ${item.model}` : ""}
+                </div>
+                <ItemPhotosEditor itemId={item.id} />
+              </div>
+            ))}
           </Card>
         )}
 

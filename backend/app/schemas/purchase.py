@@ -62,6 +62,7 @@ class PurchaseResponse(BaseModel):
     items: List[PurchaseItemResponse] = []
     order_id: Optional[uuid.UUID] = None
     order_number: Optional[str] = None
+    created_by_name: Optional[str] = None
 
 
 class PurchaseListItem(BaseModel):

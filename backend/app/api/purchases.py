@@ -88,6 +88,14 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         # Already have order_number in items
         linked_order_number = item_rows[0][2] if item_rows else None
 
+    # Resolve created_by name
+    created_by_name = None
+    if pur.created_by:
+        cb_user = (await db.execute(
+            select(User).where(User.id == pur.created_by)
+        )).scalar_one_or_none()
+        created_by_name = cb_user.full_name if cb_user else None
+
     return PurchaseResponse(
         id=pur.id, purchase_number=pur.purchase_number,
         supplier_id=pur.supplier_id, supplier_name=supplier.name if supplier else "",
@@ -101,6 +109,7 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         items=items,
         order_id=linked_order_id,
         order_number=linked_order_number,
+        created_by_name=created_by_name,
     )
 
 

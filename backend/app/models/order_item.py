@@ -1,6 +1,6 @@
 import uuid
 from decimal import Decimal
-from sqlalchemy import String, Numeric, ForeignKey, Integer
+from sqlalchemy import String, Numeric, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -15,6 +15,8 @@ class OrderItem(Base):
     preferred_supplier_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("counterparties.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     name_cn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    specification: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Trade / services fields (nullable for logistics)
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)

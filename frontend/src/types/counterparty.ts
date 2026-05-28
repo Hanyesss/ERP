@@ -14,6 +14,7 @@ export interface Counterparty {
   type: CounterpartyType;
   default_currency: CurrencyEnum;
   contact_info?: ContactInfo;
+  phone?: string;
   notes?: string;
   is_active: boolean;
 }

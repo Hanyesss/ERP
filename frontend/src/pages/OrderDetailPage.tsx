@@ -1,13 +1,14 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  Button, Card, Col, Descriptions, Divider, Popconfirm, Row,
+  Button, Card, Col, Descriptions, Divider, Image, Popconfirm, Row,
   Space, Statistic, Table, Tabs, Tag, Timeline, Typography, message,
 } from "antd";
-import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined } from "@ant-design/icons";
+import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined, DownloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { getOrder, closeOrder, cancelOrder, getOrderHistory } from "../api/orders";
+import { getOrder, closeOrder, cancelOrder, getOrderHistory, downloadClientPdf, getItemPhotoUrl } from "../api/orders";
 import { getPurchases } from "../api/purchases";
 import { getPaymentsForOrder } from "../api/payments";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
@@ -29,6 +30,8 @@ export default function OrderDetailPage() {
   const qc = useQueryClient();
 
   const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
+  const canDownloadPdf = useHasAnyRole("manager", "accountant", "admin");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order", id],
@@ -74,6 +77,23 @@ export default function OrderDetailPage() {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const res = await downloadClientPdf(id!);
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `quotation_${order?.order_number || id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "PDF generation failed");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   if (isLoading || !order) return null;
 
   const isLogistics = order.business_type_code === "logistics";
@@ -96,12 +116,38 @@ export default function OrderDetailPage() {
   const tradeItemColumns: ColumnsType<OrderItem> = [
     { title: "№", key: "idx", width: 40, render: (_, __, i) => i + 1 },
     { title: t("order.item_name"), dataIndex: "name", key: "name",
-      render: (name, row) => (
+      render: (name, row: any) => (
         <div>
           <div>{name}</div>
           {row.name_cn && <div style={{ color: "#888", fontSize: 11 }}>{row.name_cn}</div>}
+          {row.model && <div style={{ color: "#555", fontSize: 11 }}>{t("order.model")}: {row.model}</div>}
+          {row.specification && (
+            <div style={{ color: "#888", fontSize: 11, whiteSpace: "pre-wrap", maxWidth: 200 }}>{row.specification}</div>
+          )}
         </div>
       )
+    },
+    { title: t("order.photos"), key: "photos", width: 120,
+      render: (_: any, row: any) => {
+        const photos = row.photos || [];
+        if (!photos.length) return null;
+        return (
+          <Image.PreviewGroup>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {photos.map((ph: any) => (
+                <Image
+                  key={ph.id}
+                  src={getItemPhotoUrl(row.id, ph.id)}
+                  width={48}
+                  height={48}
+                  style={{ objectFit: "cover", borderRadius: 4, border: "1px solid #eee" }}
+                  preview={{ src: getItemPhotoUrl(row.id, ph.id) }}
+                />
+              ))}
+            </div>
+          </Image.PreviewGroup>
+        );
+      }
     },
     { title: t("order.item_quantity"), dataIndex: "quantity", key: "quantity", width: 90, align: "right",
       render: (v, row) => `${v ?? "—"} ${row.unit || ""}`.trim() },
@@ -166,7 +212,14 @@ export default function OrderDetailPage() {
           <Descriptions bordered size="small" column={2}>
             <Descriptions.Item label={t("order.number")}>{order.order_number}</Descriptions.Item>
             <Descriptions.Item label={t("order.date")}>{order.order_date}</Descriptions.Item>
-            <Descriptions.Item label={t("order.client")}>{order.client_name}</Descriptions.Item>
+            <Descriptions.Item label={t("order.client")}>
+              {order.client_name}
+              {(order as any).client_phone && (
+                <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                  📞 {(order as any).client_phone}
+                </Text>
+              )}
+            </Descriptions.Item>
             <Descriptions.Item label={t("order.currency")}>{order.client_currency}</Descriptions.Item>
             <Descriptions.Item label={t("order.business_type")}>
               <BusinessTypeTag code={order.business_type_code} name={order.business_type_name} />
@@ -510,6 +563,15 @@ export default function OrderDetailPage() {
         <Col>
           <Space>
             <Button onClick={() => navigate("/orders")}>{t("common.back")}</Button>
+            {canDownloadPdf && !isLogistics && (
+              <Button
+                icon={<DownloadOutlined />}
+                loading={pdfLoading}
+                onClick={handleDownloadPdf}
+              >
+                {t("order.download_client_pdf")}
+              </Button>
+            )}
             {canEdit && (
               <Button icon={<EditOutlined />} onClick={() => navigate(`/orders/${id}/edit`)}>
                 {t("common.edit")}

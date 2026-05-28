@@ -153,7 +153,17 @@
     "file_type_other": "其他",
     "upload_file": "上传文件",
     "no_files": "暂无文件",
-    "delete_file_confirm": "确认删除此文件？"
+    "delete_file_confirm": "确认删除此文件？",
+    "model": "型号",
+    "specification": "规格",
+    "spec_add": "添加规格",
+    "spec_filled": "已填写规格",
+    "photos": "商品图片",
+    "photos_per_item_hint": "为每个商品上传图片（JPEG、PNG、WebP，最大10MB）",
+    "client_phone": "客户电话",
+    "manager_readonly_hint": "经理 = 创建订单的人，不可更改。",
+    "upload_photo_after_save": "保存订单后方可上传图片",
+    "download_client_pdf": "下载客户PDF报价单"
   },
   "purchase": {
     "title": "采购单",
@@ -184,7 +194,9 @@
     "no_items_available": "暂无可采购明细",
     "total_amount": "采购金额",
     "logistics_amount_required": "请填写采购金额",
-    "delete_confirm": "确认删除此采购单？"
+    "delete_confirm": "确认删除此采购单？",
+    "purchaser": "采购员",
+    "purchaser_readonly_hint": "采购员 = 创建采购单的人，不可更改。"
   },
   "role": {
     "employee": "员工",

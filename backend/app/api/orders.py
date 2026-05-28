@@ -12,6 +12,7 @@ from app.core.deps import get_current_user, require_roles
 from app.models.user import User
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_item import OrderItem
+from app.models.order_item_photo import OrderItemPhoto
 from app.models.order_charge import OrderCharge
 from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.business_type import BusinessType
@@ -27,8 +28,8 @@ from app.models.warehouse import Warehouse
 from app.schemas.order import (
     OrderCreate, OrderUpdate, OrderListItem, OrderListResponse,
     OrderChargeResponse, OrderItemResponseManager, OrderItemResponseFull,
-    OrderResponseManager, OrderResponseFull, PurchaseItemBrief,
-    AvailableForPurchaseItem,
+    OrderItemPhotoResponse, OrderResponseManager, OrderResponseFull,
+    PurchaseItemBrief, AvailableForPurchaseItem,
 )
 from app.utils.audit import write_audit
 
@@ -106,6 +107,12 @@ async def _load_order_detail(
     paid_cny = paid_row.scalar_one() or Decimal("0")
     remaining_cny = max((order.total_sale_cny or Decimal("0")) - paid_cny, Decimal("0"))
 
+    # client phone from contact_info
+    client_row = (await db.execute(select(Counterparty).where(Counterparty.id == order.client_id))).scalar_one_or_none()
+    client_phone = None
+    if client_row and client_row.contact_info and isinstance(client_row.contact_info, dict):
+        client_phone = client_row.contact_info.get("phone")
+
     # Items with preferred_supplier names
     PreferredAlias = aliased(Counterparty)
     items_stmt = (
@@ -115,6 +122,24 @@ async def _load_order_detail(
         .order_by(OrderItem.id)
     )
     item_rows = (await db.execute(items_stmt)).all()
+
+    # Photos per order item
+    item_ids = [r[0].id for r in item_rows]
+    photos_by_item: dict[uuid.UUID, list] = {}
+    if item_ids:
+        photo_rows = (await db.execute(
+            select(OrderItemPhoto)
+            .where(OrderItemPhoto.order_item_id.in_(item_ids))
+            .order_by(OrderItemPhoto.order_item_id, OrderItemPhoto.sort_order, OrderItemPhoto.uploaded_at)
+        )).scalars().all()
+        for ph in photo_rows:
+            photos_by_item.setdefault(ph.order_item_id, []).append(
+                OrderItemPhotoResponse(
+                    id=ph.id, file_url=ph.file_url, file_name=ph.file_name,
+                    file_size_bytes=ph.file_size_bytes, mime_type=ph.mime_type,
+                    sort_order=ph.sort_order, uploaded_at=ph.uploaded_at,
+                )
+            )
 
     # Charges
     charge_rows = (await db.execute(
@@ -132,6 +157,7 @@ async def _load_order_detail(
         items = [
             OrderItemResponseManager(
                 id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
+                model=r[0].model, specification=r[0].specification,
                 quantity=r[0].quantity, unit=r[0].unit,
                 preferred_supplier_id=r[0].preferred_supplier_id,
                 preferred_supplier_name=r[1],
@@ -142,12 +168,14 @@ async def _load_order_detail(
                 price_per_kg=r[0].price_per_kg, price_per_kg_currency=r[0].price_per_kg_currency,
                 cargo_value=r[0].cargo_value, cargo_value_currency=r[0].cargo_value_currency,
                 places_count=r[0].places_count,
+                photos=photos_by_item.get(r[0].id, []),
             )
             for r in item_rows
         ]
         return OrderResponseManager(
             id=order.id, order_number=order.order_number, order_date=order.order_date,
             client_id=order.client_id, client_name=row.client_name,
+            client_phone=client_phone,
             business_type_id=order.business_type_id, business_type_name=row.business_type_name,
             business_type_name_cn=row.business_type_name_cn, business_type_code=row.business_type_code,
             manager_id=order.manager_id, manager_name=row.manager_name,
@@ -163,7 +191,6 @@ async def _load_order_detail(
         )
 
     # Purchaser/accountant/admin — load purchase_items per order_item
-    item_ids = [r[0].id for r in item_rows]
     purchase_item_rows = []
     if item_ids:
         pi_stmt = (
@@ -182,6 +209,7 @@ async def _load_order_detail(
     items = [
         OrderItemResponseFull(
             id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
+            model=r[0].model, specification=r[0].specification,
             quantity=r[0].quantity, unit=r[0].unit,
             preferred_supplier_id=r[0].preferred_supplier_id,
             preferred_supplier_name=r[1],
@@ -204,6 +232,7 @@ async def _load_order_detail(
                 )
                 for pi in pi_by_item.get(r[0].id, [])
             ],
+            photos=photos_by_item.get(r[0].id, []),
         )
         for r in item_rows
     ]
@@ -221,6 +250,7 @@ async def _load_order_detail(
     return OrderResponseFull(
         id=order.id, order_number=order.order_number, order_date=order.order_date,
         client_id=order.client_id, client_name=row.client_name,
+        client_phone=client_phone,
         business_type_id=order.business_type_id, business_type_name=row.business_type_name,
         business_type_name_cn=row.business_type_name_cn, business_type_code=row.business_type_code,
         manager_id=order.manager_id, manager_name=row.manager_name,
@@ -287,6 +317,8 @@ async def _save_items_and_charges(
             id=uuid.uuid4(),
             order_id=order_id,
             name=item_data.name, name_cn=item_data.name_cn,
+            model=getattr(item_data, "model", None) if not is_logistics else None,
+            specification=getattr(item_data, "specification", None) if not is_logistics else None,
             quantity=item_data.quantity, unit=item_data.unit,
             preferred_supplier_id=item_data.preferred_supplier_id,
             sale_price=item_data.sale_price, sale_currency=item_data.sale_currency,
@@ -528,7 +560,7 @@ async def create_order(
         company_id=company.id,
         client_id=body.client_id,
         business_type_id=body.business_type_id,
-        manager_id=body.manager_id,
+        manager_id=current_user.id,  # always the creator, ignoring any input
         order_date=body.order_date,
         status=OrderStatus.new,
         client_currency=body.client_currency,
