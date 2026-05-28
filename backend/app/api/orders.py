@@ -23,6 +23,7 @@ from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
 from app.models.expense import Expense
 from app.models.audit_log import AuditActionEnum
+from app.models.warehouse import Warehouse
 from app.schemas.order import (
     OrderCreate, OrderUpdate, OrderListItem, OrderListResponse,
     OrderChargeResponse, OrderItemResponseManager, OrderItemResponseFull,
@@ -74,6 +75,7 @@ async def _load_order_detail(
 
     ClientAlias = aliased(Counterparty)
     ManagerAlias = aliased(User)
+    WarehouseAlias = aliased(Warehouse)
 
     stmt = (
         select(
@@ -83,10 +85,12 @@ async def _load_order_detail(
             BusinessType.name.label("business_type_name"),
             BusinessType.name_cn.label("business_type_name_cn"),
             BusinessType.code.label("business_type_code"),
+            WarehouseAlias.name.label("warehouse_name"),
         )
         .join(ClientAlias, Order.client_id == ClientAlias.id)
         .join(ManagerAlias, Order.manager_id == ManagerAlias.id)
         .join(BusinessType, Order.business_type_id == BusinessType.id)
+        .outerjoin(WarehouseAlias, Order.warehouse_id == WarehouseAlias.id)
         .where(Order.id == order_id)
     )
     row = (await db.execute(stmt)).first()
@@ -154,6 +158,7 @@ async def _load_order_detail(
             remaining_amount_cny=remaining_cny,
             notes=order.notes, recipient=order.recipient, destination=order.destination,
             arrival_date=order.arrival_date, tracking_number=order.tracking_number,
+            warehouse_id=order.warehouse_id, warehouse_name=row.warehouse_name,
             created_at=order.created_at, items=items, charges=charges,
         )
 
@@ -223,6 +228,7 @@ async def _load_order_detail(
         remaining_amount_cny=remaining_cny,
         notes=order.notes, recipient=order.recipient, destination=order.destination,
         arrival_date=order.arrival_date, tracking_number=order.tracking_number,
+        warehouse_id=order.warehouse_id, warehouse_name=row.warehouse_name,
         created_at=order.created_at, items=items, charges=charges,
     )
 
@@ -531,6 +537,7 @@ async def create_order(
         destination=body.destination,
         arrival_date=body.arrival_date,
         tracking_number=body.tracking_number,
+        warehouse_id=body.warehouse_id,
         created_by=current_user.id,
     )
     db.add(order)

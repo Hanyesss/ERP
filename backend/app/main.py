@@ -12,6 +12,8 @@ from app.api.purchases import router as purchases_router
 from app.api.payments import router as payments_router
 from app.api.dashboard import router as dashboard_router
 from app.api.expenses import router as expenses_router
+from app.api.warehouses import router as warehouses_router
+from app.api.reports import router as reports_router
 
 app = FastAPI(title="ERP API", version="1.0.0")
 
@@ -34,6 +36,8 @@ app.include_router(purchases_router)
 app.include_router(payments_router)
 app.include_router(dashboard_router)
 app.include_router(expenses_router)
+app.include_router(warehouses_router)
+app.include_router(reports_router)
 
 
 @app.get("/health")

@@ -59,6 +59,7 @@ class OrderCreate(BaseModel):
     destination: Optional[str] = None
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
+    warehouse_id: Optional[uuid.UUID] = None
 
 
 class OrderUpdate(BaseModel):
@@ -74,6 +75,7 @@ class OrderUpdate(BaseModel):
     destination: Optional[str] = None
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
+    warehouse_id: Optional[uuid.UUID] = None
 
 
 # ── Item response (role-aware) ─────────────────────────────────────────────────
@@ -185,6 +187,8 @@ class OrderResponseManager(BaseModel):
     destination: Optional[str] = None
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
+    warehouse_id: Optional[uuid.UUID] = None
+    warehouse_name: Optional[str] = None
     created_at: datetime
     items: List[OrderItemResponseManager] = []
     charges: List[OrderChargeResponse] = []
@@ -217,6 +221,8 @@ class OrderResponseFull(BaseModel):
     destination: Optional[str] = None
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
+    warehouse_id: Optional[uuid.UUID] = None
+    warehouse_name: Optional[str] = None
     created_at: datetime
     items: List[OrderItemResponseFull] = []
     charges: List[OrderChargeResponse] = []

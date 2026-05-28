@@ -11,6 +11,7 @@ import { getOrder, createOrder, updateOrder, getNextOrderNumber } from "../api/o
 import { checkExchangeRates } from "../api/exchangeRates";
 import { getCounterparties } from "../api/counterparties";
 import { getManagers, getBusinessTypes } from "../api/references";
+import { getWarehouses } from "../api/warehouses";
 import OrderItemsEditor from "../components/orders/OrderItemsEditor";
 import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
 import ChargesEditor from "../components/orders/ChargesEditor";
@@ -56,6 +57,11 @@ export default function OrderFormPage({ user }: Props) {
     queryKey: ["order", id],
     queryFn: () => getOrder(id!).then(r => r.data),
     enabled: isEdit,
+  });
+
+  const { data: warehouses } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => getWarehouses().then(r => r.data),
   });
 
   const isLogistics = useMemo(() => {
@@ -156,6 +162,7 @@ export default function OrderFormPage({ user }: Props) {
         destination: existingOrder.destination,
         arrival_date: existingOrder.arrival_date ? dayjs(existingOrder.arrival_date) : null,
         tracking_number: existingOrder.tracking_number,
+        warehouse_id: existingOrder.warehouse_id || undefined,
         items: existingOrder.items.map(i => ({
           name: i.name, name_cn: i.name_cn,
           quantity: i.quantity != null ? Number(i.quantity) : undefined,
@@ -335,6 +342,15 @@ export default function OrderFormPage({ user }: Props) {
               <Col span={4}>
                 <Form.Item name="tracking_number" label={t("order.tracking_number")}>
                   <Input />
+                </Form.Item>
+              </Col>
+              <Col span={4}>
+                <Form.Item name="warehouse_id" label={t("warehouse.shipping_warehouse")}>
+                  <Select
+                    allowClear
+                    options={(warehouses || []).map((wh: any) => ({ value: wh.id, label: wh.name }))}
+                    placeholder={t("warehouse.shipping_warehouse")}
+                  />
                 </Form.Item>
               </Col>
             </Row>

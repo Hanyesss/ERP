@@ -110,6 +110,8 @@ export interface Order {
   destination?: string;
   arrival_date?: string;
   tracking_number?: string;
+  warehouse_id?: string;
+  warehouse_name?: string;
   created_at: string;
   items: OrderItem[];
   charges: OrderCharge[];

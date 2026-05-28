@@ -3,6 +3,7 @@ import { Layout, Menu, Button, Typography, Space } from "antd";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
+  BarChartOutlined, DatabaseOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -77,6 +78,18 @@ export default function AppLayout({ user, onLogout }: Props) {
       icon: <SwapOutlined />,
       label: t("nav.exchange_rates"),
     },
+
+    hasRole(user, "accountant", "admin") && {
+      key: "/warehouses",
+      icon: <DatabaseOutlined />,
+      label: t("nav.warehouses"),
+    },
+
+    hasRole(user, "manager", "accountant", "admin") && {
+      key: "/reports",
+      icon: <BarChartOutlined />,
+      label: t("nav.reports"),
+    },
   ].filter(Boolean) as { key: string; icon: JSX.Element; label: string }[];
 
   const selectedKey = location.pathname.startsWith("/orders")
@@ -89,6 +102,10 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/expenses"
     : location.pathname.startsWith("/exchange-rates")
     ? "/exchange-rates"
+    : location.pathname.startsWith("/warehouses")
+    ? "/warehouses"
+    : location.pathname.startsWith("/reports")
+    ? "/reports"
     : location.pathname;
 
   return (

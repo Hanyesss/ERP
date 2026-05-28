@@ -52,4 +52,5 @@ class Order(Base, TimestampMixin):
     destination: Mapped[str | None] = mapped_column(Text, nullable=True)
     arrival_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("warehouses.id"), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

@@ -13,6 +13,12 @@ BUSINESS_TYPES = [
     {"code": "services", "name": "Услуги", "name_cn": "服务"},
 ]
 
+WAREHOUSES = [
+    {"name": "Гуанчжоу", "name_cn": "广州仓", "city": "Guangzhou"},
+    {"name": "Иу", "name_cn": "义乌仓", "city": "Yiwu"},
+    {"name": "Шэньчжэнь", "name_cn": "深圳仓", "city": "Shenzhen"},
+]
+
 EXPENSE_CATEGORIES = [
     {"name": "Транспорт", "name_cn": "运输"},
     {"name": "Представительские", "name_cn": "招待"},
@@ -71,6 +77,7 @@ async def run_seed() -> None:
     from app.models.user_role import UserRoleEntry
     from app.models.business_type import BusinessType
     from app.models.expense_category import ExpenseCategory
+    from app.models.warehouse import Warehouse
 
     async with Session() as session:
         # Company
@@ -90,10 +97,22 @@ async def run_seed() -> None:
             else:
                 print(f"  = BusinessType '{bt['code']}' already exists")
 
+        # Warehouses
+        for wh in WAREHOUSES:
+            result = await session.execute(select(Warehouse).where(Warehouse.name == wh["name"]))
+            if not result.scalar_one_or_none():
+                session.add(Warehouse(id=uuid.uuid4(), **wh, is_active=True))
+                print(f"  + Warehouse '{wh['name']}' created")
+            else:
+                print(f"  = Warehouse '{wh['name']}' already exists")
+
+        await session.commit()
+
         # Expense categories
         for cat in EXPENSE_CATEGORIES:
             result = await session.execute(select(ExpenseCategory).where(ExpenseCategory.name == cat["name"]))
-            if not result.scalar_one_or_none():
+            rows = result.all()
+            if len(rows) == 0:
                 session.add(ExpenseCategory(id=uuid.uuid4(), **cat, is_active=True))
                 print(f"  + ExpenseCategory '{cat['name']}' created")
             else:
