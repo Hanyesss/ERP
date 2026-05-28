@@ -26,6 +26,8 @@ export interface Purchase {
   notes?: string;
   created_at: string;
   items: PurchaseItem[];
+  order_id?: string;
+  order_number?: string;
 }
 
 export interface PurchaseListItem {
@@ -41,6 +43,8 @@ export interface PurchaseListItem {
   items_count: number;
   paid_amount_cny: number;
   remaining_amount_cny: number;
+  order_id?: string;
+  order_number?: string;
 }
 
 export interface PurchaseListResponse {
@@ -65,4 +69,6 @@ export interface PurchaseFormData {
   rate_to_cny: number;
   notes?: string;
   items: PurchaseItemFormData[];
+  order_id?: string;
+  total_amount?: number;
 }

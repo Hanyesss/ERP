@@ -44,7 +44,7 @@ export default function OrderDetailPage() {
 
   const { data: purchasesData } = useQuery({
     queryKey: ["purchases-for-order", id],
-    queryFn: () => getPurchases({ page_size: 100 }).then(r => r.data),
+    queryFn: () => getPurchases({ order_id: id!, page_size: 100 }).then(r => r.data),
     enabled: !!id && canSeeCost,
   });
 
@@ -77,8 +77,9 @@ export default function OrderDetailPage() {
   if (isLoading || !order) return null;
 
   const isLogistics = order.business_type_code === "logistics";
+  const expensesCny = order.expenses_cny ?? 0;
   const margin = canSeeCost && order.total_cost_cny != null
-    ? order.total_sale_cny - order.total_cost_cny
+    ? order.total_sale_cny - order.total_cost_cny - expensesCny
     : null;
   const marginPct = margin != null && order.total_sale_cny > 0
     ? (margin / order.total_sale_cny) * 100
@@ -154,13 +155,7 @@ export default function OrderDetailPage() {
       render: v => fmtCny(Number(v)) },
   ];
 
-  // Purchases linked to this order (filtered client-side by order items)
-  const orderItemIds = new Set((order.items || []).map(i => i.id));
-  const linkedPurchases = (purchasesData?.items || []).filter(p => {
-    // We can't filter by order on the list API easily, so show all purchases for now
-    // The purchases detail page shows which orders are linked
-    return true;
-  }).slice(0, 10);
+  const linkedPurchases = purchasesData?.items || [];
 
   const tabItems = [
     {
@@ -367,35 +362,64 @@ export default function OrderDetailPage() {
               {t("purchase.create_for_order")}
             </Button>
           </Row>
-          <Table
-            size="small"
-            pagination={false}
-            dataSource={order.items.filter(i => (i.purchase_items?.length ?? 0) > 0).flatMap(i =>
-              (i.purchase_items || []).map(pi => ({
-                key: pi.id,
-                item_name: i.name,
-                purchase_number: pi.purchase_number,
-                purchase_id: pi.purchase_id,
-                quantity: pi.quantity,
-                cost_price: pi.cost_price,
-                cost_amount: pi.cost_amount,
-              }))
-            )}
-            columns={[
-              { title: t("order.item_name"), dataIndex: "item_name", key: "item_name" },
-              { title: t("purchase.number"), dataIndex: "purchase_number", key: "pur_num",
-                render: (num, row: any) => (
-                  <Button type="link" size="small" onClick={() => navigate(`/purchases/${row.purchase_id}`)}>
-                    {num}
-                  </Button>
-                )
-              },
-              { title: t("order.item_quantity"), dataIndex: "quantity", key: "qty", align: "right" },
-              { title: t("purchase.cost_price"), dataIndex: "cost_price", key: "cost_price", align: "right" },
-              { title: t("purchase.cost_amount_cny"), dataIndex: "cost_amount", key: "cost_amount", align: "right",
-                render: v => fmtCny(v) },
-            ]}
-          />
+          {isLogistics ? (
+            <Table
+              size="small"
+              pagination={false}
+              rowKey="id"
+              dataSource={linkedPurchases}
+              columns={[
+                { title: t("purchase.number"), dataIndex: "purchase_number", key: "pur_num",
+                  render: (num, row: any) => (
+                    <Button type="link" size="small" onClick={() => navigate(`/purchases/${row.id}`)}>
+                      {num}
+                    </Button>
+                  )
+                },
+                { title: t("purchase.supplier"), dataIndex: "supplier_name", key: "supplier" },
+                { title: t("purchase.date"), dataIndex: "purchase_date", key: "date" },
+                { title: `${t("purchase.total")} (CNY)`, dataIndex: "total_amount_cny", key: "total",
+                  align: "right", render: v => fmtCny(v) },
+                { title: t("purchase.payment_status"), dataIndex: "payment_status", key: "status",
+                  render: (s: string) => (
+                    <Tag color={s === "paid" ? "green" : s === "partial" ? "orange" : "red"}>
+                      {t(`purchase.status_${s}`)}
+                    </Tag>
+                  )
+                },
+              ]}
+            />
+          ) : (
+            <Table
+              size="small"
+              pagination={false}
+              dataSource={order.items.filter(i => (i.purchase_items?.length ?? 0) > 0).flatMap(i =>
+                (i.purchase_items || []).map(pi => ({
+                  key: pi.id,
+                  item_name: i.name,
+                  purchase_number: pi.purchase_number,
+                  purchase_id: pi.purchase_id,
+                  quantity: pi.quantity,
+                  cost_price: pi.cost_price,
+                  cost_amount: pi.cost_amount,
+                }))
+              )}
+              columns={[
+                { title: t("order.item_name"), dataIndex: "item_name", key: "item_name" },
+                { title: t("purchase.number"), dataIndex: "purchase_number", key: "pur_num",
+                  render: (num, row: any) => (
+                    <Button type="link" size="small" onClick={() => navigate(`/purchases/${row.purchase_id}`)}>
+                      {num}
+                    </Button>
+                  )
+                },
+                { title: t("order.item_quantity"), dataIndex: "quantity", key: "qty", align: "right" },
+                { title: t("purchase.cost_price"), dataIndex: "cost_price", key: "cost_price", align: "right" },
+                { title: t("purchase.cost_amount_cny"), dataIndex: "cost_amount", key: "cost_amount", align: "right",
+                  render: v => fmtCny(v) },
+              ]}
+            />
+          )}
         </div>
       ),
     }] : []),
@@ -416,6 +440,15 @@ export default function OrderDetailPage() {
               <Col span={6}>
                 <Statistic title={`${t("order.total_cost")} (CNY)`} value={fmtCny(order.total_cost_cny)} />
               </Col>
+              {expensesCny > 0 && (
+                <Col span={6}>
+                  <Statistic
+                    title={`${t("expense.title")} (CNY)`}
+                    value={fmtCny(expensesCny)}
+                    valueStyle={{ color: "#cf1322" }}
+                  />
+                </Col>
+              )}
               <Col span={6}>
                 <Statistic
                   title={`${t("order.margin")} (CNY)`}

@@ -16,7 +16,7 @@ import type { UploadRequestOption } from "rc-upload/lib/interface";
 import {
   getExpense, deleteExpense,
   approveReimbursement, rejectReimbursement, markReimbursementPaid,
-  uploadReceipt, getExpenseHistory,
+  uploadReceipt, getExpenseHistory, getFileUrl,
 } from "../api/expenses";
 import type { User } from "../types";
 
@@ -175,7 +175,7 @@ export default function ExpenseDetailPage({ user }: Props) {
             {expense.receipt_url ? (
               <Space>
                 <FileOutlined />
-                <a href={`/files/${expense.receipt_url}`} target="_blank" rel="noreferrer">
+                <a href={getFileUrl(expense.receipt_url)} target="_blank" rel="noreferrer">
                   {t("expense.receipt_view")}
                 </a>
               </Space>

@@ -4,7 +4,8 @@ from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_
+from sqlalchemy.orm import aliased
 
 from app.database import get_db
 from app.core.deps import require_roles
@@ -73,6 +74,20 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
     paid_cny = paid_row.scalar_one() or Decimal("0")
     remaining_cny = max((pur.total_amount_cny or Decimal("0")) - paid_cny, Decimal("0"))
 
+    # For logistics purchases: get order info directly from order_id
+    linked_order_id = pur.order_id
+    linked_order_number = None
+    if linked_order_id:
+        order_row = (await db.execute(
+            select(Order.order_number).where(Order.id == linked_order_id)
+        )).scalar_one_or_none()
+        linked_order_number = order_row
+    elif item_rows:
+        # For trade purchases: get order number from first item
+        linked_order_id = item_rows[0][0].order_id if hasattr(item_rows[0][0], "order_id") else None
+        # Already have order_number in items
+        linked_order_number = item_rows[0][2] if item_rows else None
+
     return PurchaseResponse(
         id=pur.id, purchase_number=pur.purchase_number,
         supplier_id=pur.supplier_id, supplier_name=supplier.name if supplier else "",
@@ -84,18 +99,26 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         remaining_amount_cny=remaining_cny,
         notes=pur.notes, created_at=pur.created_at,
         items=items,
+        order_id=linked_order_id,
+        order_number=linked_order_number,
     )
 
 
 async def _recalc_order_cost(db: AsyncSession, order_id: uuid.UUID) -> None:
-    """Update order.total_cost_cny from purchase_items linked to this order."""
-    result = await db.execute(
+    """Update order.total_cost_cny from purchase_items + direct logistics purchases."""
+    items_cost = (await db.execute(
         select(func.sum(PurchaseItem.cost_amount))
         .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
         .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
         .where(OrderItem.order_id == order_id, Purchase.is_deleted == False)
-    )
-    total_cost = result.scalar_one() or Decimal("0")
+    )).scalar_one() or Decimal("0")
+
+    logistics_cost = (await db.execute(
+        select(func.sum(Purchase.total_amount_cny))
+        .where(Purchase.order_id == order_id, Purchase.is_deleted == False)
+    )).scalar_one() or Decimal("0")
+
+    total_cost = items_cost + logistics_cost
     order = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
     if order:
         order.total_cost_cny = total_cost
@@ -108,6 +131,7 @@ async def list_purchases(
     payment_status: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
+    order_id: Optional[uuid.UUID] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -124,18 +148,43 @@ async def list_purchases(
         .subquery()
     )
 
+    # Correlated subquery: get order_number for trade purchases (via items → order_items → orders)
+    trade_order_num_sq = (
+        select(Order.order_number)
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(PurchaseItem, PurchaseItem.order_item_id == OrderItem.id)
+        .where(PurchaseItem.purchase_id == Purchase.id)
+        .limit(1)
+        .correlate(Purchase)
+        .scalar_subquery()
+    )
+
+    trade_order_id_sq = (
+        select(OrderItem.order_id)
+        .join(PurchaseItem, PurchaseItem.order_item_id == OrderItem.id)
+        .where(PurchaseItem.purchase_id == Purchase.id)
+        .limit(1)
+        .correlate(Purchase)
+        .scalar_subquery()
+    )
+
+    DirectOrder = aliased(Order)
+
     stmt = (
         select(
             Purchase,
             Counterparty.name.label("supplier_name"),
             func.count(PurchaseItem.id).label("items_count"),
             func.max(func.coalesce(paid_pur_sq.c.paid_cny, Decimal("0"))).label("paid_cny"),
+            func.coalesce(DirectOrder.order_number, trade_order_num_sq).label("order_number"),
+            func.coalesce(Purchase.order_id, trade_order_id_sq).label("linked_order_id"),
         )
         .join(Counterparty, Purchase.supplier_id == Counterparty.id)
         .outerjoin(PurchaseItem, PurchaseItem.purchase_id == Purchase.id)
         .outerjoin(paid_pur_sq, Purchase.id == paid_pur_sq.c.purchase_id)
+        .outerjoin(DirectOrder, Purchase.order_id == DirectOrder.id)
         .where(Purchase.is_deleted == False)
-        .group_by(Purchase.id, Counterparty.name)
+        .group_by(Purchase.id, Counterparty.name, DirectOrder.order_number)
     )
 
     if search:
@@ -148,6 +197,14 @@ async def list_purchases(
         stmt = stmt.where(Purchase.purchase_date >= date_from)
     if date_to:
         stmt = stmt.where(Purchase.purchase_date <= date_to)
+    if order_id:
+        # Include logistics purchases (direct order_id) AND trade purchases (via items)
+        trade_items_sq = (
+            select(PurchaseItem.purchase_id)
+            .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+            .where(OrderItem.order_id == order_id)
+        )
+        stmt = stmt.where(or_(Purchase.order_id == order_id, Purchase.id.in_(trade_items_sq)))
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     stmt = stmt.order_by(Purchase.purchase_date.desc(), Purchase.purchase_number.desc())
@@ -157,12 +214,14 @@ async def list_purchases(
     items = [
         PurchaseListItem(
             id=r[0].id, purchase_number=r[0].purchase_number,
-            supplier_id=r[0].supplier_id, supplier_name=r[1],
+            supplier_id=r[0].supplier_id, supplier_name=r.supplier_name,
             purchase_date=r[0].purchase_date, currency=r[0].currency,
             total_amount=r[0].total_amount, total_amount_cny=r[0].total_amount_cny,
-            payment_status=r[0].payment_status, items_count=r[2],
-            paid_amount_cny=r[3] or Decimal("0"),
-            remaining_amount_cny=max(r[0].total_amount_cny - (r[3] or Decimal("0")), Decimal("0")),
+            payment_status=r[0].payment_status, items_count=r.items_count,
+            paid_amount_cny=r.paid_cny or Decimal("0"),
+            order_id=r.linked_order_id,
+            order_number=r.order_number,
+            remaining_amount_cny=max(r[0].total_amount_cny - (r.paid_cny or Decimal("0")), Decimal("0")),
         )
         for r in rows
     ]
@@ -220,70 +279,102 @@ async def create_purchase(
         )).scalar_one()
         purchase_number = f"{prefix}{count + 1:04d}"
 
-    # Validate items and check available quantities
-    affected_order_ids: set[uuid.UUID] = set()
-    validated_items = []
-
-    for item_data in body.items:
-        oi = (await db.execute(
-            select(OrderItem).where(OrderItem.id == item_data.order_item_id)
-        )).scalar_one_or_none()
-        if not oi:
-            raise HTTPException(422, f"OrderItem {item_data.order_item_id} not found")
-        if oi.quantity is None:
-            raise HTTPException(422, f"OrderItem {item_data.order_item_id} has no quantity")
-
-        already = (await db.execute(
-            select(func.sum(PurchaseItem.quantity))
-            .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
-            .where(PurchaseItem.order_item_id == item_data.order_item_id, Purchase.is_deleted == False)
-        )).scalar_one() or Decimal("0")
-
-        available = oi.quantity - already
-        if item_data.quantity > available:
-            raise HTTPException(
-                422,
-                f"Item '{oi.name}': requested {item_data.quantity}, available {available}"
-            )
-
-        validated_items.append((oi, item_data))
-        affected_order_ids.add(oi.order_id)
-
-    # Calculate totals
-    total_amount = sum(i.quantity * i.cost_price for _, i in validated_items) if validated_items else Decimal("0")
     rate = body.rate_to_cny
-    total_amount_cny = (total_amount * rate).quantize(Decimal("0.01"))
+    affected_order_ids: set[uuid.UUID] = set()
 
-    purchase = Purchase(
-        id=uuid.uuid4(),
-        purchase_number=purchase_number,
-        company_id=company.id,
-        supplier_id=body.supplier_id,
-        purchase_date=body.purchase_date,
-        currency=body.currency,
-        total_amount=total_amount.quantize(Decimal("0.01")),
-        rate_to_cny=rate,
-        total_amount_cny=total_amount_cny,
-        payment_status=PurchasePaymentStatus.unpaid,
-        notes=body.notes,
-        created_by=current_user.id,
-    )
-    db.add(purchase)
-    await db.flush()
+    # ── Logistics mode: no items, direct order link + total amount ──────────────
+    is_logistics = not body.items and body.order_id is not None
 
-    for oi, item_data in validated_items:
-        # For cost_amount, use purchase currency rate to CNY
-        cost_amount_cny = (item_data.quantity * item_data.cost_price * rate).quantize(Decimal("0.01"))
-        db.add(PurchaseItem(
+    if is_logistics:
+        if not body.total_amount or body.total_amount <= 0:
+            raise HTTPException(422, "total_amount is required for logistics purchase")
+        order = (await db.execute(select(Order).where(Order.id == body.order_id))).scalar_one_or_none()
+        if not order:
+            raise HTTPException(422, "Order not found")
+
+        total_amount = body.total_amount
+        total_amount_cny = (total_amount * rate).quantize(Decimal("0.01"))
+
+        purchase = Purchase(
             id=uuid.uuid4(),
-            purchase_id=purchase.id,
-            order_item_id=item_data.order_item_id,
-            quantity=item_data.quantity,
-            cost_price=item_data.cost_price,
-            cost_amount=cost_amount_cny,
-        ))
+            purchase_number=purchase_number,
+            company_id=company.id,
+            supplier_id=body.supplier_id,
+            purchase_date=body.purchase_date,
+            currency=body.currency,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            rate_to_cny=rate,
+            total_amount_cny=total_amount_cny,
+            payment_status=PurchasePaymentStatus.unpaid,
+            order_id=body.order_id,
+            notes=body.notes,
+            created_by=current_user.id,
+        )
+        db.add(purchase)
+        await db.flush()
+        affected_order_ids.add(body.order_id)
 
-    await db.flush()
+    else:
+        # ── Trade/services mode: per-item purchases ─────────────────────────────
+        validated_items = []
+
+        for item_data in body.items:
+            oi = (await db.execute(
+                select(OrderItem).where(OrderItem.id == item_data.order_item_id)
+            )).scalar_one_or_none()
+            if not oi:
+                raise HTTPException(422, f"OrderItem {item_data.order_item_id} not found")
+            if oi.quantity is None:
+                raise HTTPException(422, f"OrderItem {item_data.order_item_id} has no quantity")
+
+            already = (await db.execute(
+                select(func.sum(PurchaseItem.quantity))
+                .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+                .where(PurchaseItem.order_item_id == item_data.order_item_id, Purchase.is_deleted == False)
+            )).scalar_one() or Decimal("0")
+
+            available = oi.quantity - already
+            if item_data.quantity > available:
+                raise HTTPException(
+                    422,
+                    f"Item '{oi.name}': requested {item_data.quantity}, available {available}"
+                )
+
+            validated_items.append((oi, item_data))
+            affected_order_ids.add(oi.order_id)
+
+        total_amount = sum(i.quantity * i.cost_price for _, i in validated_items) if validated_items else Decimal("0")
+        total_amount_cny = (total_amount * rate).quantize(Decimal("0.01"))
+
+        purchase = Purchase(
+            id=uuid.uuid4(),
+            purchase_number=purchase_number,
+            company_id=company.id,
+            supplier_id=body.supplier_id,
+            purchase_date=body.purchase_date,
+            currency=body.currency,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            rate_to_cny=rate,
+            total_amount_cny=total_amount_cny,
+            payment_status=PurchasePaymentStatus.unpaid,
+            notes=body.notes,
+            created_by=current_user.id,
+        )
+        db.add(purchase)
+        await db.flush()
+
+        for oi, item_data in validated_items:
+            cost_amount_cny = (item_data.quantity * item_data.cost_price * rate).quantize(Decimal("0.01"))
+            db.add(PurchaseItem(
+                id=uuid.uuid4(),
+                purchase_id=purchase.id,
+                order_item_id=item_data.order_item_id,
+                quantity=item_data.quantity,
+                cost_price=item_data.cost_price,
+                cost_amount=cost_amount_cny,
+            ))
+
+        await db.flush()
 
     # Update total_cost_cny on affected orders
     for order_id in affected_order_ids:

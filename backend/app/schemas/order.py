@@ -207,6 +207,7 @@ class OrderResponseFull(BaseModel):
     client_currency: str
     total_sale_cny: Decimal
     total_cost_cny: Decimal
+    expenses_cny: Decimal = Decimal("0")
     payment_status: str
     supplier_payment_status: str
     paid_amount_cny: Decimal = Decimal("0")

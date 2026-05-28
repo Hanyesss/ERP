@@ -21,6 +21,7 @@ from app.models.purchase_item import PurchaseItem
 from app.models.purchase import Purchase
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
+from app.models.expense import Expense
 from app.models.audit_log import AuditActionEnum
 from app.schemas.order import (
     OrderCreate, OrderUpdate, OrderListItem, OrderListResponse,
@@ -202,6 +203,12 @@ async def _load_order_detail(
         for r in item_rows
     ]
 
+    expenses_row = await db.execute(
+        select(func.coalesce(func.sum(Expense.amount_cny), Decimal("0")))
+        .where(Expense.order_id == order_id, Expense.is_active == True)
+    )
+    expenses_cny = expenses_row.scalar_one() or Decimal("0")
+
     return OrderResponseFull(
         id=order.id, order_number=order.order_number, order_date=order.order_date,
         client_id=order.client_id, client_name=row.client_name,
@@ -210,6 +217,7 @@ async def _load_order_detail(
         manager_id=order.manager_id, manager_name=row.manager_name,
         status=order.status, client_currency=order.client_currency,
         total_sale_cny=order.total_sale_cny, total_cost_cny=order.total_cost_cny,
+        expenses_cny=expenses_cny,
         payment_status=order.payment_status, supplier_payment_status=order.supplier_payment_status,
         paid_amount_cny=paid_cny,
         remaining_amount_cny=remaining_cny,

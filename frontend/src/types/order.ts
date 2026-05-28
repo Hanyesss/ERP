@@ -100,6 +100,7 @@ export interface Order {
   client_currency: string;
   total_sale_cny: number;
   total_cost_cny?: number;
+  expenses_cny?: number;
   payment_status: PaymentStatus;
   supplier_payment_status?: PaymentStatus;
   paid_amount_cny: number;

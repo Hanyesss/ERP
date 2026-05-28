@@ -178,6 +178,9 @@
     "cost_amount_cny": "人民币金额",
     "purchased_qty": "已采购",
     "no_items_selected": "未选择任何明细",
+    "no_items_available": "暂无可采购明细",
+    "total_amount": "采购金额",
+    "logistics_amount_required": "请填写采购金额",
     "delete_confirm": "确认删除此采购单？"
   },
   "role": {

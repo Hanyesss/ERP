@@ -63,7 +63,7 @@ export default function ExpenseFormPage({ user }: Props) {
 
   const { data: ordersData } = useQuery({
     queryKey: ["orders-for-expense"],
-    queryFn: () => getOrders({ page_size: 200 }).then(r => r.data),
+    queryFn: () => getOrders({ page_size: 100 }).then(r => r.data),
     enabled: linkType === "order",
   });
 

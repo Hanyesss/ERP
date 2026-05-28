@@ -59,3 +59,6 @@ export const uploadReceipt = (id: string, file: File) => {
 
 export const getExpenseHistory = (id: string) =>
   apiClient.get<any[]>(`/api/expenses/${id}/history`);
+
+export const getFileUrl = (filePath: string) =>
+  `${apiClient.defaults.baseURL}/files/${filePath}`;

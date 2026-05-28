@@ -157,6 +157,9 @@
     "cost_amount_cny": "Сумма CNY",
     "purchased_qty": "Закуплено",
     "no_items_selected": "Не выбрано ни одной позиции",
+    "no_items_available": "Нет доступных позиций для закупки",
+    "total_amount": "Сумма закупки",
+    "logistics_amount_required": "Укажите сумму закупки",
     "delete_confirm": "Удалить эту закупку?"
   },
   "role": {

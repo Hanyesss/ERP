@@ -61,6 +61,14 @@ export default function PurchasesPage() {
       key: "supplier",
     },
     {
+      title: t("order.title"),
+      dataIndex: "order_number",
+      key: "order_number",
+      render: (num: string | undefined, row) => num
+        ? <Button type="link" size="small" onClick={() => navigate(`/orders/${row.order_id}`)}>{num}</Button>
+        : "—",
+    },
+    {
       title: t("purchase.items_count"),
       dataIndex: "items_count",
       key: "items_count",

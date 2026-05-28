@@ -182,6 +182,14 @@ export default function PurchaseDetailPage() {
           <Descriptions.Item label={t("purchase.number")}>{purchase.purchase_number}</Descriptions.Item>
           <Descriptions.Item label={t("purchase.date")}>{purchase.purchase_date}</Descriptions.Item>
           <Descriptions.Item label={t("purchase.supplier")}>{purchase.supplier_name}</Descriptions.Item>
+          {purchase.order_number && (
+            <Descriptions.Item label={t("order.title")}>
+              <Button type="link" style={{ padding: 0, height: "auto" }}
+                onClick={() => navigate(`/orders/${purchase.order_id}`)}>
+                {purchase.order_number}
+              </Button>
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label={t("purchase.currency")}>{purchase.currency}</Descriptions.Item>
           <Descriptions.Item label={t("purchase.rate_to_cny")}>{Number(purchase.rate_to_cny).toFixed(4)}</Descriptions.Item>
           <Descriptions.Item label={t("purchase.payment_status")}>

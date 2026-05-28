@@ -8,6 +8,7 @@ export interface PurchaseListParams {
   payment_status?: string;
   date_from?: string;
   date_to?: string;
+  order_id?: string;
   page?: number;
   page_size?: number;
 }

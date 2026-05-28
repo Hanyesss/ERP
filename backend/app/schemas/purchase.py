@@ -19,6 +19,9 @@ class PurchaseCreate(BaseModel):
     rate_to_cny: Decimal = Decimal("1")
     notes: Optional[str] = None
     items: List[PurchaseItemCreate] = []
+    # logistics-only fields
+    order_id: Optional[uuid.UUID] = None
+    total_amount: Optional[Decimal] = None
 
 
 class PurchaseUpdate(BaseModel):
@@ -57,6 +60,8 @@ class PurchaseResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
     items: List[PurchaseItemResponse] = []
+    order_id: Optional[uuid.UUID] = None
+    order_number: Optional[str] = None
 
 
 class PurchaseListItem(BaseModel):
@@ -72,6 +77,8 @@ class PurchaseListItem(BaseModel):
     items_count: int = 0
     paid_amount_cny: Decimal = Decimal("0")
     remaining_amount_cny: Decimal = Decimal("0")
+    order_id: Optional[uuid.UUID] = None
+    order_number: Optional[str] = None
 
 
 class PurchaseListResponse(BaseModel):

@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
-  Space, Row, Col, InputNumber, Table, message, Divider,
+  Space, Row, Col, InputNumber, Table, message, Alert,
 } from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
@@ -76,6 +75,9 @@ export default function PurchaseFormPage() {
     }
   }, [availableItems]);
 
+  const selectedOrder = (orders?.items || []).find(o => o.id === selectedOrderId);
+  const isLogistics = selectedOrder?.business_type_code === "logistics";
+
   const createMutation = useMutation({
     mutationFn: createPurchase,
     onSuccess: (res) => { message.success("✓"); navigate(`/purchases/${res.data.id}`); },
@@ -83,25 +85,47 @@ export default function PurchaseFormPage() {
   });
 
   const handleSubmit = (values: any) => {
-    const selectedItems = itemRows.filter(r => r.selected && r.input_quantity > 0 && r.cost_price > 0);
-    if (selectedItems.length === 0) {
-      message.error(t("purchase.no_items_selected"));
-      return;
+    if (isLogistics) {
+      if (!selectedOrderId) {
+        message.error(t("purchase.select_order"));
+        return;
+      }
+      const totalAmount = values.logistics_total_amount;
+      if (!totalAmount || totalAmount <= 0) {
+        message.error(t("purchase.logistics_amount_required"));
+        return;
+      }
+      createMutation.mutate({
+        purchase_number: values.purchase_number,
+        supplier_id: values.supplier_id,
+        purchase_date: values.purchase_date.format("YYYY-MM-DD"),
+        currency: values.currency,
+        rate_to_cny: values.rate_to_cny ?? 1,
+        notes: values.notes,
+        items: [],
+        order_id: selectedOrderId,
+        total_amount: totalAmount,
+      });
+    } else {
+      const selectedItems = itemRows.filter(r => r.selected && r.input_quantity > 0 && r.cost_price > 0);
+      if (selectedItems.length === 0) {
+        message.error(t("purchase.no_items_selected"));
+        return;
+      }
+      createMutation.mutate({
+        purchase_number: values.purchase_number,
+        supplier_id: values.supplier_id,
+        purchase_date: values.purchase_date.format("YYYY-MM-DD"),
+        currency: values.currency,
+        rate_to_cny: values.rate_to_cny ?? 1,
+        notes: values.notes,
+        items: selectedItems.map(item => ({
+          order_item_id: item.id,
+          quantity: item.input_quantity,
+          cost_price: item.cost_price,
+        })),
+      });
     }
-
-    createMutation.mutate({
-      purchase_number: values.purchase_number,
-      supplier_id: values.supplier_id,
-      purchase_date: values.purchase_date.format("YYYY-MM-DD"),
-      currency: values.currency,
-      rate_to_cny: values.rate_to_cny ?? 1,
-      notes: values.notes,
-      items: selectedItems.map(item => ({
-        order_item_id: item.id,
-        quantity: item.input_quantity,
-        cost_price: item.cost_price,
-      })),
-    });
   };
 
   const updateRow = (id: string, field: keyof ItemRow, value: any) => {
@@ -113,6 +137,10 @@ export default function PurchaseFormPage() {
   const totalAmount = itemRows
     .filter(r => r.selected)
     .reduce((sum, r) => sum + r.input_quantity * r.cost_price, 0);
+
+  const logisticsAmount: number = Form.useWatch("logistics_total_amount", form) || 0;
+  const rate: number = Form.useWatch("rate_to_cny", form) || 1;
+  const logisticsAmountCny = Number((logisticsAmount * rate).toFixed(2));
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -165,7 +193,7 @@ export default function PurchaseFormPage() {
                 <Select
                   options={orderOptions}
                   value={selectedOrderId}
-                  onChange={setSelectedOrderId}
+                  onChange={v => { setSelectedOrderId(v); setItemRows([]); }}
                   showSearch
                   filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())}
                   placeholder={t("purchase.select_order")}
@@ -174,6 +202,28 @@ export default function PurchaseFormPage() {
               </Form.Item>
             </Col>
           </Row>
+
+          {isLogistics && (
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item
+                  name="logistics_total_amount"
+                  label={`${t("purchase.total_amount")} (${currency})`}
+                  rules={[{ required: true, type: "number", min: 0.01 }]}
+                >
+                  <InputNumber style={{ width: "100%" }} min={0} step={0.01} precision={2} />
+                </Form.Item>
+              </Col>
+              {logisticsAmount > 0 && currency !== "CNY" && (
+                <Col span={8}>
+                  <Form.Item label={`${t("purchase.total_amount")} (CNY)`}>
+                    <InputNumber style={{ width: "100%" }} value={logisticsAmountCny} disabled />
+                  </Form.Item>
+                </Col>
+              )}
+            </Row>
+          )}
+
           <Row gutter={16}>
             <Col span={24}>
               <Form.Item name="notes" label={t("purchase.notes")}>
@@ -183,7 +233,8 @@ export default function PurchaseFormPage() {
           </Row>
         </Card>
 
-        {itemRows.length > 0 && (
+        {/* Trade/services: per-item table */}
+        {!isLogistics && itemRows.length > 0 && (
           <Card title={t("purchase.items")} style={{ marginBottom: 16 }}>
             <Table
               dataSource={itemRows}
@@ -275,6 +326,10 @@ export default function PurchaseFormPage() {
               )}
             />
           </Card>
+        )}
+
+        {!isLogistics && selectedOrderId && itemRows.length === 0 && (
+          <Alert type="info" message={t("purchase.no_items_available")} showIcon />
         )}
       </Form>
     </div>

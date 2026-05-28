@@ -35,6 +35,7 @@ class Purchase(Base, TimestampMixin):
     rate_to_cny: Mapped[Decimal] = mapped_column(Numeric(18, 8), default=Decimal("1"), nullable=False)
     total_amount_cny: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), nullable=False)
     payment_status: Mapped[PurchasePaymentStatus] = mapped_column(Enum(PurchasePaymentStatus, name="purchasepaymentstatus"), default=PurchasePaymentStatus.unpaid, nullable=False)
+    order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
