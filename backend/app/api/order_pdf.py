@@ -108,7 +108,8 @@ async def download_client_pdf(
         qty = it.quantity or Decimal("0")
         price = it.sale_price or Decimal("0")
         total = (qty * price).quantize(Decimal("0.01"))
-        cur = it.sale_currency or "CNY"
+        cur_raw = it.sale_currency or "CNY"
+        cur = str(cur_raw.value if hasattr(cur_raw, 'value') else cur_raw)
         currency_totals[cur] = currency_totals.get(cur, Decimal("0")) + total
         rate_val = it.sale_rate_to_cny or Decimal("1")
         total_cny += (total * rate_val).quantize(Decimal("0.01"))
@@ -117,7 +118,8 @@ async def download_client_pdf(
         for ph in photos_by_item.get(it.id, []):
             abs_path = _get_photo_abs_path(ph)
             if Path(abs_path).exists():
-                photos_data.append({"abs_path": abs_path})
+                # WeasyPrint requires file:// URIs for local files
+                photos_data.append({"abs_path": Path(abs_path).as_uri()})
 
         template_items.append({
             "name": it.name,
@@ -132,8 +134,8 @@ async def download_client_pdf(
             "photos": photos_data,
         })
 
-    # Primary currency total
-    client_currency = order.client_currency
+    # Primary currency total — force to string (SQLAlchemy enum value)
+    client_currency = str(order.client_currency.value if hasattr(order.client_currency, 'value') else order.client_currency)
     total_in_currency = currency_totals.get(client_currency, Decimal("0"))
     if client_currency == "CNY":
         total_in_currency = total_cny

@@ -4,14 +4,21 @@ import { DeleteOutlined, PlusOutlined, FileTextOutlined } from "@ant-design/icon
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
 import CounterpartySelect from "../common/CounterpartySelect";
+import ItemPhotosPicker, { type LocalPhoto } from "./ItemPhotosPicker";
 
 const { Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
+
+export interface PendingItemPhotos {
+  [itemIndex: number]: LocalPhoto[];
+}
 
 interface Props {
   form: FormInstance;
   rates: Record<string, number>;
   clientCurrency: string;
+  pendingPhotos: PendingItemPhotos;
+  onPendingPhotosChange: (photos: PendingItemPhotos) => void;
 }
 
 function SpecPopover({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
@@ -50,8 +57,14 @@ function SpecPopover({ value, onChange }: { value?: string; onChange?: (v: strin
   );
 }
 
-export default function OrderItemsEditor({ form, rates, clientCurrency }: Props) {
+export default function OrderItemsEditor({
+  form, rates, clientCurrency, pendingPhotos, onPendingPhotosChange,
+}: Props) {
   const { t } = useTranslation();
+
+  const setPhotosForIndex = (idx: number, photos: LocalPhoto[]) => {
+    onPendingPhotosChange({ ...pendingPhotos, [idx]: photos });
+  };
 
   return (
     <Form.List name="items">
@@ -59,15 +72,16 @@ export default function OrderItemsEditor({ form, rates, clientCurrency }: Props)
         <div>
           <Row gutter={4} style={{ marginBottom: 4, paddingLeft: 4 }}>
             {[
-              [t("order.item_name"), 4],
+              [t("order.item_name"), 3],
               ["CN", 3],
-              [t("order.model"), 3],
+              [t("order.model"), 2],
               [t("order.specification"), 2],
               [t("order.item_quantity"), 2],
-              [t("order.item_unit"), 2],
+              [t("order.item_unit"), 1],
               [t("order.item_sale_price"), 2],
               ["Вал.", 2],
               [t("order.item_preferred_supplier"), 3],
+              [t("order.photos"), 3],
               ["", 1],
             ].map(([label, span], i) => (
               <Col key={i} span={span as number}>
@@ -77,8 +91,8 @@ export default function OrderItemsEditor({ form, rates, clientCurrency }: Props)
           </Row>
 
           {fields.map(({ key, name }) => (
-            <Row key={key} gutter={4} align="top" style={{ marginBottom: 4 }}>
-              <Col span={4}>
+            <Row key={key} gutter={4} align="top" style={{ marginBottom: 8 }}>
+              <Col span={3}>
                 <Form.Item name={[name, "name"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
                   <Input size="small" placeholder={t("order.item_name")} />
                 </Form.Item>
@@ -88,7 +102,7 @@ export default function OrderItemsEditor({ form, rates, clientCurrency }: Props)
                   <Input size="small" placeholder="中文名" />
                 </Form.Item>
               </Col>
-              <Col span={3}>
+              <Col span={2}>
                 <Form.Item name={[name, "model"]} style={{ margin: 0 }}>
                   <Input size="small" placeholder={t("order.model")} />
                 </Form.Item>
@@ -103,7 +117,7 @@ export default function OrderItemsEditor({ form, rates, clientCurrency }: Props)
                   <InputNumber size="small" min={0} style={{ width: "100%" }} placeholder="0" />
                 </Form.Item>
               </Col>
-              <Col span={2}>
+              <Col span={1}>
                 <Form.Item name={[name, "unit"]} style={{ margin: 0 }}>
                   <Input size="small" placeholder="шт" />
                 </Form.Item>
@@ -127,8 +141,22 @@ export default function OrderItemsEditor({ form, rates, clientCurrency }: Props)
                   />
                 </Form.Item>
               </Col>
+              <Col span={3}>
+                <ItemPhotosPicker
+                  photos={pendingPhotos[name] || []}
+                  onChange={photos => setPhotosForIndex(name, photos)}
+                />
+              </Col>
               <Col span={1}>
-                <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                <Button
+                  size="small" danger icon={<DeleteOutlined />}
+                  onClick={() => {
+                    remove(name);
+                    const updated = { ...pendingPhotos };
+                    delete updated[name];
+                    onPendingPhotosChange(updated);
+                  }}
+                />
               </Col>
             </Row>
           ))}

@@ -12,13 +12,14 @@ import { checkExchangeRates } from "../api/exchangeRates";
 import { getCounterparties } from "../api/counterparties";
 import { getManagers, getBusinessTypes } from "../api/references";
 import { getWarehouses } from "../api/warehouses";
-import OrderItemsEditor from "../components/orders/OrderItemsEditor";
+import OrderItemsEditor, { type PendingItemPhotos } from "../components/orders/OrderItemsEditor";
 import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
 import ChargesEditor from "../components/orders/ChargesEditor";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import ItemPhotosEditor from "../components/orders/ItemPhotosEditor";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import CounterpartySelect from "../components/common/CounterpartySelect";
+import { uploadItemPhoto } from "../api/orders";
 import type { User } from "../types";
 
 const { Title, Text } = Typography;
@@ -35,6 +36,7 @@ export default function OrderFormPage({ user }: Props) {
   const [form] = Form.useForm();
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [clientPhone, setClientPhone] = useState<string | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingItemPhotos>({});
 
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
@@ -152,8 +154,8 @@ export default function OrderFormPage({ user }: Props) {
 
   useEffect(() => {
     if (isEdit && existingOrder) {
-      // Set client phone from loaded order
       setClientPhone((existingOrder as any).client_phone || null);
+      setPendingPhotos({});
 
       form.setFieldsValue({
         order_number: existingOrder.order_number,
@@ -261,15 +263,39 @@ export default function OrderFormPage({ user }: Props) {
     }
   }, [items, charges, isLogistics, rates, form]);
 
+  const uploadPendingPhotos = async (savedItems: any[]) => {
+    const entries = Object.entries(pendingPhotos);
+    if (!entries.length) return;
+    const uploads: Promise<any>[] = [];
+    for (const [indexStr, photos] of entries) {
+      const idx = Number(indexStr);
+      const item = savedItems[idx];
+      if (!item?.id) continue;
+      for (const ph of photos) {
+        uploads.push(uploadItemPhoto(item.id, ph.file).catch(() => null));
+      }
+    }
+    await Promise.all(uploads);
+    setPendingPhotos({});
+  };
+
   const createMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: (res) => { message.success("✓"); navigate(`/orders/${res.data.id}`); },
+    onSuccess: async (res) => {
+      await uploadPendingPhotos(res.data.items || []);
+      message.success("✓");
+      navigate(`/orders/${res.data.id}`);
+    },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => updateOrder(id!, data),
-    onSuccess: (res) => { message.success("✓"); navigate(`/orders/${res.data.id}`); },
+    onSuccess: async (res) => {
+      await uploadPendingPhotos(res.data.items || []);
+      message.success("✓");
+      navigate(`/orders/${res.data.id}`);
+    },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -443,7 +469,13 @@ export default function OrderFormPage({ user }: Props) {
           {isLogistics ? (
             <LogisticsItemsEditor form={form} rates={rates} />
           ) : (
-            <OrderItemsEditor form={form} rates={rates} clientCurrency={clientCurrency} />
+            <OrderItemsEditor
+              form={form}
+              rates={rates}
+              clientCurrency={clientCurrency}
+              pendingPhotos={pendingPhotos}
+              onPendingPhotosChange={setPendingPhotos}
+            />
           )}
 
           {/* Totals */}
@@ -473,23 +505,6 @@ export default function OrderFormPage({ user }: Props) {
         {isLogistics && (
           <Card title={t("order.cost_breakdown")} style={{ marginBottom: 16 }}>
             <ChargesEditor form={form} rates={rates} />
-          </Card>
-        )}
-
-        {/* Photos per item (trade/services, edit mode only) */}
-        {isEdit && !isLogistics && existingOrder && (
-          <Card title={t("order.photos")} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
-              {t("order.photos_per_item_hint")}
-            </div>
-            {existingOrder.items.map((item: any, idx: number) => (
-              <div key={item.id} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #f0f0f0" }}>
-                <div style={{ marginBottom: 6, fontWeight: 500 }}>
-                  {idx + 1}. {item.name}{item.model ? ` · ${item.model}` : ""}
-                </div>
-                <ItemPhotosEditor itemId={item.id} />
-              </div>
-            ))}
           </Card>
         )}
 

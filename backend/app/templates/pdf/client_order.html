@@ -29,11 +29,14 @@
   .photo-cell { display: flex; flex-wrap: wrap; gap: 3px; }
   .photo-thumb { width: 48px; height: 48px; object-fit: cover; border: 1px solid #ddd; border-radius: 2px; }
 
-  .spec-text { font-size: 8pt; color: #555; white-space: pre-wrap; max-width: 160px; }
+  .spec-text { font-size: 8pt; color: #555; white-space: pre-wrap; max-width: 140px; word-break: break-word; }
 
-  .totals-block { margin-left: auto; width: 280px; margin-bottom: 20px; }
-  .totals-block table td { border: none; padding: 4px 6px; }
+  /* Totals — full width table, right-aligned, no overflow */
+  .totals-block { width: 100%; margin-bottom: 20px; }
+  .totals-block table { width: auto; min-width: 280px; float: right; margin-bottom: 0; }
+  .totals-block table td { border: none; padding: 4px 8px; white-space: nowrap; }
   .totals-block .total-row td { font-weight: bold; font-size: 11pt; border-top: 2px solid #2c3e50; padding-top: 8px; }
+  .totals-clearfix { clear: both; }
 
   .notes-block { margin-top: 12px; padding: 10px; background: #f5f5f5; border-left: 3px solid #2c3e50; font-size: 9pt; }
   .notes-block .label { font-weight: bold; margin-bottom: 4px; }
@@ -68,22 +71,22 @@
   <div class="party-block">
     <div class="label">Покупатель</div>
     <div class="name">{{ client_name }}</div>
-    {% if client_phone %}<div class="phone">📞 {{ client_phone }}</div>{% endif %}
+    {% if client_phone %}<div class="phone">{{ client_phone }}</div>{% endif %}
   </div>
 </div>
 
 <table>
   <thead>
     <tr>
-      <th style="width:28px">№</th>
-      <th>Наименование</th>
-      <th style="width:80px">Модель</th>
-      <th style="width:150px">Спецификация</th>
-      {% if has_photos %}<th style="width:60px">Фото</th>{% endif %}
-      <th style="width:45px;text-align:right">Кол-во</th>
-      <th style="width:35px">Ед.</th>
-      <th style="width:80px;text-align:right">Цена</th>
-      <th style="width:80px;text-align:right">Сумма</th>
+      <th style="width:24px">№</th>
+      <th style="width:25%">Наименование</th>
+      <th style="width:12%">Модель</th>
+      <th style="width:18%">Спецификация</th>
+      {% if has_photos %}<th style="width:58px">Фото</th>{% endif %}
+      <th style="width:42px;text-align:right">Кол.</th>
+      <th style="width:30px">Ед.</th>
+      <th style="width:9%;text-align:right">Цена</th>
+      <th style="width:9%;text-align:right">Сумма</th>
     </tr>
   </thead>
   <tbody>
@@ -94,13 +97,13 @@
         <strong>{{ item.name }}</strong>
         {% if item.name_cn %}<br><span style="font-size:8pt;color:#888;">{{ item.name_cn }}</span>{% endif %}
       </td>
-      <td>{{ item.model or "" }}</td>
+      <td style="word-break:break-word;">{{ item.model or "" }}</td>
       <td><span class="spec-text">{{ item.specification or "" }}</span></td>
       {% if has_photos %}
       <td>
         <div class="photo-cell">
           {% for photo in item.photos %}
-          <img class="photo-thumb" src="{{ photo.abs_path }}" alt="фото" />
+          <img class="photo-thumb" src="{{ photo.abs_path }}" alt="" />
           {% endfor %}
         </div>
       </td>
@@ -119,15 +122,16 @@
     {% if client_currency != "CNY" %}
     <tr>
       <td>Итого ({{ client_currency }}):</td>
-      <td class="num-col">{{ total_in_currency | fmt_decimal }} {{ client_currency }}</td>
+      <td class="num-col">{{ total_in_currency | fmt_decimal }}&nbsp;{{ client_currency }}</td>
     </tr>
     {% endif %}
     <tr class="total-row">
       <td>ИТОГО (CNY):</td>
-      <td class="num-col">{{ total_cny | fmt_decimal }} CNY</td>
+      <td class="num-col">{{ total_cny | fmt_decimal }}&nbsp;CNY</td>
     </tr>
   </table>
 </div>
+<div class="totals-clearfix"></div>
 
 {% if notes %}
 <div class="notes-block">
@@ -137,7 +141,7 @@
 {% endif %}
 
 <div class="footer">
-  Документ сформирован автоматически · ERP System · {{ order_date }}
+  Документ сформирован автоматически · IRS ERP system · {{ order_date }}
 </div>
 
 </body>
