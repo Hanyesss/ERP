@@ -26,6 +26,7 @@ from app.schemas.payment import (
     OrderPaymentBalance, PurchasePaymentBalance,
 )
 from app.utils.audit import write_audit
+from app.services.notifications import on_payment_unassigned, on_order_paid, on_purchase_paid
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -468,6 +469,26 @@ async def create_payment(
         {"direction": body.direction, "amount_cny": str(amount_cny),
          "counterparty": cp.name, "allocations": len(body.allocations)}
     )
+    # Notify: unassigned incoming payment
+    if body.direction == "in" and not body.allocations:
+        await on_payment_unassigned(db, payment.id, str(body.amount), body.currency, cp.name)
+    # Notify: order fully paid
+    if body.direction == "in" and body.allocations:
+        for alloc in body.allocations:
+            if alloc.order_id:
+                order = (await db.execute(select(Order).where(Order.id == alloc.order_id))).scalar_one_or_none()
+                if order and order.payment_status == "paid":
+                    client = (await db.execute(select(Counterparty).where(Counterparty.id == order.client_id))).scalar_one_or_none()
+                    await on_order_paid(db, order.id, order.order_number, order.manager_id,
+                                        client.name if client else "", str(order.total_sale_cny))
+    # Notify: purchase fully paid
+    if body.direction == "out" and body.allocations:
+        for alloc in body.allocations:
+            if alloc.purchase_id:
+                pur = (await db.execute(select(Purchase).where(Purchase.id == alloc.purchase_id))).scalar_one_or_none()
+                if pur and pur.payment_status == "paid":
+                    await on_purchase_paid(db, pur.id, pur.purchase_number,
+                                           pur.created_by, str(pur.total_amount_cny))
     await db.commit()
     return await _load_payment(db, payment.id)
 

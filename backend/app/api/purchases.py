@@ -24,6 +24,7 @@ from app.schemas.purchase import (
     PurchaseListItem, PurchaseListResponse,
 )
 from app.utils.audit import write_audit
+from app.services.notifications import on_purchase_created
 
 router = APIRouter(prefix="/api/purchases", tags=["purchases"])
 
@@ -391,6 +392,12 @@ async def create_purchase(
 
     await write_audit(db, current_user.id, "purchase", purchase.id, AuditActionEnum.create,
                       {"purchase_number": purchase_number, "total_cny": str(total_amount_cny)})
+    # Notify manager of linked order about the new purchase
+    if affected_order_ids:
+        for oid in list(affected_order_ids)[:1]:
+            order_obj = (await db.execute(select(Order).where(Order.id == oid))).scalar_one_or_none()
+            if order_obj:
+                await on_purchase_created(db, purchase.id, purchase_number, order_obj.manager_id)
     await db.commit()
     return await _load_purchase(db, purchase.id)
 

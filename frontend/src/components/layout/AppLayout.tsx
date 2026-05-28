@@ -9,6 +9,7 @@ import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User, UserRole } from "../../types";
 import { logout } from "../../api/auth";
+import NotificationBell from "../notifications/NotificationBell";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -139,6 +140,7 @@ export default function AppLayout({ user, onLogout }: Props) {
           </Button>
           <div style={{ flex: 1 }} />
           <Space>
+            <NotificationBell />
             <Text>{user.full_name}</Text>
             <Button type="link" onClick={handleLogout} danger>
               {t("nav.logout")}

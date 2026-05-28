@@ -25,6 +25,9 @@ from app.schemas.expense import (
     ApproveBody, RejectBody, MarkPaidBody,
 )
 from app.utils.audit import write_audit
+from app.services.notifications import (
+    on_reimbursement_created, on_reimbursement_status_changed,
+)
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 
@@ -361,6 +364,8 @@ async def create_expense(
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.create,
                       {"description": body.description, "amount_cny": str(amount_cny),
                        "is_reimbursement": body.is_reimbursement})
+    if body.is_reimbursement:
+        await on_reimbursement_created(db, expense.id, str(amount_cny), current_user.full_name)
     await db.commit()
     return await _load_expense(db, expense.id)
 
@@ -449,6 +454,11 @@ async def approve_reimbursement(
     expense.reimburse_status = ReimburseStatusEnum.approved
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"reimburse_status": "approved"})
+    if expense.reimburse_to_user_id:
+        await on_reimbursement_status_changed(
+            db, expense.id, expense.reimburse_to_user_id,
+            "approved", str(expense.amount_cny),
+        )
     await db.commit()
     return await _load_expense(db, expense.id)
 
@@ -474,6 +484,11 @@ async def reject_reimbursement(
     expense.reject_reason = body.reject_reason
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"reimburse_status": "rejected", "reject_reason": body.reject_reason})
+    if expense.reimburse_to_user_id:
+        await on_reimbursement_status_changed(
+            db, expense.id, expense.reimburse_to_user_id,
+            "rejected", str(expense.amount_cny),
+        )
     await db.commit()
     return await _load_expense(db, expense.id)
 
@@ -499,6 +514,11 @@ async def mark_reimbursement_paid(
     expense.reimburse_paid_date = body.paid_date
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"reimburse_status": "paid", "paid_date": str(body.paid_date)})
+    if expense.reimburse_to_user_id:
+        await on_reimbursement_status_changed(
+            db, expense.id, expense.reimburse_to_user_id,
+            "paid", str(expense.amount_cny),
+        )
     await db.commit()
     return await _load_expense(db, expense.id)
 
