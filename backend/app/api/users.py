@@ -4,7 +4,7 @@ import string
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete as sql_delete
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, field_validator
 
@@ -257,12 +257,9 @@ async def update_user(
                     detail="Cannot remove admin role from the last active administrator"
                 )
 
-        # Rewrite user_roles
-        existing_roles = await db.execute(
-            select(UserRoleEntry).where(UserRoleEntry.user_id == user.id)
-        )
-        for entry in existing_roles.scalars().all():
-            db.delete(entry)
+        # Rewrite user_roles via bulk DELETE to avoid ORM identity-map conflicts
+        await db.execute(sql_delete(UserRoleEntry).where(UserRoleEntry.user_id == user.id))
+        await db.flush()
 
         for role in body.roles:
             db.add(UserRoleEntry(id=uuid.uuid4(), user_id=user.id, role=role))
