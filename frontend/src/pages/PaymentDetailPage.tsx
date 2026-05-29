@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Button, Card, Col, Descriptions, Divider, Popconfirm, Row,
   Space, Statistic, Table, Tag, Typography, message,
@@ -17,6 +17,8 @@ export default function PaymentDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const backUrl = searchParams.get("back") || "/payments";
   const qc = useQueryClient();
 
   const { data: payment, isLoading } = useQuery({
@@ -32,7 +34,7 @@ export default function PaymentDetailPage() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["purchases"] });
       message.success("✓");
-      navigate("/payments");
+      navigate(backUrl);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -78,7 +80,7 @@ export default function PaymentDetailPage() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/payments")}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backUrl)}>
               {t("common.back")}
             </Button>
             <Title level={4} style={{ margin: 0 }}>

@@ -13,6 +13,7 @@ class ContactInfo(BaseModel):
 class CounterpartyCreate(BaseModel):
     name: str
     name_cn: Optional[str] = None
+    code: Optional[str] = None
     type: CounterpartyType
     default_currency: CurrencyEnum = CurrencyEnum.CNY
     contact_info: Optional[ContactInfo] = None
@@ -22,6 +23,7 @@ class CounterpartyCreate(BaseModel):
 class CounterpartyUpdate(BaseModel):
     name: Optional[str] = None
     name_cn: Optional[str] = None
+    code: Optional[str] = None
     type: Optional[CounterpartyType] = None
     default_currency: Optional[CurrencyEnum] = None
     contact_info: Optional[ContactInfo] = None
@@ -32,6 +34,7 @@ class CounterpartyResponse(BaseModel):
     id: uuid.UUID
     name: str
     name_cn: Optional[str] = None
+    code: Optional[str] = None
     type: CounterpartyType
     default_currency: CurrencyEnum
     contact_info: Optional[dict] = None
@@ -48,9 +51,10 @@ class CounterpartyResponse(BaseModel):
         if obj.contact_info and isinstance(obj.contact_info, dict):
             phone = obj.contact_info.get("phone")
         return cls(
-            id=obj.id, name=obj.name, name_cn=obj.name_cn, type=obj.type,
-            default_currency=obj.default_currency, contact_info=obj.contact_info,
-            phone=phone, notes=obj.notes, is_active=obj.is_active,
+            id=obj.id, name=obj.name, name_cn=obj.name_cn, code=obj.code,
+            type=obj.type, default_currency=obj.default_currency,
+            contact_info=obj.contact_info, phone=phone,
+            notes=obj.notes, is_active=obj.is_active,
         )
 
 

@@ -110,6 +110,8 @@
     "title": "往来单位",
     "name": "名称",
     "name_cn": "中文名称",
+    "code": "客户代码",
+    "code_hint": "用于物流订单编号 (IRS-代码-日月-件数)",
     "type": "类型",
     "type_client": "客户",
     "type_supplier": "供应商",
@@ -219,6 +221,7 @@
     "manager_readonly_hint": "经理 = 创建订单的人，不可更改。",
     "upload_photo_after_save": "保存订单后方可上传图片",
     "download_client_pdf": "下载客户PDF报价单",
+    "download_logistics_pdf": "下载运单 (PDF)",
     "sync": {
       "title": "同步",
       "synced": "已同步",
@@ -437,7 +440,9 @@
     "receipt_none": "未上传收据",
     "receipt_uploaded": "收据上传成功",
     "reimbursement_self_info": "报销将记录在您名下，会计将审核您的申请。",
-    "select_employee_optional": "选择员工（默认为本人）"
+    "select_employee_optional": "选择员工（默认为本人）",
+    "no_expenses": "该订单暂无费用",
+    "total": "费用合计"
   },
   "warehouse": {
     "title": "仓库",

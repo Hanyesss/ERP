@@ -35,6 +35,7 @@ class ShipmentCreatePayload(BaseModel):
     currency: str
     notes: Optional[str] = None
     items: list[ShipmentItemPayload] = []
+    generate_invoice: bool = True
 
 
 class ShipmentStatusPayload(BaseModel):

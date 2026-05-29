@@ -22,6 +22,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         form.setFieldsValue({
           name: editing.name,
           name_cn: editing.name_cn,
+          code: editing.code,
           type: editing.type,
           default_currency: editing.default_currency,
           phone: editing.contact_info?.phone,
@@ -69,6 +70,9 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         </Form.Item>
         <Form.Item name="name_cn" label={t("counterparty.name_cn")}>
           <Input />
+        </Form.Item>
+        <Form.Item name="code" label={t("counterparty.code")} tooltip={t("counterparty.code_hint")}>
+          <Input maxLength={20} style={{ width: 160 }} placeholder="A2424" />
         </Form.Item>
         <Form.Item name="type" label={t("counterparty.type")} rules={[{ required: true, message: t("validation.required") }]}>
           <Select options={forcedType ? typeOptions.filter(o => o.value === forcedType) : typeOptions} disabled={!!forcedType && !editing} />

@@ -32,3 +32,23 @@ Thumbs.db
 
 # Logs
 *.log
+# Файлы клиентов и uploads — НЕ должны попадать в репозиторий
+backend/uploads/
+uploads/
+
+# Локальная база данных PostgreSQL (если volume в проекте)
+postgres_data/
+data/
+
+# Снапшоты, бэкапы
+*.sql
+*.dump
+backup_*
+
+# Build артефакты frontend
+frontend/dist/
+frontend/build/
+
+# IDE-файлы
+.DS_Store
+*.swp

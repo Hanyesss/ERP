@@ -362,14 +362,24 @@ async def _save_items_and_charges(
 @router.get("/next-number")
 async def get_next_number(
     order_date: date = Query(alias="date"),
+    business_type_code: Optional[str] = Query(None),
+    client_code: Optional[str] = Query(None),
+    places_count: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
-    prefix = f"ORD-{order_date.strftime('%Y%m%d')}-"
-    count = (await db.execute(
-        select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
-    )).scalar_one()
-    return {"order_number": f"{prefix}{count + 1:04d}"}
+    ddmm = order_date.strftime("%d%m")
+    if business_type_code == "logistics":
+        code = client_code or "XXX"
+        places = places_count or 0
+        return {"order_number": f"IRS-{code}-{ddmm}-{places}"}
+    else:
+        yyyy = order_date.strftime("%Y")
+        prefix = f"PI{yyyy}{ddmm}-"
+        count = (await db.execute(
+            select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
+        )).scalar_one()
+        return {"order_number": f"{prefix}{count + 1}"}
 
 
 @router.get("", response_model=OrderListResponse)

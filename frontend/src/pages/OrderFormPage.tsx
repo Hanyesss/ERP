@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography, Alert,
-  Space, Row, Col, Statistic, message, Divider, Tooltip,
+  Space, Row, Col, Statistic, message, Divider, Tooltip, Tag,
 } from "antd";
+import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
@@ -19,10 +20,19 @@ import OrderFilesTab from "../components/orders/OrderFilesTab";
 import ItemPhotosEditor from "../components/orders/ItemPhotosEditor";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import CounterpartySelect from "../components/common/CounterpartySelect";
-import { uploadItemPhoto } from "../api/orders";
+import { uploadItemPhoto, uploadOrderFile } from "../api/orders";
 import type { User } from "../types";
 
 const { Title, Text } = Typography;
+
+interface PendingOrderFile { uid: string; file: File; fileType: string; }
+
+const ORDER_FILE_TYPES = [
+  { value: "cargo_photo", labelKey: "order.file_type_cargo_photo" },
+  { value: "invoice",     labelKey: "order.file_type_invoice" },
+  { value: "packing",     labelKey: "order.file_type_packing" },
+  { value: "other",       labelKey: "order.file_type_other" },
+];
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 
 interface Props { user: User }
@@ -38,6 +48,9 @@ export default function OrderFormPage({ user }: Props) {
   const [clientPhone, setClientPhone] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingItemPhotos>({});
   const [savedItemIdByKey, setSavedItemIdByKey] = useState<Record<number, string>>({});
+  const [pendingOrderFiles, setPendingOrderFiles] = useState<PendingOrderFile[]>([]);
+  const [pendingFileType, setPendingFileType] = useState("cargo_photo");
+  const pendingFilesInputRef = useRef<HTMLInputElement>(null);
 
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
@@ -69,15 +82,30 @@ export default function OrderFormPage({ user }: Props) {
     queryFn: () => getWarehouses().then(r => r.data),
   });
 
-  const isLogistics = useMemo(() => {
+  const businessTypeCode = useMemo(() => {
     const bt = (businessTypes || []).find((b: any) => b.id === businessTypeId);
-    return bt?.code === "logistics";
+    return bt?.code as string | undefined;
   }, [businessTypes, businessTypeId]);
+
+  const isLogistics = businessTypeCode === "logistics";
+
+  const clientCode = useMemo(() => {
+    if (!clientId || !clients) return undefined;
+    return clients.items.find((c: any) => c.id === clientId)?.code as string | undefined;
+  }, [clientId, clients]);
+
+  const totalPlaces = useMemo(() => {
+    return (items || []).reduce((sum: number, item: any) => sum + (Number(item?.places_count) || 0), 0);
+  }, [items]);
 
   const dateStr = orderDate?.format("YYYY-MM-DD");
   const { data: nextNumber } = useQuery({
-    queryKey: ["next-order-number", dateStr],
-    queryFn: () => getNextOrderNumber(dateStr!).then(r => r.data),
+    queryKey: ["next-order-number", dateStr, businessTypeCode, clientCode, totalPlaces],
+    queryFn: () => getNextOrderNumber(dateStr!, {
+      business_type_code: businessTypeCode,
+      client_code: clientCode,
+      places_count: isLogistics ? totalPlaces : undefined,
+    }).then(r => r.data),
     enabled: !isEdit && !!dateStr,
   });
 
@@ -270,6 +298,14 @@ export default function OrderFormPage({ user }: Props) {
     }
   }, [items, charges, isLogistics, rates, form]);
 
+  const uploadPendingOrderFiles = async (orderId: string) => {
+    if (!pendingOrderFiles.length) return;
+    await Promise.all(
+      pendingOrderFiles.map(pf => uploadOrderFile(orderId, pf.file, pf.fileType).catch(() => null))
+    );
+    setPendingOrderFiles([]);
+  };
+
   const uploadPendingPhotos = async (savedItems: any[]) => {
     const entries = Object.entries(pendingPhotos);
     if (!entries.length) return;
@@ -290,6 +326,7 @@ export default function OrderFormPage({ user }: Props) {
     mutationFn: createOrder,
     onSuccess: async (res) => {
       await uploadPendingPhotos(res.data.items || []);
+      await uploadPendingOrderFiles(res.data.id);
       message.success("✓");
       navigate(`/orders/${res.data.id}`);
     },
@@ -308,7 +345,7 @@ export default function OrderFormPage({ user }: Props) {
 
   const handleSubmit = (values: any) => {
     const missingRates = rateCheck?.missing ?? [];
-    if (missingRates.length > 0) {
+    if (!isLogistics && missingRates.length > 0) {
       message.error(t("order.missing_rate_warning", { currencies: missingRates.join(", "), date: dateStr }));
       return;
     }
@@ -363,13 +400,23 @@ export default function OrderFormPage({ user }: Props) {
         </Col>
       </Row>
 
-      {missingRates.length > 0 && (
+      {missingRates.length > 0 && !isLogistics && (
         <Alert
           type="warning"
           style={{ marginBottom: 16 }}
           message={t("order.missing_rate_warning", { currencies: missingRates.join(", "), date: dateStr })}
           action={<Button size="small" onClick={() => setRateModalOpen(true)}>{t("order.add_rate")}</Button>}
           showIcon
+        />
+      )}
+
+      {isLogistics && !isEdit && clientId && !clientCode && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="У клиента не задан код — в номере накладной будет «XXX»"
+          description={<span>Задайте код клиента в разделе <strong>Контрагенты → Редактировать</strong>, затем номер подставится автоматически. Или отредактируйте номер вручную.</span>}
         />
       )}
 
@@ -513,6 +560,54 @@ export default function OrderFormPage({ user }: Props) {
         {isLogistics && (
           <Card title={t("order.cost_breakdown")} style={{ marginBottom: 16 }}>
             <ChargesEditor form={form} rates={rates} />
+          </Card>
+        )}
+
+        {/* Files: pending upload during logistics creation */}
+        {isLogistics && !isEdit && (
+          <Card title={t("order.cargo_photo")} style={{ marginBottom: 16 }}>
+            <Row gutter={8} align="middle" style={{ marginBottom: pendingOrderFiles.length ? 12 : 0 }}>
+              <Col>
+                <Select
+                  value={pendingFileType}
+                  onChange={setPendingFileType}
+                  style={{ width: 180 }}
+                  options={ORDER_FILE_TYPES.map(ft => ({ value: ft.value, label: t(ft.labelKey) }))}
+                />
+              </Col>
+              <Col>
+                <Button icon={<UploadOutlined />} onClick={() => pendingFilesInputRef.current?.click()}>
+                  {t("order.upload_file")}
+                </Button>
+                <input
+                  ref={pendingFilesInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  style={{ display: "none" }}
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) setPendingOrderFiles(prev => [...prev, { uid: Math.random().toString(36), file: f, fileType: pendingFileType }]);
+                    e.target.value = "";
+                  }}
+                />
+              </Col>
+              <Col>
+                <Text type="secondary" style={{ fontSize: 12 }}>JPEG, PNG, WebP, PDF — max 10 MB</Text>
+              </Col>
+            </Row>
+            {pendingOrderFiles.length > 0 && (
+              <Row gutter={[8, 8]}>
+                {pendingOrderFiles.map(pf => (
+                  <Col key={pf.uid}>
+                    <Space size="small" style={{ border: "1px solid #f0f0f0", borderRadius: 4, padding: "4px 8px" }}>
+                      <Tag color="blue" style={{ margin: 0 }}>{ORDER_FILE_TYPES.find(f => f.value === pf.fileType) ? t(ORDER_FILE_TYPES.find(f => f.value === pf.fileType)!.labelKey) : pf.fileType}</Tag>
+                      <Text style={{ fontSize: 12 }}>{pf.file.name}</Text>
+                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => setPendingOrderFiles(prev => prev.filter(f => f.uid !== pf.uid))} />
+                    </Space>
+                  </Col>
+                ))}
+              </Row>
+            )}
           </Card>
         )}
 

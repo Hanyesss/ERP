@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layout, Menu, Button, Typography, Space } from "antd";
+import { Layout, Menu, Button, Typography, Space, Tooltip } from "antd";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
@@ -129,7 +129,10 @@ export default function AppLayout({ user, onLogout }: Props) {
     <Layout style={{ minHeight: "100vh" }}>
       <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme="light" style={{ borderRight: "1px solid #f0f0f0" }}>
         <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", borderBottom: "1px solid #f0f0f0", padding: "0 16px" }}>
-          {!collapsed && <Text strong style={{ fontSize: 16, whiteSpace: "nowrap" }}>ERP</Text>}
+          {!collapsed
+            ? <Text strong style={{ fontSize: 16, whiteSpace: "nowrap" }}>IRS ERP</Text>
+            : <Text strong style={{ fontSize: 14 }}>IRS</Text>
+          }
         </div>
         <Menu
           mode="inline"
@@ -138,6 +141,13 @@ export default function AppLayout({ user, onLogout }: Props) {
           onClick={({ key }) => navigate(key)}
           style={{ border: "none" }}
         />
+        {!collapsed && (
+          <div style={{ position: "absolute", bottom: 48, width: "100%", textAlign: "center", padding: "8px 0" }}>
+            <Tooltip title="Разработал Hanyesss">
+              <Text type="secondary" style={{ fontSize: 11 }}>by Hanyesss</Text>
+            </Tooltip>
+          </div>
+        )}
       </Sider>
 
       <Layout>

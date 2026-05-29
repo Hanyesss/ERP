@@ -11,6 +11,7 @@ export interface Counterparty {
   id: string;
   name: string;
   name_cn?: string;
+  code?: string;
   type: CounterpartyType;
   default_currency: CurrencyEnum;
   contact_info?: ContactInfo;
@@ -29,6 +30,7 @@ export interface CounterpartyListResponse {
 export interface CounterpartyFormData {
   name: string;
   name_cn?: string;
+  code?: string;
   type: CounterpartyType;
   default_currency: CurrencyEnum;
   phone?: string;

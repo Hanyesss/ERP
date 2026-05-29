@@ -27,6 +27,7 @@ class Counterparty(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     name_cn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     type: Mapped[CounterpartyType] = mapped_column(Enum(CounterpartyType, name="counterpartytype"), nullable=False)
     default_currency: Mapped[CurrencyEnum] = mapped_column(Enum(CurrencyEnum, name="currencyenum"), default=CurrencyEnum.CNY, nullable=False)
     contact_info: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

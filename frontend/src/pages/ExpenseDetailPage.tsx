@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Descriptions, Button, Tag, Typography, Space, Popconfirm,
   Row, Col, Card, Modal, Form, Input, DatePicker, message,
@@ -44,6 +44,8 @@ export default function ExpenseDetailPage({ user }: Props) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const backUrl = searchParams.get("back") || "/expenses";
   const qc = useQueryClient();
 
   const isAccountant = user.roles?.some(r => ["accountant", "admin"].includes(r));
@@ -74,7 +76,7 @@ export default function ExpenseDetailPage({ user }: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteExpense(id!),
-    onSuccess: () => { message.success("✓"); navigate("/expenses"); },
+    onSuccess: () => { message.success("✓"); navigate(backUrl); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -287,7 +289,7 @@ export default function ExpenseDetailPage({ user }: Props) {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/expenses")}>{t("common.back")}</Button>
+            <Button onClick={() => navigate(backUrl)}>{t("common.back")}</Button>
             {canEdit && (
               <Button icon={<EditOutlined />} onClick={() => navigate(`/expenses/${id}/edit`)}>
                 {t("common.edit")}

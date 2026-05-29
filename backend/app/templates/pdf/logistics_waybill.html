@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 20mm 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
+  body { font-size: 10pt; color: #222; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .company-block { font-size: 9pt; color: #555; line-height: 1.5; }
+  .doc-title { text-align: center; margin: 16px 0 14px; }
+  .doc-title h1 { font-size: 16pt; font-weight: bold; letter-spacing: 1px; }
+  .doc-title .doc-meta { font-size: 9pt; color: #777; margin-top: 4px; }
+
+  .info-grid { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .info-block { flex: 1; min-width: 180px; border: 1px solid #ddd; border-radius: 4px; padding: 8px 10px; }
+  .info-block .label { font-size: 8pt; color: #888; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-block .value { font-weight: bold; font-size: 10pt; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  thead th { background: #1a4e7a; color: #fff; padding: 6px 5px; font-size: 8.5pt; text-align: left; }
+  tbody tr:nth-child(even) { background: #f8f9fa; }
+  tbody td { padding: 6px 5px; font-size: 8.5pt; vertical-align: top; border-bottom: 1px solid #eee; }
+  .num-col { text-align: right; white-space: nowrap; }
+  .center-col { text-align: center; }
+
+  .section-title { font-size: 10pt; font-weight: bold; color: #1a4e7a; margin: 12px 0 6px; border-bottom: 1px solid #1a4e7a; padding-bottom: 3px; }
+
+  .totals-block { width: 100%; margin-bottom: 16px; }
+  .totals-block table { width: auto; min-width: 260px; float: right; margin-bottom: 0; }
+  .totals-block table td { border: none; padding: 3px 8px; white-space: nowrap; }
+  .totals-block .total-row td { font-weight: bold; font-size: 11pt; border-top: 2px solid #1a4e7a; padding-top: 6px; }
+  .totals-clearfix { clear: both; }
+
+  .photos-section { margin-top: 16px; page-break-before: auto; }
+  .photos-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .photo-item { text-align: center; }
+  .photo-img { width: 180px; height: 135px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
+  .photo-label { font-size: 7.5pt; color: #888; margin-top: 2px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .notes-block { margin-top: 12px; padding: 8px 10px; background: #f0f4f8; border-left: 3px solid #1a4e7a; font-size: 9pt; }
+  .notes-block .label { font-weight: bold; margin-bottom: 4px; }
+
+  .footer { margin-top: 20px; font-size: 8pt; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-block">
+    <strong>{{ company_name }}</strong><br>
+    {% if company_phone %}Тел: {{ company_phone }}<br>{% endif %}
+    {% if company_email %}Email: {{ company_email }}<br>{% endif %}
+  </div>
+  <div style="text-align:right; font-size:9pt; color:#888;">
+    Дата: {{ order_date }}<br>
+    № {{ order_number }}
+  </div>
+</div>
+
+<div class="doc-title">
+  <h1>ТРАНСПОРТНАЯ НАКЛАДНАЯ</h1>
+  <div class="doc-meta">№ {{ order_number }} от {{ order_date }}</div>
+</div>
+
+<div class="info-grid">
+  <div class="info-block">
+    <div class="label">Клиент</div>
+    <div class="value">{{ client_name }}</div>
+    {% if client_phone %}<div style="font-size:9pt;color:#555;margin-top:2px;">{{ client_phone }}</div>{% endif %}
+  </div>
+  {% if recipient %}
+  <div class="info-block">
+    <div class="label">Получатель</div>
+    <div class="value">{{ recipient }}</div>
+  </div>
+  {% endif %}
+  {% if destination %}
+  <div class="info-block">
+    <div class="label">Направление</div>
+    <div class="value">{{ destination }}</div>
+  </div>
+  {% endif %}
+  {% if arrival_date %}
+  <div class="info-block">
+    <div class="label">Дата прибытия</div>
+    <div class="value">{{ arrival_date }}</div>
+  </div>
+  {% endif %}
+  {% if tracking_number %}
+  <div class="info-block">
+    <div class="label">Трек-номер</div>
+    <div class="value">{{ tracking_number }}</div>
+  </div>
+  {% endif %}
+</div>
+
+{% if items %}
+<div class="section-title">Грузы</div>
+<table>
+  <thead>
+    <tr>
+      <th style="width:24px">№</th>
+      <th style="width:28%">Наименование</th>
+      <th style="width:8%;text-align:right;white-space:nowrap">Вес, кг</th>
+      <th style="width:8%;text-align:right;white-space:nowrap">Объём, м³</th>
+      <th style="width:8%;text-align:right;white-space:nowrap">Плотн.</th>
+      <th style="width:10%;text-align:right;white-space:nowrap">Цена/кг</th>
+      <th style="width:12%;text-align:right;white-space:nowrap">Ценность</th>
+      <th style="width:7%;text-align:right;white-space:nowrap">Мест</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td class="center-col">{{ loop.index }}</td>
+      <td>{{ item.name }}</td>
+      <td class="num-col">{{ item.weight_kg | fmt_decimal }}</td>
+      <td class="num-col">{{ item.volume_m3 | fmt_decimal }}</td>
+      <td class="num-col">{{ item.density }}</td>
+      <td class="num-col">{% if item.price_per_kg %}{{ item.price_per_kg | fmt_decimal }}&nbsp;{{ item.price_per_kg_currency }}{% else %}—{% endif %}</td>
+      <td class="num-col">{% if item.cargo_value %}{{ item.cargo_value | fmt_decimal }}&nbsp;{{ item.cargo_value_currency }}{% else %}—{% endif %}</td>
+      <td class="num-col">{{ item.places_count or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if charges %}
+<div class="section-title">Расчёт стоимости</div>
+<table>
+  <thead>
+    <tr>
+      <th style="width:40%">Услуга</th>
+      <th style="width:20%;text-align:right">Сумма</th>
+      <th style="width:20%;text-align:right">Сумма (CNY)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for charge in charges %}
+    <tr>
+      <td>{{ charge.label }}</td>
+      <td class="num-col">{{ charge.amount | fmt_decimal }}&nbsp;{{ charge.currency }}</td>
+      <td class="num-col">{{ charge.amount_cny | fmt_decimal }}&nbsp;CNY</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="totals-block">
+  <table>
+    <tr class="total-row">
+      <td>ИТОГО (CNY):</td>
+      <td class="num-col">{{ total_cny | fmt_decimal }}&nbsp;CNY</td>
+    </tr>
+  </table>
+</div>
+<div class="totals-clearfix"></div>
+
+{% if notes %}
+<div class="notes-block">
+  <div class="label">Примечания:</div>
+  {{ notes }}
+</div>
+{% endif %}
+
+{% if cargo_photos %}
+<div class="photos-section">
+  <div class="section-title">Фотографии груза</div>
+  <div class="photos-grid">
+    {% for photo in cargo_photos %}
+    <div class="photo-item">
+      <img class="photo-img" src="{{ photo.abs_path }}" alt="" />
+      {% if photo.file_name %}<div class="photo-label">{{ photo.file_name }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="footer">
+  Документ сформирован автоматически · IRS ERP · {{ order_date }}
+</div>
+
+</body>
+</html>

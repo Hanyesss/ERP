@@ -63,6 +63,7 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
         currency=order.client_currency,
         notes=order.notes,
         items=items,
+        generate_invoice=True,
     )
 
 
@@ -77,8 +78,8 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
 
     loop = asyncio.get_event_loop()
 
-    if order.external_shipment_id:
-        result = await loop.run_in_executor(None, lambda: client.update_shipment(order.external_shipment_id, payload))
+    if order.external_shipment_number:
+        result = await loop.run_in_executor(None, lambda: client.update_shipment(order.external_shipment_number, payload))
     else:
         result = await loop.run_in_executor(None, lambda: client.create_shipment(payload))
 
@@ -123,7 +124,7 @@ async def push_status_to_site(order: Order, db: AsyncSession, status: str, comme
 
     loop = asyncio.get_event_loop()
     payload = ShipmentStatusPayload(status=status, comment=comment)
-    result = await loop.run_in_executor(None, lambda: client.add_status(order.external_shipment_id, payload))
+    result = await loop.run_in_executor(None, lambda: client.add_status(order.external_shipment_number, payload))
 
     if result.error:
         return False, result.error

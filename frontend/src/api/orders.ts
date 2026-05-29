@@ -20,8 +20,13 @@ export const getOrders = (params: OrderListParams = {}) =>
 export const getOrder = (id: string) =>
   apiClient.get<Order>(`/api/orders/${id}`);
 
-export const getNextOrderNumber = (date: string) =>
-  apiClient.get<{ order_number: string }>("/api/orders/next-number", { params: { date } });
+export const getNextOrderNumber = (
+  date: string,
+  opts?: { business_type_code?: string; client_code?: string; places_count?: number }
+) =>
+  apiClient.get<{ order_number: string }>("/api/orders/next-number", {
+    params: { date, ...opts },
+  });
 
 export const createOrder = (data: OrderFormData) =>
   apiClient.post<Order>("/api/orders", data);
@@ -77,3 +82,6 @@ export const getItemPhotoUrl = (itemId: string, photoId: string) =>
 
 export const downloadClientPdf = (orderId: string) =>
   apiClient.get(`/api/orders/${orderId}/client-pdf`, { responseType: "blob" });
+
+export const downloadLogisticsPdf = (orderId: string) =>
+  apiClient.get(`/api/orders/${orderId}/logistics-pdf`, { responseType: "blob" });

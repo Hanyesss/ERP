@@ -6,16 +6,18 @@ import {
   Button, Card, Col, Descriptions, Divider, Form, Image, Input, Modal, Popconfirm, Row, Select,
   Space, Statistic, Table, Tabs, Tag, Timeline, Typography, message,
 } from "antd";
-import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined, DownloadOutlined, SyncOutlined, LinkOutlined } from "@ant-design/icons";
+import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined, DownloadOutlined, SyncOutlined, LinkOutlined, PlusOutlined, FileOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { getOrder, closeOrder, cancelOrder, getOrderHistory, downloadClientPdf, getItemPhotoUrl } from "../api/orders";
+import { getOrder, closeOrder, cancelOrder, getOrderHistory, downloadClientPdf, downloadLogisticsPdf, getItemPhotoUrl } from "../api/orders";
 import { getPurchases } from "../api/purchases";
 import { getPaymentsForOrder } from "../api/payments";
+import { getExpenses, getFileUrl } from "../api/expenses";
 import { syncOrderToSite, pushOrderStatus } from "../api/integration";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import { useHasAnyRole } from "../hooks/useRole";
 import type { OrderItem, OrderCharge } from "../types/order";
+import type { ExpenseListItem } from "../types/expense";
 
 const { Title, Text } = Typography;
 
@@ -34,6 +36,7 @@ export default function OrderDetailPage() {
   const canDownloadPdf = useHasAnyRole("manager", "accountant", "admin");
   const canSync = useHasAnyRole("manager", "accountant", "admin");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [logisticsPdfLoading, setLogisticsPdfLoading] = useState(false);
   const [pushStatusOpen, setPushStatusOpen] = useState(false);
   const [pushStatusForm] = Form.useForm();
 
@@ -58,6 +61,12 @@ export default function OrderDetailPage() {
   const { data: orderPayments } = useQuery({
     queryKey: ["payments-for-order", id],
     queryFn: () => getPaymentsForOrder(id!).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const { data: orderExpenses } = useQuery({
+    queryKey: ["expenses-for-order", id],
+    queryFn: () => getExpenses({ order_id: id!, page_size: 100 }).then(r => r.data),
     enabled: !!id,
   });
 
@@ -119,12 +128,30 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleDownloadLogisticsPdf = async () => {
+    setLogisticsPdfLoading(true);
+    try {
+      const res = await downloadLogisticsPdf(id!);
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `waybill_${order?.order_number || id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "PDF generation failed");
+    } finally {
+      setLogisticsPdfLoading(false);
+    }
+  };
+
   if (isLoading || !order) return null;
 
   const isLogistics = order.business_type_code === "logistics";
   const expensesCny = order.expenses_cny ?? 0;
-  const margin = canSeeCost && order.total_cost_cny != null
-    ? order.total_sale_cny - order.total_cost_cny - expensesCny
+  const totalCostCny = order.total_cost_cny ?? 0;
+  const margin = canSeeCost
+    ? order.total_sale_cny - totalCostCny - expensesCny
     : null;
   const marginPct = margin != null && order.total_sale_cny > 0
     ? (margin / order.total_sale_cny) * 100
@@ -410,9 +437,9 @@ export default function OrderDetailPage() {
             ) : (
               <>
                 <Col><Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} /></Col>
-                {canSeeCost && order.total_cost_cny != null && (
+                {canSeeCost && (
                   <>
-                    <Col><Statistic title={`${t("order.total_cost")} (CNY)`} value={fmtCny(order.total_cost_cny)} /></Col>
+                    <Col><Statistic title={`${t("order.total_cost")} (CNY)`} value={fmtCny(totalCostCny)} /></Col>
                     <Col>
                       <Statistic
                         title={`${t("order.margin")} (CNY)`}
@@ -461,7 +488,7 @@ export default function OrderDetailPage() {
               {order.payment_status !== "paid" && (
                 <Button
                   type="primary"
-                  onClick={() => navigate(`/payments/new?counterparty_id=${order.client_id}&direction=in`)}
+                  onClick={() => navigate(`/payments/new?counterparty_id=${order.client_id}&direction=in&back=/orders/${id}`)}
                 >
                   {t("payment.create_for_remaining")} ({fmtCny(order.remaining_amount_cny)} CNY)
                 </Button>
@@ -485,7 +512,7 @@ export default function OrderDetailPage() {
                   render: (v: string) => Number(v).toLocaleString("ru-RU", {minimumFractionDigits: 2}) },
                 { title: t("common.actions"), key: "actions", width: 60,
                   render: (_: any, row: any) => (
-                    <Button type="link" size="small" onClick={() => navigate(`/payments/${row.id}`)}>
+                    <Button type="link" size="small" onClick={() => navigate(`/payments/${row.id}?back=/orders/${id}`)}>
                       {t("common.open")}
                     </Button>
                   )},
@@ -570,49 +597,148 @@ export default function OrderDetailPage() {
         </div>
       ),
     }] : []),
+    {
+      key: "expenses",
+      label: t("expense.title"),
+      children: (
+        <div>
+          <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
+            <Col>
+              {orderExpenses && orderExpenses.items.length > 0 && (
+                <Text type="secondary">
+                  {t("expense.total")}: <Text strong>{fmtCny(orderExpenses.total_cny)} CNY</Text>
+                </Text>
+              )}
+            </Col>
+            <Col>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate(`/expenses/new?order_id=${id}&back=/orders/${id}`)}
+              >
+                {t("expense.create_new")}
+              </Button>
+            </Col>
+          </Row>
+
+          {(!orderExpenses || orderExpenses.items.length === 0) ? (
+            <Text type="secondary">{t("expense.no_expenses")}</Text>
+          ) : (
+            <Table<ExpenseListItem>
+              dataSource={orderExpenses.items}
+              rowKey="id"
+              size="small"
+              pagination={false}
+              columns={[
+                {
+                  title: t("expense.date"),
+                  dataIndex: "expense_date",
+                  key: "date",
+                  width: 100,
+                },
+                {
+                  title: t("expense.category"),
+                  key: "category",
+                  render: (_, row) => row.category_name_cn
+                    ? `${row.category_name} / ${row.category_name_cn}`
+                    : row.category_name,
+                },
+                {
+                  title: t("expense.description"),
+                  dataIndex: "description",
+                  key: "description",
+                },
+                {
+                  title: t("expense.amount"),
+                  key: "amount",
+                  align: "right",
+                  width: 130,
+                  render: (_, row) => `${Number(row.amount).toLocaleString("ru-RU", { minimumFractionDigits: 2 })} ${row.currency}`,
+                },
+                {
+                  title: "CNY",
+                  dataIndex: "amount_cny",
+                  key: "amount_cny",
+                  align: "right",
+                  width: 110,
+                  render: (v: number) => fmtCny(v),
+                },
+                {
+                  title: t("expense.receipt"),
+                  key: "receipt",
+                  width: 60,
+                  align: "center",
+                  render: (_, row) => row.receipt_url
+                    ? <a href={getFileUrl(row.receipt_url)} target="_blank" rel="noreferrer"><FileOutlined style={{ color: "#1677ff" }} /></a>
+                    : null,
+                },
+                {
+                  title: t("common.actions"),
+                  key: "actions",
+                  width: 70,
+                  render: (_, row) => (
+                    <Button type="link" size="small" onClick={() => navigate(`/expenses/${row.id}?back=/orders/${id}`)}>
+                      {t("common.open")}
+                    </Button>
+                  ),
+                },
+              ]}
+              summary={() => (
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0} colSpan={4} align="right">
+                    <Text strong>{t("expense.total")}:</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={4} align="right">
+                    <Text strong>{fmtCny(orderExpenses?.total_cny ?? 0)} CNY</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={5} />
+                  <Table.Summary.Cell index={6} />
+                </Table.Summary.Row>
+              )}
+            />
+          )}
+        </div>
+      ),
+    },
     ...(canSeeCost ? [{
       key: "profit",
       label: t("order.tab_profit"),
       children: (
         <Row gutter={24} style={{ padding: 16 }}>
-          {isLogistics ? (
+          <Col span={6}>
+            <Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} />
+          </Col>
+          <Col span={6}>
+            <Statistic
+              title={`${t("order.total_cost")} (CNY)`}
+              value={fmtCny(totalCostCny)}
+              valueStyle={{ color: "#cf1322" }}
+            />
+          </Col>
+          {expensesCny > 0 && (
             <Col span={6}>
-              <Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} />
+              <Statistic
+                title={`${t("expense.title")} (CNY)`}
+                value={fmtCny(expensesCny)}
+                valueStyle={{ color: "#cf1322" }}
+              />
             </Col>
-          ) : (
-            <>
-              <Col span={6}>
-                <Statistic title={`${t("order.total_sale")} (CNY)`} value={fmtCny(order.total_sale_cny)} />
-              </Col>
-              <Col span={6}>
-                <Statistic title={`${t("order.total_cost")} (CNY)`} value={fmtCny(order.total_cost_cny)} />
-              </Col>
-              {expensesCny > 0 && (
-                <Col span={6}>
-                  <Statistic
-                    title={`${t("expense.title")} (CNY)`}
-                    value={fmtCny(expensesCny)}
-                    valueStyle={{ color: "#cf1322" }}
-                  />
-                </Col>
-              )}
-              <Col span={6}>
-                <Statistic
-                  title={`${t("order.margin")} (CNY)`}
-                  value={fmtCny(margin)}
-                  valueStyle={{ color: (margin ?? 0) >= 0 ? "#3f8600" : "#cf1322" }}
-                />
-              </Col>
-              <Col span={6}>
-                <Statistic
-                  title={t("order.margin_pct")}
-                  value={marginPct != null ? marginPct.toFixed(1) : "—"}
-                  suffix="%"
-                  valueStyle={{ color: (marginPct ?? 0) >= 20 ? "#3f8600" : (marginPct ?? 0) >= 0 ? "#faad14" : "#cf1322" }}
-                />
-              </Col>
-            </>
           )}
+          <Col span={6}>
+            <Statistic
+              title={`${t("order.margin")} (CNY)`}
+              value={fmtCny(margin)}
+              valueStyle={{ color: (margin ?? 0) >= 0 ? "#3f8600" : "#cf1322" }}
+            />
+          </Col>
+          <Col span={6}>
+            <Statistic
+              title={t("order.margin_pct")}
+              value={marginPct != null ? marginPct.toFixed(1) : "—"}
+              suffix="%"
+              valueStyle={{ color: (marginPct ?? 0) >= 20 ? "#3f8600" : (marginPct ?? 0) >= 0 ? "#faad14" : "#cf1322" }}
+            />
+          </Col>
         </Row>
       ),
     }] : []),
@@ -691,6 +817,15 @@ export default function OrderDetailPage() {
                 onClick={handleDownloadPdf}
               >
                 {t("order.download_client_pdf")}
+              </Button>
+            )}
+            {canDownloadPdf && isLogistics && (
+              <Button
+                icon={<DownloadOutlined />}
+                loading={logisticsPdfLoading}
+                onClick={handleDownloadLogisticsPdf}
+              >
+                {t("order.download_logistics_pdf")}
               </Button>
             )}
             {canEdit && (

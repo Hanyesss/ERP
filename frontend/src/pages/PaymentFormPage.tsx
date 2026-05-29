@@ -35,6 +35,7 @@ export default function PaymentFormPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const backUrl = searchParams.get("back") || "/payments";
   const [form] = Form.useForm();
   const [direction, setDirection] = useState<"in" | "out">("in");
   const [counterpartyId, setCounterpartyId] = useState<string | undefined>(
@@ -49,7 +50,13 @@ export default function PaymentFormPage() {
   const dateStr = paymentDate?.format("YYYY-MM-DD");
 
   useEffect(() => {
-    form.setFieldsValue({ payment_date: dayjs(), currency: "CNY", rate_to_cny: 1 });
+    const preselectedCpId = searchParams.get("counterparty_id");
+    form.setFieldsValue({
+      payment_date: dayjs(),
+      currency: "CNY",
+      rate_to_cny: 1,
+      ...(preselectedCpId ? { counterparty_id: preselectedCpId } : {}),
+    });
   }, [form]);
 
   // Auto-fetch exchange rate when currency/date changes
@@ -147,7 +154,7 @@ export default function PaymentFormPage() {
     mutationFn: createPayment,
     onSuccess: (res) => {
       message.success("✓");
-      navigate(`/payments/${res.data.id}`);
+      navigate(`/payments/${res.data.id}?back=${encodeURIComponent(backUrl)}`);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -210,7 +217,6 @@ export default function PaymentFormPage() {
         <InputNumber
           size="small"
           min={0}
-          max={Math.min(row.remaining_cny, amountCny)}
           value={row.alloc_amount}
           onChange={v => updateAllocAmount(row.id, v ?? 0)}
           style={{ width: "100%" }}
@@ -228,7 +234,7 @@ export default function PaymentFormPage() {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/payments")}>{t("common.cancel")}</Button>
+            <Button onClick={() => navigate(backUrl)}>{t("common.cancel")}</Button>
             <Button type="primary" onClick={() => form.submit()} loading={createMutation.isPending}>
               {t("common.save")}
             </Button>

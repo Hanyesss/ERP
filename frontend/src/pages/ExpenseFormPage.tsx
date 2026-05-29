@@ -1,20 +1,21 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
   Space, Row, Col, InputNumber, Switch, Alert, message, Skeleton,
 } from "antd";
+import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createExpense, updateExpense, getExpense } from "../api/expenses";
+import { createExpense, updateExpense, getExpense, uploadReceipt } from "../api/expenses";
 import { getExpenseCategories, getEmployees } from "../api/references";
 import { getOrders } from "../api/orders";
 import { getExchangeRates } from "../api/exchangeRates";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import type { User } from "../types";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 
 interface Props { user: User }
@@ -24,6 +25,9 @@ export default function ExpenseFormPage({ user }: Props) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
+  const [searchParams] = useSearchParams();
+  const preselectedOrderId = searchParams.get("order_id") ?? undefined;
+  const backUrl = searchParams.get("back") || (preselectedOrderId ? `/orders/${preselectedOrderId}` : "/expenses");
   const [form] = Form.useForm();
 
   const isAccountant = user.roles?.some(r => ["accountant", "admin"].includes(r));
@@ -34,6 +38,8 @@ export default function ExpenseFormPage({ user }: Props) {
   const [linkType, setLinkType] = useState("none");
   const [isReimbursement, setIsReimbursement] = useState(!isAccountant);
   const [initialized, setInitialized] = useState(false);
+  const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const expenseDate: dayjs.Dayjs | null = Form.useWatch("expense_date", form);
   const dateStr = expenseDate?.format("YYYY-MM-DD");
@@ -95,8 +101,10 @@ export default function ExpenseFormPage({ user }: Props) {
         expense_date: dayjs(),
         currency: "CNY",
         rate_to_cny: 1,
-        link_type: "none",
+        link_type: preselectedOrderId ? "order" : "none",
+        order_id: preselectedOrderId,
       });
+      if (preselectedOrderId) setLinkType("order");
       setInitialized(true);
     }
   }, [isEdit, existing, form, initialized]);
@@ -125,7 +133,13 @@ export default function ExpenseFormPage({ user }: Props) {
 
   const createMutation = useMutation({
     mutationFn: createExpense,
-    onSuccess: (res) => { message.success("✓"); navigate(`/expenses/${res.data.id}`); },
+    onSuccess: async (res) => {
+      if (pendingReceipt) {
+        try { await uploadReceipt(res.data.id, pendingReceipt); } catch {}
+      }
+      message.success("✓");
+      navigate(`/expenses/${res.data.id}?back=${encodeURIComponent(backUrl)}`);
+    },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -185,7 +199,7 @@ export default function ExpenseFormPage({ user }: Props) {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate(isEdit ? `/expenses/${id}` : "/expenses")}>
+            <Button onClick={() => navigate(isEdit ? `/expenses/${id}?back=${encodeURIComponent(backUrl)}` : backUrl)}>
               {t("common.cancel")}
             </Button>
             <Button type="primary" onClick={() => form.submit()} loading={isPending}>
@@ -300,6 +314,37 @@ export default function ExpenseFormPage({ user }: Props) {
               </Col>
             )}
           </Row>
+
+          {!isEdit && (
+            <Form.Item label={t("expense.receipt")}>
+              <Space>
+                <Button
+                  icon={<UploadOutlined />}
+                  size="small"
+                  onClick={() => receiptInputRef.current?.click()}
+                >
+                  {pendingReceipt ? t("expense.receipt_replace") : t("expense.receipt_upload")}
+                </Button>
+                {pendingReceipt && (
+                  <>
+                    <Text style={{ fontSize: 12 }}>{pendingReceipt.name}</Text>
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => setPendingReceipt(null)} />
+                  </>
+                )}
+              </Space>
+              <input
+                ref={receiptInputRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                style={{ display: "none" }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) setPendingReceipt(f);
+                  e.target.value = "";
+                }}
+              />
+            </Form.Item>
+          )}
 
           <Form.Item name="description" label={t("expense.description")} rules={[{ required: true }]}>
             <Input.TextArea rows={2} />
