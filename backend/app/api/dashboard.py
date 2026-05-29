@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, not_
+from sqlalchemy import select, func, and_, not_, text
 
 from app.database import get_db
 from app.core.deps import get_current_user
@@ -203,9 +203,11 @@ async def get_widgets(
 
         # Profit dynamics — last 6 months
         six_months_ago = today.replace(day=1) - timedelta(days=150)
+        _month = text("'month'")
+        pay_month = func.date_trunc(_month, Payment.payment_date)
         dyn_rows = (await db.execute(
             select(
-                func.date_trunc("month", Payment.payment_date).label("month"),
+                pay_month.label("month"),
                 Payment.direction,
                 func.coalesce(func.sum(Payment.amount_cny), D0).label("total"),
             )
@@ -213,8 +215,8 @@ async def get_widgets(
                 Payment.is_active == True,
                 Payment.payment_date >= six_months_ago,
             )
-            .group_by(func.date_trunc("month", Payment.payment_date), Payment.direction)
-            .order_by(func.date_trunc("month", Payment.payment_date))
+            .group_by(pay_month, Payment.direction)
+            .order_by(pay_month)
         )).all()
 
         months: dict = {}
@@ -227,9 +229,10 @@ async def get_widgets(
             else:
                 months[m]["cost"] = r.total or D0
 
+        exp_month = func.date_trunc(_month, Expense.expense_date)
         exp_dyn = (await db.execute(
             select(
-                func.date_trunc("month", Expense.expense_date).label("month"),
+                exp_month.label("month"),
                 func.coalesce(func.sum(Expense.amount_cny), D0).label("total"),
             )
             .where(
@@ -240,7 +243,7 @@ async def get_widgets(
                     Expense.reimburse_status == ReimburseStatusEnum.rejected,
                 )),
             )
-            .group_by(func.date_trunc("month", Expense.expense_date))
+            .group_by(exp_month)
         )).all()
         for r in exp_dyn:
             m = r.month.strftime("%Y-%m")

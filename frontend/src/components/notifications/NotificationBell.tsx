@@ -29,6 +29,9 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 function NotifItem({ item, onRead }: { item: NotificationItem; onRead: (id: string, link?: string) => void }) {
+  const { t, i18n } = useTranslation();
+  const title = t(`notification.types.${item.type}`, { defaultValue: item.title });
+  const locale = i18n.language === "zh" ? "zh-cn" : "ru";
   return (
     <List.Item
       style={{
@@ -43,10 +46,10 @@ function NotifItem({ item, onRead }: { item: NotificationItem; onRead: (id: stri
       <Space align="start" size={8}>
         <span style={{ fontSize: 18 }}>{TYPE_ICONS[item.type] || "🔔"}</span>
         <div>
-          <div style={{ fontWeight: item.is_read ? 400 : 600, fontSize: 13 }}>{item.title}</div>
+          <div style={{ fontWeight: item.is_read ? 400 : 600, fontSize: 13 }}>{title}</div>
           {item.body && <Text type="secondary" style={{ fontSize: 12 }}>{item.body}</Text>}
           <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
-            {dayjs(item.created_at).locale("ru").fromNow()}
+            {dayjs(item.created_at).locale(locale).fromNow()}
           </div>
         </div>
       </Space>

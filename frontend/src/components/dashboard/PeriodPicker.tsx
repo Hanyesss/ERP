@@ -1,6 +1,9 @@
 import { Button, DatePicker, Space } from "antd";
 import { useTranslation } from "react-i18next";
 import dayjs, { Dayjs } from "dayjs";
+import quarterOfYear from "dayjs/plugin/quarterOfYear";
+
+dayjs.extend(quarterOfYear);
 
 export interface Period {
   date_from: string;
@@ -12,7 +15,7 @@ const { RangePicker } = DatePicker;
 const today = () => dayjs();
 const startOfMonth = () => today().startOf("month");
 const startOfWeek = () => today().startOf("week");
-const startOfQuarter = () => today().startOf("quarter" as any);
+const startOfQuarter = () => today().startOf("quarter");
 const startOfYear = () => today().startOf("year");
 
 interface Props {
