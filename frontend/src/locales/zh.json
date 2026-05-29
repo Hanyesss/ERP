@@ -32,6 +32,7 @@
     "reports": "报表",
     "users": "员工",
     "notifications": "通知",
+    "integrations": "系统集成",
     "logout": "退出"
   },
   "dashboard": {
@@ -81,7 +82,18 @@
     "no_notifications": "暂无通知",
     "unread_only": "仅未读",
     "all": "全部",
-    "delete_confirm": "确认删除此通知？"
+    "delete_confirm": "确认删除此通知？",
+    "types": {
+      "reimbursement_created": "新报销申请",
+      "reimbursement_approved": "报销申请已批准",
+      "reimbursement_rejected": "报销申请已拒绝",
+      "reimbursement_paid": "报销款已发放",
+      "order_paid": "订单已全额付款",
+      "purchase_created": "已为您的订单创建采购单",
+      "purchase_paid": "采购单已全额付款",
+      "payment_unassigned": "付款需要分配",
+      "order_overdue": "订单已逾期"
+    }
   },
   "login": {
     "title": "系统登录",
@@ -206,7 +218,23 @@
     "client_phone": "客户电话",
     "manager_readonly_hint": "经理 = 创建订单的人，不可更改。",
     "upload_photo_after_save": "保存订单后方可上传图片",
-    "download_client_pdf": "下载客户PDF报价单"
+    "download_client_pdf": "下载客户PDF报价单",
+    "sync": {
+      "title": "同步",
+      "synced": "已同步",
+      "failed": "同步失败",
+      "disabled": "已停用",
+      "not_synced": "未同步",
+      "sync_now": "立即同步",
+      "sync_again": "重新同步",
+      "shipment_number": "运单号",
+      "download_invoice": "下载发票",
+      "open_tracking": "查看物流",
+      "push_status": "推送状态",
+      "status": "状态",
+      "comment": "备注",
+      "status_pushed": "状态已推送"
+    }
   },
   "purchase": {
     "title": "采购单",
@@ -457,5 +485,18 @@
     "invalid_email": "邮箱格式不正确",
     "file_too_large": "文件过大（最大10MB）",
     "file_type_not_allowed": "不支持该文件类型（仅允许JPEG、PNG、WebP、PDF）"
+  },
+  "integration": {
+    "title": "irsway.com 网站集成",
+    "base_url": "网站地址",
+    "api_token": "API密钥",
+    "change_token": "更换密钥",
+    "new_token_placeholder": "输入新密钥",
+    "enabled": "已启用",
+    "test_connection": "测试连接",
+    "test_ok": "连接成功",
+    "test_fail": "连接失败",
+    "last_sync": "最后同步",
+    "sync_ok": "正常"
   }
 }

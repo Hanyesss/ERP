@@ -115,6 +115,14 @@ export interface Order {
   created_at: string;
   items: OrderItem[];
   charges: OrderCharge[];
+  // Sync fields
+  external_shipment_id?: string;
+  external_shipment_number?: string;
+  external_invoice_url?: string;
+  external_tracking_url?: string;
+  sync_status?: string;
+  sync_error?: string;
+  synced_at?: string;
 }
 
 export interface OrderListItem {
@@ -136,6 +144,7 @@ export interface OrderListItem {
   supplier_payment_status?: PaymentStatus;
   paid_amount_cny: number;
   remaining_amount_cny: number;
+  sync_status?: string;
 }
 
 export interface OrderListResponse {

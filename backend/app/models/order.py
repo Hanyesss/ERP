@@ -54,3 +54,11 @@ class Order(Base, TimestampMixin):
     tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     warehouse_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("warehouses.id"), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # Integration sync fields
+    external_shipment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_shipment_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_invoice_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_tracking_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

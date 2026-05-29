@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Table, Button, Space, Popconfirm, Typography, Row, Col, DatePicker, Select, Input } from "antd";
-import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Table, Button, Space, Popconfirm, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip } from "antd";
+import { EyeOutlined, EditOutlined, DeleteOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -28,6 +28,7 @@ export default function OrderTable() {
   const [clientId, setClientId] = useState<string | undefined>();
   const [btId, setBtId] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [syncStatusFilter, setSyncStatusFilter] = useState<string | undefined>();
   const [managerId, setManagerId] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[string, string] | null>(null);
   const [page, setPage] = useState(1);
@@ -36,6 +37,7 @@ export default function OrderTable() {
     search: search || undefined, client_id: clientId, business_type_id: btId,
     status: statusFilter, manager_id: managerId,
     date_from: dateRange?.[0], date_to: dateRange?.[1],
+    sync_status: syncStatusFilter,
     page, page_size: 20,
   };
 
@@ -135,6 +137,19 @@ export default function OrderTable() {
       render: (_, row) => <PaymentStatusTag status={row.payment_status} />,
     },
     {
+      title: t("order.sync.title"),
+      key: "sync_status",
+      width: 80,
+      render: (_, row) => {
+        if (row.business_type_code !== "logistics") return null;
+        if (!row.sync_status) return <Tooltip title={t("order.sync.not_synced")}><MinusCircleOutlined style={{ color: "#d9d9d9" }} /></Tooltip>;
+        if (row.sync_status === "synced") return <Tooltip title={t("order.sync.synced")}><CheckCircleOutlined style={{ color: "#52c41a" }} /></Tooltip>;
+        if (row.sync_status === "failed") return <Tooltip title={t("order.sync.failed")}><CloseCircleOutlined style={{ color: "#ff4d4f" }} /></Tooltip>;
+        if (row.sync_status === "disabled") return <Tooltip title={t("order.sync.disabled")}><MinusCircleOutlined style={{ color: "#bfbfbf" }} /></Tooltip>;
+        return <Tag style={{ fontSize: 10 }}>{row.sync_status}</Tag>;
+      },
+    },
+    {
       title: t("common.actions"),
       key: "actions",
       width: 100,
@@ -191,6 +206,15 @@ export default function OrderTable() {
         <Col>
           <Select allowClear placeholder={t("order.manager")} style={{ width: 150 }} options={managerOptions}
             onChange={v => { setManagerId(v); setPage(1); }} />
+        </Col>
+        <Col>
+          <Select
+            allowClear
+            placeholder={t("order.sync.title")}
+            style={{ width: 130 }}
+            options={["synced", "failed", "disabled"].map(s => ({ value: s, label: t(`order.sync.${s}`) }))}
+            onChange={v => { setSyncStatusFilter(v); setPage(1); }}
+          />
         </Col>
         <Col flex="auto" style={{ textAlign: "right" }}>
           <Button type="primary" onClick={() => navigate("/orders/new")}>{t("order.create_new")}</Button>

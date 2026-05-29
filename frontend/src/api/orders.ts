@@ -9,6 +9,7 @@ export interface OrderListParams {
   manager_id?: string;
   date_from?: string;
   date_to?: string;
+  sync_status?: string;
   page?: number;
   page_size?: number;
 }

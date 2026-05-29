@@ -3,14 +3,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  Button, Card, Col, Descriptions, Divider, Image, Popconfirm, Row,
+  Button, Card, Col, Descriptions, Divider, Form, Image, Input, Modal, Popconfirm, Row, Select,
   Space, Statistic, Table, Tabs, Tag, Timeline, Typography, message,
 } from "antd";
-import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined, DownloadOutlined } from "@ant-design/icons";
+import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined, DownloadOutlined, SyncOutlined, LinkOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getOrder, closeOrder, cancelOrder, getOrderHistory, downloadClientPdf, getItemPhotoUrl } from "../api/orders";
 import { getPurchases } from "../api/purchases";
 import { getPaymentsForOrder } from "../api/payments";
+import { syncOrderToSite, pushOrderStatus } from "../api/integration";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import { useHasAnyRole } from "../hooks/useRole";
@@ -31,7 +32,10 @@ export default function OrderDetailPage() {
 
   const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
   const canDownloadPdf = useHasAnyRole("manager", "accountant", "admin");
+  const canSync = useHasAnyRole("manager", "accountant", "admin");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pushStatusOpen, setPushStatusOpen] = useState(false);
+  const [pushStatusForm] = Form.useForm();
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order", id],
@@ -73,6 +77,27 @@ export default function OrderDetailPage() {
       qc.invalidateQueries({ queryKey: ["order", id] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       message.success(t("order.status_cancelled") + " ✓");
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => syncOrderToSite(id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["order", id] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      message.success(t("order.sync.synced") + " ✓");
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const pushStatusMutation = useMutation({
+    mutationFn: (vals: { status: string; comment?: string }) =>
+      pushOrderStatus(id!, vals.status, vals.comment),
+    onSuccess: () => {
+      setPushStatusOpen(false);
+      pushStatusForm.resetFields();
+      message.success(t("order.sync.status_pushed") + " ✓");
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -258,6 +283,75 @@ export default function OrderDetailPage() {
                   <Descriptions.Item label={t("order.tracking_number")}>{order.tracking_number}</Descriptions.Item>
                 )}
               </Descriptions>
+
+              {canSync && (
+                <>
+                  <Divider>{t("order.sync.title")}</Divider>
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    {order.sync_status === "synced" && (
+                      <Space wrap>
+                        <Tag color="green" icon={<CheckOutlined />}>{t("order.sync.synced")}</Tag>
+                        {order.synced_at && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {new Date(order.synced_at).toLocaleString("ru-RU")}
+                          </Text>
+                        )}
+                        {order.external_shipment_number && (
+                          <Text>{t("order.sync.shipment_number")}: <Text strong>{order.external_shipment_number}</Text></Text>
+                        )}
+                      </Space>
+                    )}
+                    {order.sync_status === "failed" && (
+                      <Space direction="vertical">
+                        <Tag color="red" icon={<CloseOutlined />}>{t("order.sync.failed")}</Tag>
+                        {order.sync_error && <Text type="danger" style={{ fontSize: 12 }}>{order.sync_error}</Text>}
+                      </Space>
+                    )}
+                    {order.sync_status === "disabled" && (
+                      <Text type="secondary">{t("order.sync.disabled")}</Text>
+                    )}
+                    {!order.sync_status && (
+                      <Text type="secondary">{t("order.sync.not_synced")}</Text>
+                    )}
+
+                    <Space wrap>
+                      <Button
+                        icon={<SyncOutlined />}
+                        loading={syncMutation.isPending}
+                        onClick={() => syncMutation.mutate()}
+                      >
+                        {order.sync_status === "synced" ? t("order.sync.sync_again") : t("order.sync.sync_now")}
+                      </Button>
+
+                      {order.sync_status === "synced" && (
+                        <>
+                          {order.external_invoice_url && (
+                            <Button
+                              icon={<DownloadOutlined />}
+                              href={order.external_invoice_url}
+                              target="_blank"
+                            >
+                              {t("order.sync.download_invoice")}
+                            </Button>
+                          )}
+                          {order.external_tracking_url && (
+                            <Button
+                              icon={<LinkOutlined />}
+                              href={order.external_tracking_url}
+                              target="_blank"
+                            >
+                              {t("order.sync.open_tracking")}
+                            </Button>
+                          )}
+                          <Button onClick={() => setPushStatusOpen(true)}>
+                            {t("order.sync.push_status")}
+                          </Button>
+                        </>
+                      )}
+                    </Space>
+                  </Space>
+                </>
+              )}
             </>
           )}
         </>
@@ -550,8 +644,35 @@ export default function OrderDetailPage() {
     },
   ];
 
+  const LOGISTICS_STATUSES = [
+    "WAREHOUSE_CN", "MOVE_CN", "BORDER", "CUSTOMS", "MOVE_RU", "MOSCOW",
+  ];
+
   return (
     <div style={{ maxWidth: 1200 }}>
+      <Modal
+        open={pushStatusOpen}
+        title={t("order.sync.push_status")}
+        onCancel={() => { setPushStatusOpen(false); pushStatusForm.resetFields(); }}
+        onOk={() => pushStatusForm.submit()}
+        confirmLoading={pushStatusMutation.isPending}
+        okText={t("common.confirm")}
+        cancelText={t("common.cancel")}
+      >
+        <Form
+          form={pushStatusForm}
+          layout="vertical"
+          onFinish={vals => pushStatusMutation.mutate(vals)}
+        >
+          <Form.Item name="status" label={t("order.sync.status")} rules={[{ required: true }]}>
+            <Select options={LOGISTICS_STATUSES.map(s => ({ value: s, label: s }))} />
+          </Form.Item>
+          <Form.Item name="comment" label={t("order.sync.comment")}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Space align="center">

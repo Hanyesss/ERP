@@ -11,6 +11,7 @@
     "reports": "Отчёты",
     "users": "Сотрудники",
     "notifications": "Уведомления",
+    "integrations": "Интеграции",
     "logout": "Выйти"
   },
   "dashboard": {
@@ -60,7 +61,18 @@
     "no_notifications": "Нет уведомлений",
     "unread_only": "Только новые",
     "all": "Все",
-    "delete_confirm": "Удалить уведомление?"
+    "delete_confirm": "Удалить уведомление?",
+    "types": {
+      "reimbursement_created": "Новая заявка на возмещение",
+      "reimbursement_approved": "Заявка на возмещение одобрена",
+      "reimbursement_rejected": "Заявка на возмещение отклонена",
+      "reimbursement_paid": "Возмещение выплачено",
+      "order_paid": "Заказ полностью оплачен",
+      "purchase_created": "Создана закупка под ваш заказ",
+      "purchase_paid": "Закупка полностью оплачена",
+      "payment_unassigned": "Платёж требует распределения",
+      "order_overdue": "Просроченный заказ"
+    }
   },
   "login": {
     "title": "Вход в систему",
@@ -185,7 +197,23 @@
     "client_phone": "Телефон клиента",
     "manager_readonly_hint": "Менеджер = тот, кто создал заказ. Нельзя изменить.",
     "upload_photo_after_save": "Сохраните заказ, чтобы загружать фото",
-    "download_client_pdf": "Скачать PDF для клиента"
+    "download_client_pdf": "Скачать PDF для клиента",
+    "sync": {
+      "title": "Синхронизация",
+      "synced": "Синхронизирован",
+      "failed": "Ошибка синхронизации",
+      "disabled": "Отключено",
+      "not_synced": "Не синхронизирован",
+      "sync_now": "Синхронизировать",
+      "sync_again": "Синхронизировать снова",
+      "shipment_number": "Номер отправления",
+      "download_invoice": "Скачать накладную",
+      "open_tracking": "Отслеживание",
+      "push_status": "Отправить статус",
+      "status": "Статус",
+      "comment": "Комментарий",
+      "status_pushed": "Статус отправлен"
+    }
   },
   "purchase": {
     "title": "Закупки",
@@ -457,5 +485,18 @@
     "invalid_email": "Некорректный email",
     "file_too_large": "Файл слишком большой (макс. 10 МБ)",
     "file_type_not_allowed": "Тип файла не разрешён (только JPEG, PNG, WebP, PDF)"
+  },
+  "integration": {
+    "title": "Интеграция с сайтом irsway.com",
+    "base_url": "URL сайта",
+    "api_token": "API токен",
+    "change_token": "Изменить токен",
+    "new_token_placeholder": "Введите новый токен",
+    "enabled": "Включено",
+    "test_connection": "Тест подключения",
+    "test_ok": "Подключение успешно",
+    "test_fail": "Ошибка подключения",
+    "last_sync": "Последняя синхронизация",
+    "sync_ok": "OK"
   }
 }

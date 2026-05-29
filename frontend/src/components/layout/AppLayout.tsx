@@ -3,7 +3,7 @@ import { Layout, Menu, Button, Typography, Space } from "antd";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
-  BarChartOutlined, DatabaseOutlined,
+  BarChartOutlined, DatabaseOutlined, SettingOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -97,6 +97,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       icon: <TeamOutlined />,
       label: t("nav.users"),
     },
+
+    hasRole(user, "admin") && {
+      key: "/settings/integrations",
+      icon: <SettingOutlined />,
+      label: t("nav.integrations"),
+    },
   ].filter(Boolean) as { key: string; icon: JSX.Element; label: string }[];
 
   const selectedKey = location.pathname.startsWith("/orders")
@@ -115,6 +121,8 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/reports"
     : location.pathname.startsWith("/users")
     ? "/users"
+    : location.pathname.startsWith("/settings/integrations")
+    ? "/settings/integrations"
     : location.pathname;
 
   return (

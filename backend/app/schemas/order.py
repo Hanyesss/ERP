@@ -179,6 +179,7 @@ class OrderListItem(BaseModel):
     supplier_payment_status: Optional[str] = None
     paid_amount_cny: Decimal = Decimal("0")
     remaining_amount_cny: Decimal = Decimal("0")
+    sync_status: Optional[str] = None
 
 
 class OrderResponseManager(BaseModel):
@@ -211,6 +212,14 @@ class OrderResponseManager(BaseModel):
     created_at: datetime
     items: List[OrderItemResponseManager] = []
     charges: List[OrderChargeResponse] = []
+    # Sync fields
+    external_shipment_id: Optional[str] = None
+    external_shipment_number: Optional[str] = None
+    external_invoice_url: Optional[str] = None
+    external_tracking_url: Optional[str] = None
+    sync_status: Optional[str] = None
+    sync_error: Optional[str] = None
+    synced_at: Optional[datetime] = None
 
 
 class OrderResponseFull(BaseModel):
@@ -246,6 +255,14 @@ class OrderResponseFull(BaseModel):
     created_at: datetime
     items: List[OrderItemResponseFull] = []
     charges: List[OrderChargeResponse] = []
+    # Sync fields
+    external_shipment_id: Optional[str] = None
+    external_shipment_number: Optional[str] = None
+    external_invoice_url: Optional[str] = None
+    external_tracking_url: Optional[str] = None
+    sync_status: Optional[str] = None
+    sync_error: Optional[str] = None
+    synced_at: Optional[datetime] = None
 
 
 # Alias for imports that still use OrderResponse

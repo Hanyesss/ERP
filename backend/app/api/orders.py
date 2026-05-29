@@ -32,6 +32,7 @@ from app.schemas.order import (
     PurchaseItemBrief, AvailableForPurchaseItem,
 )
 from app.utils.audit import write_audit
+from app.integrations.irsway_site.service import sync_order_to_site
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -188,6 +189,13 @@ async def _load_order_detail(
             arrival_date=order.arrival_date, tracking_number=order.tracking_number,
             warehouse_id=order.warehouse_id, warehouse_name=row.warehouse_name,
             created_at=order.created_at, items=items, charges=charges,
+            external_shipment_id=order.external_shipment_id,
+            external_shipment_number=order.external_shipment_number,
+            external_invoice_url=order.external_invoice_url,
+            external_tracking_url=order.external_tracking_url,
+            sync_status=order.sync_status,
+            sync_error=order.sync_error,
+            synced_at=order.synced_at,
         )
 
     # Purchaser/accountant/admin — load purchase_items per order_item
@@ -264,6 +272,13 @@ async def _load_order_detail(
         arrival_date=order.arrival_date, tracking_number=order.tracking_number,
         warehouse_id=order.warehouse_id, warehouse_name=row.warehouse_name,
         created_at=order.created_at, items=items, charges=charges,
+        external_shipment_id=order.external_shipment_id,
+        external_shipment_number=order.external_shipment_number,
+        external_invoice_url=order.external_invoice_url,
+        external_tracking_url=order.external_tracking_url,
+        sync_status=order.sync_status,
+        sync_error=order.sync_error,
+        synced_at=order.synced_at,
     )
 
 
@@ -366,6 +381,7 @@ async def list_orders(
     manager_id: Optional[uuid.UUID] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
+    sync_status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -393,6 +409,7 @@ async def list_orders(
             Order.client_currency, Order.total_sale_cny, Order.total_cost_cny,
             Order.payment_status, Order.supplier_payment_status,
             Order.client_id, Order.business_type_id, Order.manager_id,
+            Order.sync_status,
             ClientAlias.name.label("client_name"),
             ManagerAlias.full_name.label("manager_name"),
             BusinessType.name.label("business_type_name"),
@@ -420,6 +437,8 @@ async def list_orders(
         stmt = stmt.where(Order.order_date >= date_from)
     if date_to:
         stmt = stmt.where(Order.order_date <= date_to)
+    if sync_status:
+        stmt = stmt.where(Order.sync_status == sync_status)
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     stmt = stmt.order_by(Order.order_date.desc(), Order.order_number.desc())
@@ -440,6 +459,7 @@ async def list_orders(
             supplier_payment_status=r.supplier_payment_status if is_full else None,
             paid_amount_cny=r.paid_amount_cny or Decimal("0"),
             remaining_amount_cny=max(r.total_sale_cny - (r.paid_amount_cny or Decimal("0")), Decimal("0")),
+            sync_status=r.sync_status,
         )
         for r in rows
     ]
@@ -593,6 +613,14 @@ async def create_order(
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.create,
                       {"order_number": order.order_number, "total_sale_cny": str(total_sale)})
     await db.commit()
+
+    if is_logistics:
+        try:
+            await sync_order_to_site(order, db)
+            await db.commit()
+        except Exception:
+            pass
+
     return await _load_order_detail(db, order.id, current_user)
 
 
@@ -644,6 +672,14 @@ async def update_order(
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update,
                       {"old": old_data, "total_sale_cny": str(order.total_sale_cny)})
     await db.commit()
+
+    if is_logistics:
+        try:
+            await sync_order_to_site(order, db)
+            await db.commit()
+        except Exception:
+            pass
+
     return await _load_order_detail(db, order.id, current_user)
 
 
