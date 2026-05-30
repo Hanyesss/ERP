@@ -74,7 +74,7 @@ def upgrade() -> None:
         )
     """))
 
-    # Seed USD/CNY rate for today (skip if already exists)
+    # Seed USD/CNY rate for today (skip if no admin user or rate already exists)
     op.execute(sa.text("""
         INSERT INTO exchange_rates (id, currency, rate_to_cny, rate_date, created_by, source, created_at)
         SELECT
@@ -87,6 +87,9 @@ def upgrade() -> None:
             now()
         WHERE NOT EXISTS (
             SELECT 1 FROM exchange_rates WHERE currency = 'USD' AND rate_date = CURRENT_DATE
+        )
+        AND EXISTS (
+            SELECT 1 FROM users WHERE role = 'admin'
         )
     """))
 
