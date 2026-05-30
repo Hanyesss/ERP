@@ -168,6 +168,7 @@ class OrderListItem(BaseModel):
     client_name: str
     business_type_id: uuid.UUID
     business_type_name: str
+    business_type_name_cn: Optional[str] = None
     business_type_code: str
     manager_id: uuid.UUID
     manager_name: str

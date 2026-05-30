@@ -1,23 +1,34 @@
-import { useEffect } from "react";
-import { Modal, Form, Input, Select } from "antd";
+import { useEffect, useState } from "react";
+import { Modal, Form, Input, Select, Checkbox, Divider } from "antd";
 import { useTranslation } from "react-i18next";
 import type { Counterparty, CounterpartyFormData } from "../../types/counterparty";
+
+export interface CounterpartyFormValues extends CounterpartyFormData {
+  create_site_account?: boolean;
+  site_login?: string;
+  site_password?: string;
+}
 
 interface Props {
   open: boolean;
   editing?: Counterparty | null;
   onClose: () => void;
-  onSubmit: (data: CounterpartyFormData) => void;
+  onSubmit: (data: CounterpartyFormValues) => void;
   loading?: boolean;
   forcedType?: "client" | "supplier";
 }
 
 export default function CounterpartyForm({ open, editing, onClose, onSubmit, loading, forcedType }: Props) {
   const { t } = useTranslation();
-  const [form] = Form.useForm<CounterpartyFormData>();
+  const [form] = Form.useForm<CounterpartyFormValues>();
+  const [createAccount, setCreateAccount] = useState(false);
+
+  const watchedType = Form.useWatch("type", form);
+  const isClient = watchedType === "client" || watchedType === "both";
 
   useEffect(() => {
     if (open) {
+      setCreateAccount(false);
       if (editing) {
         form.setFieldsValue({
           name: editing.name,
@@ -38,7 +49,9 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
   }, [open, editing, form]);
 
   const handleOk = () => {
-    form.validateFields().then(onSubmit);
+    form.validateFields().then((values) => {
+      onSubmit({ ...values, create_site_account: createAccount });
+    });
   };
 
   const typeOptions = [
@@ -100,6 +113,36 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         <Form.Item name="notes" label={t("counterparty.notes")}>
           <Input.TextArea rows={3} />
         </Form.Item>
+
+        {!editing && isClient && (
+          <>
+            <Divider style={{ margin: "12px 0" }} />
+            <Checkbox
+              checked={createAccount}
+              onChange={(e) => setCreateAccount(e.target.checked)}
+            >
+              {t("counterparty.create_site_account")}
+            </Checkbox>
+            {createAccount && (
+              <div style={{ marginTop: 12 }}>
+                <Form.Item
+                  name="site_login"
+                  label={t("counterparty.site_login")}
+                  rules={[{ required: createAccount, message: t("validation.required") }]}
+                >
+                  <Input autoComplete="new-password" />
+                </Form.Item>
+                <Form.Item
+                  name="site_password"
+                  label={t("counterparty.site_password")}
+                  rules={[{ required: createAccount, message: t("validation.required") }, { min: 6, message: t("validation.min_length", { min: 6 }) }]}
+                >
+                  <Input.Password autoComplete="new-password" />
+                </Form.Item>
+              </div>
+            )}
+          </>
+        )}
       </Form>
     </Modal>
   );

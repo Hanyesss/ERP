@@ -104,7 +104,12 @@
     "add_new": "+ Добавить",
     "edit": "Редактировать",
     "delete_confirm": "Удалить этого контрагента?",
-    "search_placeholder": "Поиск по названию..."
+    "search_placeholder": "Поиск по названию...",
+    "create_site_account": "Создать учётную запись на сайте",
+    "site_login": "Логин",
+    "site_password": "Пароль",
+    "site_account_created": "Учётная запись создана на сайте",
+    "site_account_error": "Ошибка создания аккаунта на сайте: {{error}}"
   },
   "order": {
     "title": "Заказы",
@@ -489,7 +494,8 @@
     "required": "Обязательное поле",
     "invalid_email": "Некорректный email",
     "file_too_large": "Файл слишком большой (макс. 10 МБ)",
-    "file_type_not_allowed": "Тип файла не разрешён (только JPEG, PNG, WebP, PDF)"
+    "file_type_not_allowed": "Тип файла не разрешён (только JPEG, PNG, WebP, PDF)",
+    "min_length": "Минимум {{min}} символов"
   },
   "integration": {
     "title": "Интеграция с сайтом irsway.com",

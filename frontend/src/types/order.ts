@@ -133,6 +133,7 @@ export interface OrderListItem {
   client_name: string;
   business_type_id: string;
   business_type_name: string;
+  business_type_name_cn?: string;
   business_type_code: string;
   manager_id: string;
   manager_name: string;

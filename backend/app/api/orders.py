@@ -423,6 +423,7 @@ async def list_orders(
             ClientAlias.name.label("client_name"),
             ManagerAlias.full_name.label("manager_name"),
             BusinessType.name.label("business_type_name"),
+            BusinessType.name_cn.label("business_type_name_cn"),
             BusinessType.code.label("business_type_code"),
             func.coalesce(paid_sq.c.paid_cny, Decimal("0")).label("paid_amount_cny"),
         )
@@ -460,6 +461,7 @@ async def list_orders(
             id=r.id, order_number=r.order_number, order_date=r.order_date,
             client_id=r.client_id, client_name=r.client_name,
             business_type_id=r.business_type_id, business_type_name=r.business_type_name,
+            business_type_name_cn=r.business_type_name_cn,
             business_type_code=r.business_type_code,
             manager_id=r.manager_id, manager_name=r.manager_name,
             status=r.status, client_currency=r.client_currency,

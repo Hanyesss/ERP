@@ -79,7 +79,7 @@ export default function OrderTable() {
       title: t("order.business_type"),
       key: "bt",
       width: 120,
-      render: (_, row) => <BusinessTypeTag code={row.business_type_code} name={row.business_type_name} />,
+      render: (_, row) => <BusinessTypeTag code={row.business_type_code} name={row.business_type_name} nameCn={row.business_type_name_cn} />,
     },
     { title: t("order.manager"), dataIndex: "manager_name", key: "manager_name", width: 130 },
     {

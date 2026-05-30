@@ -31,6 +31,8 @@ export function PaymentStatusTag({ status }: { status: PaymentStatus }) {
   return <Tag color={PAYMENT_COLORS[status]}>{t(`order.payment_status_${status}`)}</Tag>;
 }
 
-export function BusinessTypeTag({ code, name }: { code: string; name: string }) {
-  return <Tag color={BT_COLORS[code] ?? "default"}>{name}</Tag>;
+export function BusinessTypeTag({ code, name, nameCn }: { code: string; name: string; nameCn?: string }) {
+  const { i18n } = useTranslation();
+  const label = i18n.language === "zh" && nameCn ? nameCn : name;
+  return <Tag color={BT_COLORS[code] ?? "default"}>{label}</Tag>;
 }

@@ -65,3 +65,9 @@ class ShipmentResult(BaseModel):
 class HealthResult(BaseModel):
     ok: bool
     message: Optional[str] = None
+
+
+class ClientCreateResult(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    user_id: Optional[str] = None

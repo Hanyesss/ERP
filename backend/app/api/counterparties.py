@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 
@@ -123,6 +124,42 @@ async def update_counterparty(
     await db.commit()
     await db.refresh(cp)
     return CounterpartyResponse.from_obj(cp)
+
+
+class SiteAccountBody(BaseModel):
+    login: str
+    password: str
+
+
+@router.post("/{cp_id}/create-site-account")
+async def create_site_account(
+    cp_id: uuid.UUID,
+    body: SiteAccountBody,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    from app.integrations.irsway_site.service import get_active_client
+    import asyncio
+
+    cp = await _get_or_404(db, cp_id)
+    client = await get_active_client(db)
+    if client is None:
+        raise HTTPException(422, "Интеграция с сайтом не настроена или отключена")
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.create_client(
+            username=body.login,
+            password=body.password,
+            full_name=cp.name,
+            phone=cp.contact_info.get("phone") if isinstance(cp.contact_info, dict) else None,
+            code=cp.code.upper() if cp.code else None,
+        ),
+    )
+    if not result.ok:
+        raise HTTPException(422, result.error or "Ошибка создания аккаунта на сайте")
+    return {"ok": True, "user_id": result.user_id}
 
 
 @router.delete("/{cp_id}", status_code=status.HTTP_204_NO_CONTENT)

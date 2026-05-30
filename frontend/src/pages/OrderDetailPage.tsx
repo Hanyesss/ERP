@@ -274,7 +274,7 @@ export default function OrderDetailPage() {
             </Descriptions.Item>
             <Descriptions.Item label={t("order.currency")}>{order.client_currency}</Descriptions.Item>
             <Descriptions.Item label={t("order.business_type")}>
-              <BusinessTypeTag code={order.business_type_code} name={order.business_type_name} />
+              <BusinessTypeTag code={order.business_type_code} name={order.business_type_name} nameCn={order.business_type_name_cn} />
             </Descriptions.Item>
             <Descriptions.Item label={t("order.manager")}>{order.manager_name}</Descriptions.Item>
             <Descriptions.Item label={t("order.title")}>

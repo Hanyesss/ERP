@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Table, Button, Input, Select, Tag, Space, Popconfirm, Row, Col } from "antd";
+import { Table, Button, Input, Select, Tag, Space, Popconfirm, Row, Col, message } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import type { Counterparty, CounterpartyFormData } from "../../types/counterparty";
-import { getCounterparties, createCounterparty, updateCounterparty, deleteCounterparty } from "../../api/counterparties";
-import CounterpartyForm from "./CounterpartyForm";
+import { getCounterparties, createCounterparty, updateCounterparty, deleteCounterparty, createSiteAccount } from "../../api/counterparties";
+import CounterpartyForm, { type CounterpartyFormValues } from "./CounterpartyForm";
 
 const TYPE_COLORS: Record<string, string> = {
   client: "blue",
@@ -39,7 +39,19 @@ export default function CounterpartyTable({ forcedType }: Props) {
 
   const createMutation = useMutation({
     mutationFn: createCounterparty,
-    onSuccess: () => { invalidate(); setFormOpen(false); },
+    onSuccess: async (res, variables) => {
+      const vals = variables as CounterpartyFormValues;
+      if (vals.create_site_account && vals.site_login && vals.site_password) {
+        try {
+          await createSiteAccount(res.data.id, { login: vals.site_login, password: vals.site_password });
+          message.success(t("counterparty.site_account_created"));
+        } catch (e: any) {
+          message.warning(t("counterparty.site_account_error", { error: e.response?.data?.detail || String(e) }));
+        }
+      }
+      invalidate();
+      setFormOpen(false);
+    },
   });
 
   const updateMutation = useMutation({
@@ -52,11 +64,11 @@ export default function CounterpartyTable({ forcedType }: Props) {
     onSuccess: invalidate,
   });
 
-  const handleSubmit = (formData: CounterpartyFormData) => {
+  const handleSubmit = (formData: CounterpartyFormValues) => {
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: formData });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(formData as CounterpartyFormData);
     }
   };
 

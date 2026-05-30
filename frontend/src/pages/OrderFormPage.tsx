@@ -6,7 +6,7 @@ import {
 } from "antd";
 import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { getOrder, createOrder, updateOrder, getNextOrderNumber } from "../api/orders";
 import { checkExchangeRates } from "../api/exchangeRates";
@@ -43,6 +43,8 @@ export default function OrderFormPage({ user }: Props) {
   const { id } = useParams<{ id?: string }>();
   const isEdit = !!id;
 
+  const qc = useQueryClient();
+  const formInitializedRef = useRef(false);
   const [form] = Form.useForm();
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [clientPhone, setClientPhone] = useState<string | null>(null);
@@ -182,7 +184,9 @@ export default function OrderFormPage({ user }: Props) {
   }, [nextNumber, isEdit, form]);
 
   useEffect(() => {
-    if (isEdit && existingOrder) {
+    if (!isEdit || !existingOrder || formInitializedRef.current) return;
+    formInitializedRef.current = true;
+    {
       setClientPhone((existingOrder as any).client_phone || null);
       setPendingPhotos({});
       // Map Form.List key (=index for initial load) → saved item ID
@@ -337,6 +341,8 @@ export default function OrderFormPage({ user }: Props) {
     mutationFn: (data: any) => updateOrder(id!, data),
     onSuccess: async (res) => {
       await uploadPendingPhotos(res.data.items || []);
+      qc.invalidateQueries({ queryKey: ["order", id] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
       message.success("✓");
       navigate(`/orders/${res.data.id}`);
     },

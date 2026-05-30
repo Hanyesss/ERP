@@ -94,7 +94,7 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
         erp_order_id=str(order.id),
         erp_order_number=order.order_number,
         client_phone=client_phone,
-        client_code=client_row.code if client_row else None,
+        client_code=client_row.code.upper() if client_row and client_row.code else None,
         client_name=client_row.name if client_row else "",
         recipient=order.recipient,
         destination=order.destination,

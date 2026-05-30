@@ -125,7 +125,12 @@
     "add_new": "+ 添加",
     "edit": "编辑",
     "delete_confirm": "确认删除该往来单位？",
-    "search_placeholder": "按名称搜索..."
+    "search_placeholder": "按名称搜索...",
+    "create_site_account": "在网站创建账号",
+    "site_login": "登录名",
+    "site_password": "密码",
+    "site_account_created": "已在网站创建账号",
+    "site_account_error": "网站账号创建失败：{{error}}"
   },
   "order": {
     "title": "订单",
@@ -489,7 +494,8 @@
     "required": "必填项",
     "invalid_email": "邮箱格式不正确",
     "file_too_large": "文件过大（最大10MB）",
-    "file_type_not_allowed": "不支持该文件类型（仅允许JPEG、PNG、WebP、PDF）"
+    "file_type_not_allowed": "不支持该文件类型（仅允许JPEG、PNG、WebP、PDF）",
+    "min_length": "最少 {{min}} 个字符"
   },
   "integration": {
     "title": "irsway.com 网站集成",

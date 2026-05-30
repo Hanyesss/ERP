@@ -3,7 +3,7 @@ import httpx
 from typing import Optional
 from .schemas import (
     ShipmentCreatePayload, ShipmentStatusPayload,
-    ShipmentResult, ShipmentClientResult, HealthResult,
+    ShipmentResult, ShipmentClientResult, HealthResult, ClientCreateResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,13 @@ class IrswayClient:
             body["places_count"] = total_places
         if price_per_kg is not None:
             body["price_per_kg"] = price_per_kg
+        # cargo_value нужен irsway для расчёта insurance_cost = cargo_value × insurance_percent / 100
+        total_cargo = sum(i.cargo_value for i in items if i.cargo_value) or None
+        if total_cargo is not None:
+            body["cargo_value"] = total_cargo
+            cargo_currency = next((i.cargo_value_currency for i in items if i.cargo_value and i.cargo_value_currency), None)
+            if cargo_currency:
+                body["cargo_value_currency"] = cargo_currency
         body["generate_invoice"] = payload.generate_invoice
         if payload.insurance_percent is not None:
             body["insurance_percent"] = payload.insurance_percent
@@ -81,6 +88,26 @@ class IrswayClient:
             return HealthResult(ok=False, message=f"HTTP {r.status_code}: {r.text[:200]}")
         except Exception as e:
             return HealthResult(ok=False, message=str(e))
+
+    def create_client(self, username: str, password: str, full_name: str, phone: Optional[str] = None, code: Optional[str] = None) -> ClientCreateResult:
+        body: dict = {"username": username, "password": password, "full_name": full_name}
+        if phone:
+            body["phone"] = phone
+        if code:
+            body["code"] = code
+        try:
+            r = httpx.post(
+                self._url("/api/v1/clients/"),
+                headers=self.headers,
+                json=body,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 201):
+                data = r.json()
+                return ClientCreateResult(ok=True, user_id=str(data.get("user_id") or data.get("id") or ""))
+            return ClientCreateResult(ok=False, error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return ClientCreateResult(ok=False, error=str(e))
 
     def lookup_client(self, phone: str) -> ShipmentClientResult:
         try:

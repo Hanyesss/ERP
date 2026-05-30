@@ -31,3 +31,6 @@ export const updateCounterparty = (id: string, data: Partial<CounterpartyFormDat
 
 export const deleteCounterparty = (id: string) =>
   apiClient.delete(`/api/counterparties/${id}`);
+
+export const createSiteAccount = (id: string, data: { login: string; password: string }) =>
+  apiClient.post(`/api/counterparties/${id}/create-site-account`, data);
