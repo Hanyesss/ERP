@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-erp}
       POSTGRES_USER: ${POSTGRES_USER:-erp}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp_dev_password}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +25,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp}:${POSTGRES_PASSWORD:-erp_dev_password}@postgres:5432/${POSTGRES_DB:-erp}
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production_use_random_32_chars}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     volumes:
       - uploads_data:/app/uploads
     depends_on:

@@ -26,7 +26,10 @@ class ShipmentItemPayload(BaseModel):
 class ShipmentCreatePayload(BaseModel):
     erp_order_id: str
     erp_order_number: str
+    # client_phone используется irsway для привязки owner (пока единственный рабочий метод)
+    # client_code передаётся для будущей поддержки на стороне irsway
     client_phone: Optional[str] = None
+    client_code: Optional[str] = None
     client_name: str
     recipient: Optional[str] = None
     destination: Optional[str] = None
@@ -36,6 +39,13 @@ class ShipmentCreatePayload(BaseModel):
     notes: Optional[str] = None
     items: list[ShipmentItemPayload] = []
     generate_invoice: bool = True
+    # Хранимые поля расходов на стороне irsway (в USD).
+    # delivery_cost и insurance_cost НЕ включены — они @property на irsway (weight×price_per_kg
+    # и cargo_value×insurance_percent/100), устанавливать их через API невозможно.
+    insurance_percent: Optional[float] = None  # процент, не валюта
+    china_delivery: Optional[float] = None     # USD
+    packing: Optional[float] = None            # USD (ERP: extra_packing)
+    market_fee: Optional[float] = None         # USD (ERP: loaders)
 
 
 class ShipmentStatusPayload(BaseModel):

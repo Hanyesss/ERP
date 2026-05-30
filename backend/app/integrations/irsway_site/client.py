@@ -50,6 +50,8 @@ class IrswayClient:
             "receiver_name": payload.recipient,
             "goods_name": goods_name,
         }
+        if payload.client_code:
+            body["client_code"] = payload.client_code
         if payload.client_phone:
             body["client_phone"] = payload.client_phone
         if total_weight is not None:
@@ -61,6 +63,14 @@ class IrswayClient:
         if price_per_kg is not None:
             body["price_per_kg"] = price_per_kg
         body["generate_invoice"] = payload.generate_invoice
+        if payload.insurance_percent is not None:
+            body["insurance_percent"] = payload.insurance_percent
+        if payload.china_delivery is not None:
+            body["china_delivery"] = payload.china_delivery
+        if payload.packing is not None:
+            body["packing"] = payload.packing
+        if payload.market_fee is not None:
+            body["loaders"] = payload.market_fee
         return body
 
     def health(self) -> HealthResult:
