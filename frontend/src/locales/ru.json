@@ -12,7 +12,20 @@
     "users": "Сотрудники",
     "notifications": "Уведомления",
     "integrations": "Интеграции",
+    "cash_registers": "Кассы",
     "logout": "Выйти"
+  },
+  "cash": {
+    "add_new": "Новая касса",
+    "edit": "Редактировать кассу",
+    "name": "Название кассы",
+    "balance": "Баланс",
+    "balance_after": "Остаток после",
+    "amount": "Сумма",
+    "direction": "Тип",
+    "notes": "Примечание",
+    "register": "Касса",
+    "select_register": "Выберите кассу"
   },
   "dashboard": {
     "welcome": "Добро пожаловать",
@@ -109,7 +122,15 @@
     "site_login": "Логин",
     "site_password": "Пароль",
     "site_account_created": "Учётная запись создана на сайте",
-    "site_account_error": "Ошибка создания аккаунта на сайте: {{error}}"
+    "site_account_linked": "Код клиента привязан к аккаунту на сайте",
+    "link_site_account": "Привязать код к существующему аккаунту на сайте",
+    "link_site_confirm": "Привязать код этого контрагента к его аккаунту на irsway.com?",
+    "change_site_credentials": "Сменить логин/пароль на сайте",
+    "current_site_login": "Текущий логин на сайте",
+    "new_site_login": "Новый логин (необязательно)",
+    "new_site_password": "Новый пароль (мин. 8 знаков)",
+    "site_credentials_updated": "Логин/пароль на сайте обновлены",
+    "site_account_error": "Ошибка: {{error}}"
   },
   "order": {
     "title": "Заказы",
@@ -294,6 +315,8 @@
     "filter_role": "Роль",
     "filter_status": "Статус",
     "password": "Пароль",
+    "new_password_optional": "Новый пароль (необязательно)",
+    "password_leave_empty": "Оставьте пустым, чтобы не менять",
     "created": "Сотрудник добавлен",
     "updated": "Данные обновлены"
   },
@@ -311,7 +334,10 @@
     "add_new": "Добавить курс",
     "already_exists": "Курс для {{currency}} на {{date}} уже существует",
     "source_manual": "Вручную",
-    "source_auto": "Автоматически"
+    "source_auto": "Автоматически",
+    "edit_rates": "Изменить курсы",
+    "rates_for_date": "Курсы на дату",
+    "derived": "вычисляется автоматически"
   },
   "payment": {
     "title": "Платежи",

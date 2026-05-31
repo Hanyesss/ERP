@@ -67,19 +67,19 @@ export default function DashboardPage({ user }: Props) {
               <DebtsWidget data={widgets.debts} />
             </Col>
           )}
-          {isAdminOrAccountant && widgets.profit_dynamics && (
+          {isAdminOrAccountant && (
             <Col xs={24} lg={16}>
-              <ProfitChartWidget data={widgets.profit_dynamics} />
+              <ProfitChartWidget data={widgets.profit_dynamics ?? []} period={period} />
             </Col>
           )}
-          {isAdminOrAccountant && widgets.expense_structure?.length > 0 && (
+          {isAdminOrAccountant && (
             <Col xs={24} lg={8}>
-              <ExpenseStructureWidget data={widgets.expense_structure} />
+              <ExpenseStructureWidget data={widgets.expense_structure ?? []} />
             </Col>
           )}
-          {isAdminOrAccountant && widgets.top_clients?.length > 0 && (
+          {isAdminOrAccountant && (
             <Col xs={24} md={12} lg={8}>
-              <TopClientsWidget data={widgets.top_clients} />
+              <TopClientsWidget data={widgets.top_clients ?? []} />
             </Col>
           )}
 

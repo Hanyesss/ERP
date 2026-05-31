@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { createPayment } from "../api/payments";
+import { getCashRegisters } from "../api/cashRegisters";
 import { getOrders } from "../api/orders";
 import { getPurchases } from "../api/purchases";
 import { getExchangeRates } from "../api/exchangeRates";
@@ -47,6 +48,7 @@ export default function PaymentFormPage() {
   const [allocRows, setAllocRows] = useState<AllocRow[]>([]);
 
   const paymentDate: dayjs.Dayjs | null = Form.useWatch("payment_date", form);
+  const selectedCurrency: string = Form.useWatch("currency", form) || "CNY";
   const dateStr = paymentDate?.format("YYYY-MM-DD");
 
   useEffect(() => {
@@ -58,6 +60,15 @@ export default function PaymentFormPage() {
       ...(preselectedCpId ? { counterparty_id: preselectedCpId } : {}),
     });
   }, [form]);
+
+  // Кассы — фильтруем по валюте платежа
+  const { data: cashRegisters = [] } = useQuery({
+    queryKey: ["cash-registers"],
+    queryFn: () => getCashRegisters().then(r => r.data),
+  });
+  const cashOptions = cashRegisters
+    .filter((r: any) => r.currency === selectedCurrency && r.is_active)
+    .map((r: any) => ({ value: r.id, label: `${r.name} (${r.currency})` }));
 
   // Auto-fetch exchange rate when currency/date changes
   const { data: ratesData } = useQuery({
@@ -175,6 +186,7 @@ export default function PaymentFormPage() {
     createMutation.mutate({
       direction,
       counterparty_id: values.counterparty_id,
+      cash_register_id: values.cash_register_id,
       payment_date: values.payment_date.format("YYYY-MM-DD"),
       currency: values.currency,
       amount: values.amount,
@@ -283,7 +295,23 @@ export default function PaymentFormPage() {
               <Form.Item name="currency" label={t("payment.currency")} rules={[{ required: true }]}>
                 <Select
                   options={CURRENCIES.map(c => ({ value: c, label: c }))}
-                  onChange={(v) => setCurrency(v)}
+                  onChange={(v) => { setCurrency(v); form.setFieldValue("cash_register_id", undefined); }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="cash_register_id"
+                label={t("cash.register")}
+                rules={[{ required: true, message: t("cash.select_register") }]}
+              >
+                <Select
+                  options={cashOptions}
+                  placeholder={t("cash.select_register")}
+                  notFoundContent={<span style={{ color: "#aaa" }}>Нет касс с валютой {selectedCurrency}</span>}
                 />
               </Form.Item>
             </Col>

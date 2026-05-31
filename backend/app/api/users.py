@@ -75,6 +75,8 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+    login: Optional[str] = None
+    password: Optional[str] = None
     lang: Optional[UserLang] = None
     roles: Optional[List[UserRole]] = None
     is_active: Optional[bool] = None
@@ -84,6 +86,13 @@ class UserUpdate(BaseModel):
     def roles_not_empty(cls, v: Optional[List[UserRole]]) -> Optional[List[UserRole]]:
         if v is not None and len(v) == 0:
             raise ValueError("At least one role is required")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) < 6:
+            raise ValueError("Password must be at least 6 characters")
         return v
 
 
@@ -223,6 +232,17 @@ async def update_user(
     user = await _get_user_or_404(db, user_id)
 
     changes: dict = {}
+
+    if body.login is not None and body.login != user.login:
+        existing = await db.execute(select(User).where(User.login == body.login))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Login already taken")
+        changes["login"] = body.login
+        user.login = body.login
+
+    if body.password is not None:
+        user.password_hash = hash_password(body.password)
+        changes["action"] = "password_changed"
 
     if body.full_name is not None:
         changes["full_name"] = body.full_name

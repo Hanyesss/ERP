@@ -131,6 +131,12 @@ class SiteAccountBody(BaseModel):
     password: str
 
 
+class SiteCredentialsBody(BaseModel):
+    current_login: str
+    new_login: Optional[str] = None
+    new_password: Optional[str] = None
+
+
 @router.post("/{cp_id}/create-site-account")
 async def create_site_account(
     cp_id: uuid.UUID,
@@ -160,6 +166,68 @@ async def create_site_account(
     if not result.ok:
         raise HTTPException(422, result.error or "Ошибка создания аккаунта на сайте")
     return {"ok": True, "user_id": result.user_id}
+
+
+@router.post("/{cp_id}/link-site-account")
+async def link_site_account(
+    cp_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Привязать client_code к существующему аккаунту на irsway.com (по номеру телефона)."""
+    from app.integrations.irsway_site.service import get_active_client
+    import asyncio
+
+    cp = await _get_or_404(db, cp_id)
+    if not cp.code:
+        raise HTTPException(422, "У контрагента не задан код (code)")
+
+    client = await get_active_client(db)
+    if client is None:
+        raise HTTPException(422, "Интеграция с сайтом не настроена или отключена")
+
+    phone = cp.contact_info.get("phone") if isinstance(cp.contact_info, dict) else None
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.link_client(code=cp.code.upper()),
+    )
+    if not result.ok:
+        raise HTTPException(422, result.error or "Не удалось привязать аккаунт")
+    return {"ok": True, "user_id": result.user_id}
+
+
+@router.patch("/{cp_id}/update-site-credentials")
+async def update_site_credentials(
+    cp_id: uuid.UUID,
+    body: SiteCredentialsBody,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Сменить логин и/или пароль клиента на irsway.com."""
+    from app.integrations.irsway_site.service import get_active_client
+    import asyncio
+
+    if not body.new_login and not body.new_password:
+        raise HTTPException(422, "Укажите new_login и/или new_password")
+
+    client = await get_active_client(db)
+    if client is None:
+        raise HTTPException(422, "Интеграция с сайтом не настроена или отключена")
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.update_client_credentials(
+            username=body.current_login,
+            new_username=body.new_login or None,
+            new_password=body.new_password or None,
+        ),
+    )
+    if not result.ok:
+        raise HTTPException(422, result.error or "Не удалось обновить данные")
+    return {"ok": True, "username": result.user_id}
 
 
 @router.delete("/{cp_id}", status_code=status.HTTP_204_NO_CONTENT)

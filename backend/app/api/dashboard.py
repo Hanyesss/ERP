@@ -201,8 +201,21 @@ async def get_widgets(
             "revenue_change_pct": pct_change(revenue, prev_revenue),
         }
 
-        # Profit dynamics — last 6 months
-        six_months_ago = today.replace(day=1) - timedelta(days=150)
+        # Profit dynamics — from date_from's month; short periods (<3m) get 3-month context
+        dyn_start = date_from.replace(day=1)
+        period_months = (date_to.year - date_from.year) * 12 + (date_to.month - date_from.month) + 1
+        if period_months < 3:
+            _y, _m = today.year, today.month
+            for _ in range(2):
+                if _m > 1:
+                    _m -= 1
+                else:
+                    _m = 12
+                    _y -= 1
+            min_dyn_start = date(_y, _m, 1)
+            if dyn_start > min_dyn_start:
+                dyn_start = min_dyn_start
+
         _month = text("'month'")
         pay_month = func.date_trunc(_month, Payment.payment_date)
         dyn_rows = (await db.execute(
@@ -213,7 +226,7 @@ async def get_widgets(
             )
             .where(
                 Payment.is_active == True,
-                Payment.payment_date >= six_months_ago,
+                Payment.payment_date >= dyn_start,
             )
             .group_by(pay_month, Payment.direction)
             .order_by(pay_month)
@@ -237,7 +250,7 @@ async def get_widgets(
             )
             .where(
                 Expense.is_active == True,
-                Expense.expense_date >= six_months_ago,
+                Expense.expense_date >= dyn_start,
                 not_(and_(
                     Expense.is_reimbursement == True,
                     Expense.reimburse_status == ReimburseStatusEnum.rejected,
@@ -250,6 +263,18 @@ async def get_widgets(
             if m not in months:
                 months[m] = {"month": m, "revenue": D0, "cost": D0}
             months[m]["expenses"] = r.total or D0
+
+        # Fill all months from dyn_start to date_to with zeros if missing
+        _cur = dyn_start
+        _end_month = date_to.replace(day=1)
+        while _cur <= _end_month:
+            m_str = _cur.strftime("%Y-%m")
+            if m_str not in months:
+                months[m_str] = {"month": m_str, "revenue": D0, "cost": D0}
+            if _cur.month == 12:
+                _cur = _cur.replace(year=_cur.year + 1, month=1)
+            else:
+                _cur = _cur.replace(month=_cur.month + 1)
 
         result["profit_dynamics"] = [
             {

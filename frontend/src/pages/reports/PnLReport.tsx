@@ -123,7 +123,7 @@ export default function PnLReport() {
 
   const btOptions = [
     { value: "", label: t("report.all_types") },
-    ...(businessTypes || []).map((bt: any) => ({ value: bt.id, label: bt.name })),
+    ...(businessTypes || []).map((bt: any) => ({ value: bt.id, label: lang === "zh" && bt.name_cn ? bt.name_cn : bt.name })),
   ];
 
   const whOptions = [

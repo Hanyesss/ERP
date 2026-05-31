@@ -4,7 +4,7 @@ import {
   Form, Input, Select, DatePicker, Button, Card, Typography, Alert,
   Space, Row, Col, Statistic, message, Divider, Tooltip, Tag,
 } from "antd";
-import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
+import { UploadOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
@@ -38,7 +38,7 @@ const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 interface Props { user: User }
 
 export default function OrderFormPage({ user }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const isEdit = !!id;
@@ -380,12 +380,26 @@ export default function OrderFormPage({ user }: Props) {
     else createMutation.mutate(payload);
   };
 
-  const btOptions = (businessTypes || []).map((bt: any) => ({ value: bt.id, label: bt.name }));
+  const btOptions = (businessTypes || []).map((bt: any) => ({ value: bt.id, label: i18n.language === "zh" && bt.name_cn ? bt.name_cn : bt.name }));
   // Manager name: for edit — from loaded order; for new — current user
   const managerName = isEdit
     ? ((existingOrder as any)?.manager_name || user.full_name)
     : user.full_name;
   const missingRates = rateCheck?.missing ?? [];
+
+  // Производные значения курсов для виджета и предзаполнения формы
+  const ratesForWidget = useMemo(() => {
+    const r = rateCheck?.rates ?? {};
+    const rub = r["RUB"] as number | undefined;
+    const usd = r["USD"] as number | undefined;
+    const usdt = r["USDT"] as number | undefined;
+    return {
+      cny_to_rub:  rub              ? parseFloat((1 / rub).toFixed(4))         : undefined,
+      usd_to_rub:  rub && usd       ? parseFloat((usd / rub).toFixed(4))        : undefined,
+      usd_to_cny:  usd              ? parseFloat(Number(usd).toFixed(4))        : undefined,
+      usd_to_usdt: usd && usdt      ? parseFloat((usd / usdt).toFixed(4))       : undefined,
+    };
+  }, [rateCheck]);
 
   return (
     <div style={{ maxWidth: 1200 }}>
@@ -406,12 +420,40 @@ export default function OrderFormPage({ user }: Props) {
         </Col>
       </Row>
 
+      {dateStr && (
+        <Card
+          size="small"
+          style={{ marginBottom: 16, background: "#fafafa" }}
+          extra={
+            <Button size="small" icon={<EditOutlined />} onClick={() => setRateModalOpen(true)}>
+              {t("exchange_rate.edit_rates")}
+            </Button>
+          }
+          title={<span style={{ fontSize: 13 }}>{t("exchange_rate.rates_for_date")}: <b>{dateStr}</b></span>}
+        >
+          <Row gutter={[24, 0]}>
+            {[
+              { label: "1 CNY = ? RUB", value: ratesForWidget.cny_to_rub },
+              { label: "1 USD = ? RUB", value: ratesForWidget.usd_to_rub },
+              { label: "1 USD = ? CNY", value: ratesForWidget.usd_to_cny },
+              { label: "1 USD = ? USDT", value: ratesForWidget.usd_to_usdt },
+            ].map(({ label, value }) => (
+              <Col key={label}>
+                <span style={{ color: "#888", fontSize: 12 }}>{label}:</span>{" "}
+                <b style={{ color: value ? "#222" : "#d9d9d9" }}>{value ?? "—"}</b>
+              </Col>
+            ))}
+          </Row>
+        </Card>
+      )}
+
       {missingRates.length > 0 && !isLogistics && (
         <Alert
           type="warning"
           style={{ marginBottom: 16 }}
           message={t("order.missing_rate_warning", { currencies: missingRates.join(", "), date: dateStr })}
           action={<Button size="small" onClick={() => setRateModalOpen(true)}>{t("order.add_rate")}</Button>}
+
           showIcon
         />
       )}
@@ -628,6 +670,7 @@ export default function OrderFormPage({ user }: Props) {
       <ExchangeRateForm
         open={rateModalOpen}
         defaultDate={dateStr}
+        initialRates={ratesForWidget}
         onClose={() => setRateModalOpen(false)}
       />
     </div>

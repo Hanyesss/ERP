@@ -27,6 +27,7 @@ from app.schemas.payment import (
 )
 from app.utils.audit import write_audit
 from app.services.notifications import on_payment_unassigned, on_order_paid, on_purchase_paid
+from app.models.cash_register import CashRegister, CashTransaction
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -133,6 +134,12 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
         select(User).where(User.id == payment.created_by)
     )).scalar_one_or_none()
 
+    cash_reg = None
+    if payment.cash_register_id:
+        cash_reg = (await db.execute(
+            select(CashRegister).where(CashRegister.id == payment.cash_register_id)
+        )).scalar_one_or_none()
+
     # Load allocations
     alloc_rows = await db.execute(
         select(PaymentAllocation, Order.order_number)
@@ -176,6 +183,8 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
         amount_cny=payment.amount_cny,
         network_fee=payment.network_fee,
         notes=payment.notes,
+        cash_register_id=payment.cash_register_id,
+        cash_register_name=cash_reg.name if cash_reg else None,
         is_active=payment.is_active,
         created_by_name=creator.full_name if creator else "",
         created_at=payment.created_at,
@@ -427,6 +436,13 @@ async def create_payment(
     if not cp:
         raise HTTPException(422, "Counterparty not found or inactive")
 
+    # Validate cash register
+    cash_reg = (await db.execute(
+        select(CashRegister).where(CashRegister.id == body.cash_register_id, CashRegister.is_active == True)
+    )).scalar_one_or_none()
+    if not cash_reg:
+        raise HTTPException(422, "Касса не найдена или неактивна")
+
     # Auto-fetch rate if not CNY
     rate = body.rate_to_cny
     if body.currency != "CNY" and rate == Decimal("1"):
@@ -446,6 +462,7 @@ async def create_payment(
         company_id=company.id,
         direction=body.direction,
         counterparty_id=body.counterparty_id,
+        cash_register_id=body.cash_register_id,
         payment_date=body.payment_date,
         currency=body.currency,
         amount=body.amount,
@@ -457,6 +474,23 @@ async def create_payment(
         is_active=True,
     )
     db.add(payment)
+    await db.flush()
+
+    # Создаём транзакцию кассы
+    from app.api.cash_registers import _get_balance
+    current_balance = await _get_balance(db, body.cash_register_id)
+    tx_direction = "in" if body.direction == "in" else "out"
+    new_balance = current_balance + body.amount if tx_direction == "in" else current_balance - body.amount
+    db.add(CashTransaction(
+        id=uuid.uuid4(),
+        cash_register_id=body.cash_register_id,
+        payment_id=payment.id,
+        direction=tx_direction,
+        amount=body.amount,
+        balance_after=new_balance,
+        notes=body.notes,
+        created_by=current_user.id,
+    ))
     await db.flush()
 
     await _apply_allocations(db, payment, body.allocations)

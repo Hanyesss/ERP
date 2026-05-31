@@ -7,6 +7,10 @@ export interface CounterpartyFormValues extends CounterpartyFormData {
   create_site_account?: boolean;
   site_login?: string;
   site_password?: string;
+  // при редактировании
+  current_site_login?: string;
+  new_site_login?: string;
+  new_site_password?: string;
 }
 
 interface Props {
@@ -22,6 +26,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
   const { t } = useTranslation();
   const [form] = Form.useForm<CounterpartyFormValues>();
   const [createAccount, setCreateAccount] = useState(false);
+  const [changeCredentials, setChangeCredentials] = useState(false);
 
   const watchedType = Form.useWatch("type", form);
   const isClient = watchedType === "client" || watchedType === "both";
@@ -29,6 +34,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
   useEffect(() => {
     if (open) {
       setCreateAccount(false);
+      setChangeCredentials(false);
       if (editing) {
         form.setFieldsValue({
           name: editing.name,
@@ -135,7 +141,42 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
                 <Form.Item
                   name="site_password"
                   label={t("counterparty.site_password")}
-                  rules={[{ required: createAccount, message: t("validation.required") }, { min: 6, message: t("validation.min_length", { min: 6 }) }]}
+                  rules={[{ required: createAccount, message: t("validation.required") }, { min: 8, message: t("validation.min_length", { min: 8 }) }]}
+                >
+                  <Input.Password autoComplete="new-password" />
+                </Form.Item>
+              </div>
+            )}
+          </>
+        )}
+
+        {editing && isClient && (
+          <>
+            <Divider style={{ margin: "12px 0" }} />
+            <Checkbox
+              checked={changeCredentials}
+              onChange={(e) => setChangeCredentials(e.target.checked)}
+            >
+              {t("counterparty.change_site_credentials")}
+            </Checkbox>
+            {changeCredentials && (
+              <div style={{ marginTop: 12 }}>
+                <Form.Item
+                  name="current_site_login"
+                  label={t("counterparty.current_site_login")}
+                  rules={[{ required: changeCredentials, message: t("validation.required") }]}
+                >
+                  <Input autoComplete="off" />
+                </Form.Item>
+                <Form.Item name="new_site_login" label={t("counterparty.new_site_login")}>
+                  <Input autoComplete="off" />
+                </Form.Item>
+                <Form.Item
+                  name="new_site_password"
+                  label={t("counterparty.new_site_password")}
+                  rules={[
+                    { min: 8, message: t("validation.min_length", { min: 8 }) },
+                  ]}
                 >
                   <Input.Password autoComplete="new-password" />
                 </Form.Item>

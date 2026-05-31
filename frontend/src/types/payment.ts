@@ -65,6 +65,7 @@ export interface AllocationInput {
 export interface PaymentCreateInput {
   direction: PaymentDirection;
   counterparty_id: string;
+  cash_register_id: string;
   payment_date: string;
   currency: PaymentCurrency;
   amount: number;

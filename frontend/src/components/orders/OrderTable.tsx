@@ -18,7 +18,7 @@ const { Text } = Typography;
 const fmtCny = (v: number) => v?.toLocaleString("ru-RU", { minimumFractionDigits: 2 });
 
 export default function OrderTable() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
@@ -165,7 +165,7 @@ export default function OrderTable() {
     },
   ];
 
-  const btOptions = (businessTypes || []).map(bt => ({ value: bt.id, label: bt.name }));
+  const btOptions = (businessTypes || []).map(bt => ({ value: bt.id, label: i18n.language === "zh" && bt.name_cn ? bt.name_cn : bt.name }));
   const managerOptions = (managers || []).map(m => ({ value: m.id, label: m.full_name }));
   const statusOptions = ["new", "active", "closed", "cancelled"].map(s => ({ value: s, label: t(`order.status_${s}`) }));
 

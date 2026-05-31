@@ -86,6 +86,40 @@ async def list_rates(
     return ExchangeRateListResponse(items=items, total=total)
 
 
+@router.put("/upsert", response_model=ExchangeRateResponse)
+async def upsert_rate(
+    body: ExchangeRateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Создать или обновить курс за дату."""
+    result = await db.execute(
+        select(ExchangeRate)
+        .where(ExchangeRate.currency == body.currency, ExchangeRate.rate_date == body.rate_date)
+    )
+    rate = result.scalar_one_or_none()
+    if rate:
+        rate.rate_to_cny = body.rate_to_cny
+        rate.source = body.source
+    else:
+        rate = ExchangeRate(
+            id=uuid.uuid4(),
+            currency=body.currency,
+            rate_to_cny=body.rate_to_cny,
+            rate_date=body.rate_date,
+            created_by=current_user.id,
+            source=body.source,
+        )
+        db.add(rate)
+    await db.commit()
+    await db.refresh(rate)
+    return ExchangeRateResponse(
+        id=rate.id, currency=rate.currency, rate_to_cny=rate.rate_to_cny,
+        rate_date=rate.rate_date, created_by=rate.created_by,
+        created_by_name=current_user.full_name, source=rate.source, created_at=rate.created_at,
+    )
+
+
 @router.post("", response_model=ExchangeRateResponse, status_code=status.HTTP_201_CREATED)
 async def create_rate(
     body: ExchangeRateCreate,

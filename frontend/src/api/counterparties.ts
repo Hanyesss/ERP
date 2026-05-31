@@ -34,3 +34,9 @@ export const deleteCounterparty = (id: string) =>
 
 export const createSiteAccount = (id: string, data: { login: string; password: string }) =>
   apiClient.post(`/api/counterparties/${id}/create-site-account`, data);
+
+export const linkSiteAccount = (id: string) =>
+  apiClient.post(`/api/counterparties/${id}/link-site-account`);
+
+export const updateSiteCredentials = (id: string, data: { current_login: string; new_login?: string; new_password?: string }) =>
+  apiClient.patch(`/api/counterparties/${id}/update-site-credentials`, data);

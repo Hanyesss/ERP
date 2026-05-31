@@ -26,8 +26,7 @@ class ShipmentItemPayload(BaseModel):
 class ShipmentCreatePayload(BaseModel):
     erp_order_id: str
     erp_order_number: str
-    # client_phone используется irsway для привязки owner (пока единственный рабочий метод)
-    # client_code передаётся для будущей поддержки на стороне irsway
+    # client_code используется irsway для привязки owner (приоритет); client_phone — запасной вариант
     client_phone: Optional[str] = None
     client_code: Optional[str] = None
     client_name: str

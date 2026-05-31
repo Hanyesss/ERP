@@ -1,6 +1,6 @@
 export interface ExchangeRate {
   id: string;
-  currency: "RUB" | "USDT";
+  currency: "RUB" | "USDT" | "USD";
   rate_to_cny: number;
   rate_date: string;
   created_by: string;

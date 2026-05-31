@@ -1,17 +1,23 @@
 import { useEffect } from "react";
-import { Modal, Form, Select, InputNumber, DatePicker, message } from "antd";
+import { Modal, Form, InputNumber, DatePicker, Row, Col } from "antd";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createExchangeRate } from "../../api/exchangeRates";
+import { upsertExchangeRate } from "../../api/exchangeRates";
 
 interface Props {
   open: boolean;
   defaultDate?: string;
+  initialRates?: {
+    cny_to_rub?: number;
+    usd_to_rub?: number;
+    usd_to_cny?: number;
+    usd_to_usdt?: number;
+  };
   onClose: () => void;
 }
 
-export default function ExchangeRateForm({ open, defaultDate, onClose }: Props) {
+export default function ExchangeRateForm({ open, defaultDate, initialRates, onClose }: Props) {
   const { t } = useTranslation();
   const [form] = Form.useForm();
   const qc = useQueryClient();
@@ -19,30 +25,36 @@ export default function ExchangeRateForm({ open, defaultDate, onClose }: Props) 
   useEffect(() => {
     if (open) {
       form.resetFields();
-      if (defaultDate) form.setFieldValue("rate_date", dayjs(defaultDate));
+      form.setFieldsValue({
+        rate_date: dayjs(defaultDate || dayjs().format("YYYY-MM-DD")),
+        cny_to_rub: initialRates?.cny_to_rub,
+        usd_to_rub: initialRates?.usd_to_rub,
+        usd_to_cny: initialRates?.usd_to_cny,
+        usd_to_usdt: initialRates?.usd_to_usdt,
+      });
     }
-  }, [open, defaultDate, form]);
+  }, [open, defaultDate, initialRates, form]);
 
   const mutation = useMutation({
-    mutationFn: (values: any) =>
-      createExchangeRate({
-        currency: values.currency,
-        rate_to_cny: values.rate_to_cny,
-        rate_date: values.rate_date.format("YYYY-MM-DD"),
-      }),
+    mutationFn: async (values: any) => {
+      const dateStr: string = values.rate_date.format("YYYY-MM-DD");
+      // 1 RUB = (1 / cny_to_rub) CNY
+      const rubRateToCny = 1 / values.cny_to_rub;
+      // 1 USD = usd_to_cny CNY
+      const usdRateToCny = values.usd_to_cny;
+      // 1 USDT = usd_to_cny / usd_to_usdt CNY
+      const usdtRateToCny = values.usd_to_cny / values.usd_to_usdt;
+
+      await Promise.all([
+        upsertExchangeRate({ currency: "RUB", rate_to_cny: rubRateToCny, rate_date: dateStr }),
+        upsertExchangeRate({ currency: "USD", rate_to_cny: usdRateToCny, rate_date: dateStr }),
+        upsertExchangeRate({ currency: "USDT", rate_to_cny: usdtRateToCny, rate_date: dateStr }),
+      ]);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["exchange-rates"] });
       qc.invalidateQueries({ queryKey: ["exchange-rates-check"] });
-      message.success(t("common.save") + " ✓");
       onClose();
-    },
-    onError: (err: any) => {
-      const detail = err.response?.data?.detail || "";
-      if (detail.includes("already exists")) {
-        message.error(t("exchange_rate.already_exists", { currency: "", date: "" }));
-      } else {
-        message.error(detail || "Error");
-      }
     },
   });
 
@@ -58,19 +70,35 @@ export default function ExchangeRateForm({ open, defaultDate, onClose }: Props) 
       destroyOnClose
     >
       <Form form={form} layout="vertical">
-        <Form.Item name="currency" label={t("exchange_rate.currency")} rules={[{ required: true }]}>
-          <Select options={[
-            { value: "RUB", label: "RUB" },
-            { value: "USDT", label: "USDT" },
-            { value: "USD", label: "USD" },
-          ]} />
-        </Form.Item>
-        <Form.Item name="rate_to_cny" label={t("exchange_rate.rate")} rules={[{ required: true }]}>
-          <InputNumber min={0} precision={8} step={0.001} style={{ width: "100%" }} placeholder="0.085" />
-        </Form.Item>
         <Form.Item name="rate_date" label={t("exchange_rate.date")} rules={[{ required: true }]}>
           <DatePicker style={{ width: "100%" }} />
         </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="cny_to_rub" label="1 CNY = ? RUB" rules={[{ required: true }, { type: "number", min: 0.0001 }]}>
+              <InputNumber min={0} precision={4} step={0.1} style={{ width: "100%" }} placeholder="11.50" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="usd_to_rub" label="1 USD = ? RUB" rules={[{ required: true }, { type: "number", min: 0.0001 }]}>
+              <InputNumber min={0} precision={4} step={1} style={{ width: "100%" }} placeholder="85.00" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="usd_to_cny" label="1 USD = ? CNY" rules={[{ required: true }, { type: "number", min: 0.0001 }]}>
+              <InputNumber min={0} precision={4} step={0.01} style={{ width: "100%" }} placeholder="7.25" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="usd_to_usdt" label="1 USD = ? USDT" rules={[{ required: true }, { type: "number", min: 0.0001 }]}>
+              <InputNumber min={0} precision={4} step={0.01} style={{ width: "100%" }} placeholder="1.02" />
+            </Form.Item>
+          </Col>
+        </Row>
       </Form>
     </Modal>
   );

@@ -136,10 +136,12 @@ export default function UsersPage() {
     if (editingUser) {
       const patch: any = {
         full_name: values.full_name,
+        login: values.login,
         lang: values.lang,
         roles: values.roles,
         is_active: values.is_active,
       };
+      if (values.password) patch.password = values.password;
       updateMut.mutate({ id: editingUser.id, data: patch });
     } else {
       createMut.mutate({
@@ -329,21 +331,19 @@ export default function UsersPage() {
             label={t("user.login")}
             rules={[{ required: true, message: t("validation.required") }]}
           >
-            <Input disabled={!!editingUser} />
+            <Input />
           </Form.Item>
 
-          {!editingUser && (
-            <Form.Item
-              name="password"
-              label={t("user.password")}
-              rules={[
-                { required: true, message: t("validation.required") },
-                { min: 6, message: t("user.password_min_length") },
-              ]}
-            >
-              <Input.Password />
-            </Form.Item>
-          )}
+          <Form.Item
+            name="password"
+            label={editingUser ? t("user.new_password_optional") : t("user.password")}
+            rules={[
+              { required: !editingUser, message: t("validation.required") },
+              { min: 6, message: t("user.password_min_length") },
+            ]}
+          >
+            <Input.Password placeholder={editingUser ? t("user.password_leave_empty") : undefined} />
+          </Form.Item>
 
           <Form.Item
             name="lang"

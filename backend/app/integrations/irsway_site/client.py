@@ -109,6 +109,42 @@ class IrswayClient:
         except Exception as e:
             return ClientCreateResult(ok=False, error=str(e))
 
+    def update_client_credentials(self, username: str, new_username: Optional[str] = None, new_password: Optional[str] = None) -> ClientCreateResult:
+        body: dict = {}
+        if new_username:
+            body["new_username"] = new_username
+        if new_password:
+            body["new_password"] = new_password
+        try:
+            r = httpx.patch(
+                self._url(f"/api/v1/clients/{username}/"),
+                headers=self.headers,
+                json=body,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                return ClientCreateResult(ok=True, user_id=data.get("username", ""))
+            return ClientCreateResult(ok=False, error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return ClientCreateResult(ok=False, error=str(e))
+
+    def link_client(self, code: str) -> ClientCreateResult:
+        try:
+            r = httpx.post(
+                self._url("/api/v1/clients/link/"),
+                headers=self.headers,
+                json={"code": code},
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 201):
+                data = r.json()
+                client = data.get("client") or {}
+                return ClientCreateResult(ok=True, user_id=str(client.get("user_id") or ""))
+            return ClientCreateResult(ok=False, error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return ClientCreateResult(ok=False, error=str(e))
+
     def lookup_client(self, phone: str) -> ShipmentClientResult:
         try:
             r = httpx.get(

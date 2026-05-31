@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button, DatePicker, Space } from "antd";
 import { useTranslation } from "react-i18next";
 import dayjs, { Dayjs } from "dayjs";
@@ -12,12 +13,6 @@ export interface Period {
 
 const { RangePicker } = DatePicker;
 
-const today = () => dayjs();
-const startOfMonth = () => today().startOf("month");
-const startOfWeek = () => today().startOf("week");
-const startOfQuarter = () => today().startOf("quarter");
-const startOfYear = () => today().startOf("year");
-
 interface Props {
   value: Period;
   onChange: (p: Period) => void;
@@ -25,28 +20,30 @@ interface Props {
 
 export default function PeriodPicker({ value, onChange }: Props) {
   const { t } = useTranslation();
-  const set = (from: Dayjs, to: Dayjs) =>
-    onChange({ date_from: from.format("YYYY-MM-DD"), date_to: to.format("YYYY-MM-DD") });
+  // Track which preset was clicked — prevents two buttons being active simultaneously
+  const [activeKey, setActiveKey] = useState<string>("month");
 
-  const isActive = (from: Dayjs, to: Dayjs) =>
-    value.date_from === from.format("YYYY-MM-DD") && value.date_to === to.format("YYYY-MM-DD");
+  const set = (key: string, from: Dayjs, to: Dayjs) => {
+    setActiveKey(key);
+    onChange({ date_from: from.format("YYYY-MM-DD"), date_to: to.format("YYYY-MM-DD") });
+  };
 
   const presets = [
-    { label: t("dashboard.period_today"), from: today(), to: today() },
-    { label: t("dashboard.period_week"), from: startOfWeek(), to: today() },
-    { label: t("dashboard.period_month"), from: startOfMonth(), to: today() },
-    { label: t("dashboard.period_quarter"), from: startOfQuarter(), to: today() },
-    { label: t("dashboard.period_year"), from: startOfYear(), to: today() },
+    { key: "today",   label: t("dashboard.period_today"),   from: dayjs(),                          to: dayjs() },
+    { key: "week",    label: t("dashboard.period_week"),    from: dayjs().subtract(6, "day"),        to: dayjs() },
+    { key: "month",   label: t("dashboard.period_month"),   from: dayjs().startOf("month"),          to: dayjs() },
+    { key: "quarter", label: t("dashboard.period_quarter"), from: dayjs().startOf("quarter"),        to: dayjs().endOf("quarter") },
+    { key: "year",    label: t("dashboard.period_year"),    from: dayjs().startOf("year"),           to: dayjs().endOf("year") },
   ];
 
   return (
     <Space wrap size={4}>
       {presets.map(p => (
         <Button
-          key={p.label}
+          key={p.key}
           size="small"
-          type={isActive(p.from, p.to) ? "primary" : "default"}
-          onClick={() => set(p.from, p.to)}
+          type={activeKey === p.key ? "primary" : "default"}
+          onClick={() => set(p.key, p.from, p.to)}
         >
           {p.label}
         </Button>
@@ -55,7 +52,13 @@ export default function PeriodPicker({ value, onChange }: Props) {
         size="small"
         value={[dayjs(value.date_from), dayjs(value.date_to)]}
         onChange={range => {
-          if (range?.[0] && range?.[1]) set(range[0], range[1]);
+          if (range?.[0] && range?.[1]) {
+            setActiveKey("custom");
+            onChange({
+              date_from: range[0].format("YYYY-MM-DD"),
+              date_to: range[1].format("YYYY-MM-DD"),
+            });
+          }
         }}
         allowClear={false}
       />

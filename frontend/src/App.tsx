@@ -26,6 +26,7 @@ import ReportsPage from "./pages/reports/ReportsPage";
 import UsersPage from "./pages/UsersPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import IntegrationSettingsPage from "./pages/IntegrationSettingsPage";
+import CashRegistersPage from "./pages/CashRegistersPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
@@ -80,6 +81,7 @@ function Inner() {
             <Route path="/users" element={<UsersPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings/integrations" element={<IntegrationSettingsPage />} />
+            <Route path="/cash-registers" element={<CashRegistersPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

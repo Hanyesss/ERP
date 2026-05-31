@@ -3,7 +3,7 @@ import { Layout, Menu, Button, Typography, Space, Tooltip } from "antd";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
-  BarChartOutlined, DatabaseOutlined, SettingOutlined,
+  BarChartOutlined, DatabaseOutlined, SettingOutlined, BankOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -68,6 +68,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.payments"),
     },
 
+    hasRole(user, "accountant", "admin") && {
+      key: "/cash-registers",
+      icon: <BankOutlined />,
+      label: t("nav.cash_registers"),
+    },
+
     {
       key: "/expenses",
       icon: <AccountBookOutlined />,
@@ -115,6 +121,8 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/expenses"
     : location.pathname.startsWith("/exchange-rates")
     ? "/exchange-rates"
+    : location.pathname.startsWith("/cash-registers")
+    ? "/cash-registers"
     : location.pathname.startsWith("/warehouses")
     ? "/warehouses"
     : location.pathname.startsWith("/reports")

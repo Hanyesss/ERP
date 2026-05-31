@@ -1,77 +1,127 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Button, Col, DatePicker, Row, Select, Table, Tag, Typography } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
-import type { ColumnsType } from "antd/es/table";
+import { Button, Col, DatePicker, Row, Table, Typography } from "antd";
+import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getExchangeRates } from "../api/exchangeRates";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import type { ExchangeRate } from "../types/exchangeRate";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+interface RatesByDate {
+  date: string;
+  rub?: ExchangeRate;
+  usd?: ExchangeRate;
+  usdt?: ExchangeRate;
+}
+
+function fmt(n: number, digits = 4) {
+  return n.toFixed(digits);
+}
 
 export default function ExchangeRatesPage() {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
-  const [currency, setCurrency] = useState<string | undefined>();
+  const [editDate, setEditDate] = useState<string | undefined>();
+  const [editInitial, setEditInitial] = useState<any>(undefined);
   const [dateRange, setDateRange] = useState<[string, string] | null>(null);
 
-  const params = {
-    currency,
-    date_from: dateRange?.[0],
-    date_to: dateRange?.[1],
-  };
+  const params = { date_from: dateRange?.[0], date_to: dateRange?.[1] };
 
   const { data, isLoading } = useQuery({
     queryKey: ["exchange-rates", params],
     queryFn: () => getExchangeRates(params).then(r => r.data),
   });
 
-  const columns: ColumnsType<ExchangeRate> = [
-    {
-      title: t("exchange_rate.currency"),
-      dataIndex: "currency",
-      key: "currency",
-      width: 100,
-      render: (v) => <Tag color={v === "RUB" ? "blue" : "gold"}>{v}</Tag>,
-    },
-    {
-      title: t("exchange_rate.rate"),
-      dataIndex: "rate_to_cny",
-      key: "rate_to_cny",
-      width: 150,
-      render: (v) => `${Number(v).toFixed(6)} CNY`,
-    },
+  // Группируем записи по дате
+  const grouped: RatesByDate[] = (() => {
+    if (!data?.items) return [];
+    const map: Record<string, RatesByDate> = {};
+    for (const r of data.items) {
+      if (!map[r.rate_date]) map[r.rate_date] = { date: r.rate_date };
+      if (r.currency === "RUB") map[r.rate_date].rub = r;
+      if (r.currency === "USD") map[r.rate_date].usd = r;
+      if (r.currency === "USDT") map[r.rate_date].usdt = r;
+    }
+    return Object.values(map).sort((a, b) => b.date.localeCompare(a.date));
+  })();
+
+  const openEdit = (row: RatesByDate) => {
+    const rubRate = row.rub ? parseFloat(String(row.rub.rate_to_cny)) : undefined;
+    const usdRate = row.usd ? parseFloat(String(row.usd.rate_to_cny)) : undefined;
+    const usdtRate = row.usdt ? parseFloat(String(row.usdt.rate_to_cny)) : undefined;
+    setEditInitial({
+      cny_to_rub: rubRate ? parseFloat((1 / rubRate).toFixed(4)) : undefined,
+      usd_to_cny: usdRate ? parseFloat(usdRate.toFixed(4)) : undefined,
+      usd_to_usdt: usdRate && usdtRate ? parseFloat((usdRate / usdtRate).toFixed(4)) : undefined,
+    });
+    setEditDate(row.date);
+    setModalOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditInitial(undefined);
+    setEditDate(dayjs().format("YYYY-MM-DD"));
+    setModalOpen(true);
+  };
+
+  const columns = [
     {
       title: t("exchange_rate.date"),
-      dataIndex: "rate_date",
-      key: "rate_date",
+      dataIndex: "date",
+      key: "date",
+      width: 120,
+    },
+    {
+      title: "1 CNY = ? RUB",
+      key: "cny_rub",
       width: 130,
-      defaultSortOrder: "descend",
-      sorter: (a, b) => a.rate_date.localeCompare(b.rate_date),
+      render: (_: any, row: RatesByDate) => {
+        if (!row.rub) return <Text type="secondary">—</Text>;
+        const v = 1 / parseFloat(String(row.rub.rate_to_cny));
+        return <Text strong>{fmt(v)}</Text>;
+      },
     },
     {
-      title: t("exchange_rate.source"),
-      dataIndex: "source",
-      key: "source",
-      width: 100,
-      render: (v) => (
-        <Tag color={v === "auto" ? "green" : "default"}>
-          {t(`exchange_rate.source_${v}`) || v}
-        </Tag>
+      title: "1 USD = ? RUB",
+      key: "usd_rub",
+      width: 130,
+      render: (_: any, row: RatesByDate) => {
+        if (!row.rub || !row.usd) return <Text type="secondary">—</Text>;
+        const rub = parseFloat(String(row.rub.rate_to_cny));
+        const usd = parseFloat(String(row.usd.rate_to_cny));
+        return <Text>{fmt(usd / rub)}</Text>;
+      },
+    },
+    {
+      title: "1 USD = ? CNY",
+      key: "usd_cny",
+      width: 130,
+      render: (_: any, row: RatesByDate) => {
+        if (!row.usd) return <Text type="secondary">—</Text>;
+        return <Text>{fmt(parseFloat(String(row.usd.rate_to_cny)))}</Text>;
+      },
+    },
+    {
+      title: "1 USD = ? USDT",
+      key: "usd_usdt",
+      width: 130,
+      render: (_: any, row: RatesByDate) => {
+        if (!row.usd || !row.usdt) return <Text type="secondary">—</Text>;
+        const usd = parseFloat(String(row.usd.rate_to_cny));
+        const usdt = parseFloat(String(row.usdt.rate_to_cny));
+        return <Text>{fmt(usd / usdt)}</Text>;
+      },
+    },
+    {
+      title: t("common.actions"),
+      key: "actions",
+      width: 80,
+      render: (_: any, row: RatesByDate) => (
+        <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(row)} />
       ),
-    },
-    {
-      title: t("common.created_by") || "Кто добавил",
-      dataIndex: "created_by_name",
-      key: "created_by_name",
-    },
-    {
-      title: t("common.created_at") || "Дата добавления",
-      dataIndex: "created_at",
-      key: "created_at",
-      render: (v) => new Date(v).toLocaleString("ru-RU"),
     },
   ];
 
@@ -82,7 +132,7 @@ export default function ExchangeRatesPage() {
           <Title level={4} style={{ margin: 0 }}>{t("nav.exchange_rates")}</Title>
         </Col>
         <Col>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t("exchange_rate.add_new")}
           </Button>
         </Col>
@@ -90,17 +140,8 @@ export default function ExchangeRatesPage() {
 
       <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
         <Col>
-          <Select
-            allowClear
-            placeholder={t("exchange_rate.currency")}
-            style={{ width: 120 }}
-            options={[{ value: "RUB", label: "RUB" }, { value: "USDT", label: "USDT" }]}
-            onChange={v => setCurrency(v)}
-          />
-        </Col>
-        <Col>
           <DatePicker.RangePicker
-            style={{ width: 240 }}
+            style={{ width: 260 }}
             onChange={(_, strs) => setDateRange(strs[0] && strs[1] ? [strs[0], strs[1]] : null)}
           />
         </Col>
@@ -108,8 +149,8 @@ export default function ExchangeRatesPage() {
 
       <Table
         columns={columns}
-        dataSource={data?.items ?? []}
-        rowKey="id"
+        dataSource={grouped}
+        rowKey="date"
         loading={isLoading}
         size="small"
         pagination={{ pageSize: 50, showTotal: total => `${total}` }}
@@ -117,8 +158,9 @@ export default function ExchangeRatesPage() {
 
       <ExchangeRateForm
         open={modalOpen}
-        defaultDate={dayjs().format("YYYY-MM-DD")}
-        onClose={() => setModalOpen(false)}
+        defaultDate={editDate}
+        initialRates={editInitial}
+        onClose={() => { setModalOpen(false); setEditInitial(undefined); }}
       />
     </div>
   );

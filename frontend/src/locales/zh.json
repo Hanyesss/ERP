@@ -33,7 +33,21 @@
     "users": "员工",
     "notifications": "通知",
     "integrations": "系统集成",
+    "cash_registers": "收银台",
     "logout": "退出"
+  },
+  "cash": {
+    "add_new": "新建收银台",
+    "edit": "编辑收银台",
+    "name": "收银台名称",
+    "balance": "余额",
+    "balance_after": "操作后余额",
+    "amount": "金额",
+    "direction": "方向",
+    "notes": "备注",
+    "register": "收银台",
+    "select_register": "选择收银台"
+
   },
   "dashboard": {
     "welcome": "欢迎",
@@ -130,7 +144,15 @@
     "site_login": "登录名",
     "site_password": "密码",
     "site_account_created": "已在网站创建账号",
-    "site_account_error": "网站账号创建失败：{{error}}"
+    "site_account_linked": "客户代码已关联到网站账号",
+    "link_site_account": "关联到已有网站账号",
+    "link_site_confirm": "在irsway.com上关联此客户代码？",
+    "change_site_credentials": "修改网站登录名/密码",
+    "current_site_login": "当前网站登录名",
+    "new_site_login": "新登录名（可选）",
+    "new_site_password": "新密码（最少8位）",
+    "site_credentials_updated": "网站登录名/密码已更新",
+    "site_account_error": "错误：{{error}}"
   },
   "order": {
     "title": "订单",
@@ -315,6 +337,8 @@
     "filter_role": "角色",
     "filter_status": "状态",
     "password": "密码",
+    "new_password_optional": "新密码（可选）",
+    "password_leave_empty": "留空则不修改",
     "created": "员工已创建",
     "updated": "信息已更新"
   },
@@ -332,7 +356,10 @@
     "add_new": "添加汇率",
     "already_exists": "{{currency}} 在 {{date}} 的汇率已存在",
     "source_manual": "手动录入",
-    "source_auto": "自动获取"
+    "source_auto": "自动获取",
+    "edit_rates": "修改汇率",
+    "rates_for_date": "该日期汇率",
+    "derived": "自动计算"
   },
   "payment": {
     "title": "收付款",

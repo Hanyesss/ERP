@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Table, Button, Input, Select, Tag, Space, Popconfirm, Row, Col, message } from "antd";
-import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Table, Button, Input, Select, Tag, Space, Popconfirm, Row, Col, message, Tooltip } from "antd";
+import { EditOutlined, DeleteOutlined, LinkOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import type { Counterparty, CounterpartyFormData } from "../../types/counterparty";
-import { getCounterparties, createCounterparty, updateCounterparty, deleteCounterparty, createSiteAccount } from "../../api/counterparties";
+import { getCounterparties, createCounterparty, updateCounterparty, deleteCounterparty, createSiteAccount, linkSiteAccount, updateSiteCredentials } from "../../api/counterparties";
 import CounterpartyForm, { type CounterpartyFormValues } from "./CounterpartyForm";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -56,12 +56,35 @@ export default function CounterpartyTable({ forcedType }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<CounterpartyFormData> }) => updateCounterparty(id, data),
-    onSuccess: () => { invalidate(); setFormOpen(false); setEditing(null); },
+    onSuccess: async (_, { id, data }) => {
+      const vals = data as CounterpartyFormValues;
+      if (vals.current_site_login && (vals.new_site_login || vals.new_site_password)) {
+        try {
+          await updateSiteCredentials(id, {
+            current_login: vals.current_site_login,
+            new_login: vals.new_site_login || undefined,
+            new_password: vals.new_site_password || undefined,
+          });
+          message.success(t("counterparty.site_credentials_updated"));
+        } catch (e: any) {
+          message.warning(t("counterparty.site_account_error", { error: e.response?.data?.detail || String(e) }));
+        }
+      }
+      invalidate();
+      setFormOpen(false);
+      setEditing(null);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteCounterparty,
     onSuccess: invalidate,
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: (id: string) => linkSiteAccount(id),
+    onSuccess: () => message.success(t("counterparty.site_account_linked")),
+    onError: (e: any) => message.error(t("counterparty.site_account_error", { error: e.response?.data?.detail || String(e) })),
   });
 
   const handleSubmit = (formData: CounterpartyFormValues) => {
@@ -103,24 +126,43 @@ export default function CounterpartyTable({ forcedType }: Props) {
     {
       title: t("common.actions"),
       key: "actions",
-      width: 100,
-      render: (_: unknown, row: Counterparty) => (
-        <Space>
-          <Button
-            icon={<EditOutlined />}
-            size="small"
-            onClick={() => openEdit(row)}
-          />
-          <Popconfirm
-            title={t("counterparty.delete_confirm")}
-            onConfirm={() => deleteMutation.mutate(row.id)}
-            okText={t("common.yes")}
-            cancelText={t("common.no")}
-          >
-            <Button icon={<DeleteOutlined />} size="small" danger />
-          </Popconfirm>
-        </Space>
-      ),
+      width: 130,
+      render: (_: unknown, row: Counterparty) => {
+        const isClient = row.type === "client" || row.type === "both";
+        return (
+          <Space>
+            <Button
+              icon={<EditOutlined />}
+              size="small"
+              onClick={() => openEdit(row)}
+            />
+            {isClient && row.code && (
+              <Tooltip title={t("counterparty.link_site_account")}>
+                <Popconfirm
+                  title={t("counterparty.link_site_confirm")}
+                  onConfirm={() => linkMutation.mutate(row.id)}
+                  okText={t("common.yes")}
+                  cancelText={t("common.no")}
+                >
+                  <Button
+                    icon={<LinkOutlined />}
+                    size="small"
+                    loading={linkMutation.isPending}
+                  />
+                </Popconfirm>
+              </Tooltip>
+            )}
+            <Popconfirm
+              title={t("counterparty.delete_confirm")}
+              onConfirm={() => deleteMutation.mutate(row.id)}
+              okText={t("common.yes")}
+              cancelText={t("common.no")}
+            >
+              <Button icon={<DeleteOutlined />} size="small" danger />
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 

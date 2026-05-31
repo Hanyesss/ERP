@@ -7,6 +7,9 @@ export const getExchangeRates = (params?: { currency?: string; date_from?: strin
 export const createExchangeRate = (data: { currency: string; rate_to_cny: number; rate_date: string }) =>
   apiClient.post("/api/exchange-rates", data);
 
+export const upsertExchangeRate = (data: { currency: string; rate_to_cny: number; rate_date: string }) =>
+  apiClient.put("/api/exchange-rates/upsert", data);
+
 export const checkExchangeRates = (date: string, currencies: string[]) =>
   apiClient.get<RateCheckResponse>("/api/exchange-rates/check", {
     params: { date, currencies: currencies.join(",") },
