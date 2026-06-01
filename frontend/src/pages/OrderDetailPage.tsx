@@ -771,7 +771,12 @@ export default function OrderDetailPage() {
   ];
 
   const LOGISTICS_STATUSES = [
-    "WAREHOUSE_CN", "MOVE_CN", "BORDER", "CUSTOMS", "MOVE_RU", "MOSCOW",
+    { value: "WAREHOUSE_CN", label: t("order.sync.status_warehouse_cn") },
+    { value: "MOVE_CN",      label: t("order.sync.status_move_cn") },
+    { value: "BORDER",       label: t("order.sync.status_border") },
+    { value: "CUSTOMS",      label: t("order.sync.status_customs") },
+    { value: "MOVE_RU",      label: t("order.sync.status_move_ru") },
+    { value: "MOSCOW",       label: t("order.sync.status_moscow") },
   ];
 
   return (
@@ -791,7 +796,7 @@ export default function OrderDetailPage() {
           onFinish={vals => pushStatusMutation.mutate(vals)}
         >
           <Form.Item name="status" label={t("order.sync.status")} rules={[{ required: true }]}>
-            <Select options={LOGISTICS_STATUSES.map(s => ({ value: s, label: s }))} />
+            <Select options={LOGISTICS_STATUSES} />
           </Form.Item>
           <Form.Item name="comment" label={t("order.sync.comment")}>
             <Input.TextArea rows={2} />

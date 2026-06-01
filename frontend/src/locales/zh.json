@@ -18,7 +18,13 @@
     "amount": "金额",
     "created_by": "创建人",
     "created_at": "创建时间",
-    "coming_soon": "该功能将在下一模块中添加"
+    "coming_soon": "该功能将在下一模块中添加",
+    "no_data": "暂无数据",
+    "date": "日期",
+    "upload_file": "上传附件",
+    "choose_file": "选择文件",
+    "file_uploaded": "文件上传成功",
+    "files": "文件与单据"
   },
   "nav": {
     "dashboard": "主页",
@@ -260,10 +266,16 @@
       "shipment_number": "运单号",
       "download_invoice": "下载发票",
       "open_tracking": "查看物流",
-      "push_status": "推送状态",
+      "push_status": "发送货物状态",
       "status": "状态",
       "comment": "备注",
-      "status_pushed": "状态已推送"
+      "status_pushed": "状态已发送",
+      "status_warehouse_cn": "在中国仓库",
+      "status_move_cn": "中国境内运输中",
+      "status_border": "在边境口岸",
+      "status_customs": "清关中",
+      "status_move_ru": "俄罗斯境内运输中",
+      "status_moscow": "已到达莫斯科"
     }
   },
   "purchase": {

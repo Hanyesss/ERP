@@ -252,7 +252,7 @@ export default function PurchaseFormPage() {
 
           <Row gutter={16}>
             <Col span={24}>
-              <Form.Item label={t("common.upload_file") || "Прикрепить файл"}>
+              <Form.Item label={t("common.upload_file")}>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -262,7 +262,7 @@ export default function PurchaseFormPage() {
                 />
                 <Space>
                   <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                    {t("common.choose_file") || "Выбрать файл"}
+                    {t("common.choose_file")}
                   </Button>
                   {pendingFile && (
                     <span style={{ color: "#52c41a" }}>

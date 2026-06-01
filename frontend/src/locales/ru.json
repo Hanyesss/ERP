@@ -238,10 +238,16 @@
       "shipment_number": "Номер отправления",
       "download_invoice": "Скачать накладную",
       "open_tracking": "Отслеживание",
-      "push_status": "Отправить статус",
+      "push_status": "Отправить статус груза",
       "status": "Статус",
       "comment": "Комментарий",
-      "status_pushed": "Статус отправлен"
+      "status_pushed": "Статус отправлен",
+      "status_warehouse_cn": "Склад в Китае",
+      "status_move_cn": "В пути по Китаю",
+      "status_border": "На границе",
+      "status_customs": "На таможне (растаможка)",
+      "status_move_ru": "В пути по России",
+      "status_moscow": "Прибыл в Москву"
     }
   },
   "purchase": {
@@ -517,7 +523,13 @@
     "amount": "Сумма",
     "created_by": "Кто добавил",
     "created_at": "Дата добавления",
-    "coming_soon": "Раздел появится в следующем модуле"
+    "coming_soon": "Раздел появится в следующем модуле",
+    "no_data": "Нет данных за период",
+    "date": "Дата",
+    "upload_file": "Прикрепить файл",
+    "choose_file": "Выбрать файл",
+    "file_uploaded": "Файл успешно загружен",
+    "files": "Документы и файлы"
   },
   "validation": {
     "required": "Обязательное поле",

@@ -61,7 +61,7 @@ export default function PurchaseDetailPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
     },
-    onSuccess: () => { refetchFiles(); message.success(t("common.file_uploaded") || "Файл загружен"); },
+    onSuccess: () => { refetchFiles(); message.success(t("common.file_uploaded")); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
   const deleteFileMut = useMutation({
@@ -172,7 +172,7 @@ export default function PurchaseDetailPage() {
     },
     {
       key: "files",
-      label: t("order.files") || "Файлы",
+      label: t("common.files"),
       children: (
         <div>
           <input
@@ -196,7 +196,7 @@ export default function PurchaseDetailPage() {
           </Button>
           <List
             dataSource={purchaseFiles}
-            locale={{ emptyText: t("common.no_data") || "Нет файлов" }}
+            locale={{ emptyText: t("common.no_data") }}
             renderItem={(f: any) => (
               <List.Item
                 actions={[
