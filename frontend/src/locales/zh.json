@@ -52,8 +52,22 @@
     "direction": "方向",
     "notes": "备注",
     "register": "收银台",
-    "select_register": "选择收银台"
-
+    "select_register": "选择收银台",
+    "transfer": "账户间转账",
+    "transfer_title": "账户间转账",
+    "transfer_done": "转账成功",
+    "do_transfer": "转账",
+    "from": "从",
+    "to": "到",
+    "sent": "扣款",
+    "received": "到账",
+    "rate": "汇率",
+    "send_amount": "扣款金额",
+    "receive_amount": "到账金额",
+    "exchange_rate": "换算汇率",
+    "history": "交易记录",
+    "transactions": "交易记录",
+    "transfers": "转账记录"
   },
   "dashboard": {
     "welcome": "欢迎",

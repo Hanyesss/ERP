@@ -25,7 +25,22 @@
     "direction": "Тип",
     "notes": "Примечание",
     "register": "Касса",
-    "select_register": "Выберите кассу"
+    "select_register": "Выберите кассу",
+    "transfer": "Перевод между кассами",
+    "transfer_title": "Перевод между кассами",
+    "transfer_done": "Перевод выполнен",
+    "do_transfer": "Перевести",
+    "from": "Откуда",
+    "to": "Куда",
+    "sent": "Списано",
+    "received": "Зачислено",
+    "rate": "Курс",
+    "send_amount": "Сумма списания",
+    "receive_amount": "Сумма зачисления",
+    "exchange_rate": "Курс конвертации",
+    "history": "История транзакций",
+    "transactions": "Транзакции",
+    "transfers": "Переводы"
   },
   "dashboard": {
     "welcome": "Добро пожаловать",
