@@ -98,25 +98,30 @@ export const getTonnage = (params: {
   client_id?: string;
 }) => apiClient.get<TonnageData>(`${BASE}/tonnage`, { params });
 
-function exportUrl(path: string, params: Record<string, any>) {
-  const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
-  ).toString();
-  const base = (apiClient.defaults.baseURL || "http://localhost:8000").replace(/\/$/, "");
-  window.open(`${base}${path}?${qs}`, "_blank");
+async function downloadExcel(path: string, params: Record<string, any>, filename: string) {
+  const response = await apiClient.get(path, {
+    params: Object.fromEntries(Object.entries(params).filter(([, v]) => v != null)),
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export const exportPnL = (params: { date_from: string; date_to: string; lang: string }) =>
-  exportUrl(`${BASE}/pnl/export`, params);
+  downloadExcel(`${BASE}/pnl/export`, params, `pnl_${params.date_from}_${params.date_to}.xlsx`);
 
 export const exportByClient = (params: { date_from: string; date_to: string; lang: string }) =>
-  exportUrl(`${BASE}/by-client/export`, params);
+  downloadExcel(`${BASE}/by-client/export`, params, `by_client_${params.date_from}_${params.date_to}.xlsx`);
 
 export const exportBySupplier = (params: { date_from: string; date_to: string; lang: string }) =>
-  exportUrl(`${BASE}/by-supplier/export`, params);
+  downloadExcel(`${BASE}/by-supplier/export`, params, `by_supplier_${params.date_from}_${params.date_to}.xlsx`);
 
 export const exportExpenses = (params: { date_from: string; date_to: string; lang: string }) =>
-  exportUrl(`${BASE}/expenses/export`, params);
+  downloadExcel(`${BASE}/expenses/export`, params, `expenses_${params.date_from}_${params.date_to}.xlsx`);
 
 export const exportTonnage = (params: { date_from: string; date_to: string; lang: string }) =>
-  exportUrl(`${BASE}/tonnage/export`, params);
+  downloadExcel(`${BASE}/tonnage/export`, params, `tonnage_${params.date_from}_${params.date_to}.xlsx`);

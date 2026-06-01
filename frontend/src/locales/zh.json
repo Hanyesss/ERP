@@ -340,7 +340,10 @@
     "new_password_optional": "新密码（可选）",
     "password_leave_empty": "留空则不修改",
     "created": "员工已创建",
-    "updated": "信息已更新"
+    "updated": "信息已更新",
+    "deleted": "员工已删除",
+    "delete": "删除员工",
+    "delete_confirm": "确认删除该员工？此操作不可撤销。"
   },
   "business_type": {
     "trade": "贸易",

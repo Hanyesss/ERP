@@ -4,23 +4,26 @@
 <meta charset="UTF-8">
 <style>
   @page { size: A4; margin: 20mm 15mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Noto Sans CJK SC", "DejaVu Sans", Arial, sans-serif; }
   body { font-size: 10pt; color: #222; }
 
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
   .company-block { font-size: 9pt; color: #555; line-height: 1.5; }
   .doc-title { text-align: center; margin: 20px 0 16px; }
-  .doc-title h1 { font-size: 16pt; font-weight: bold; letter-spacing: 1px; }
+  .doc-title h1 { font-size: 15pt; font-weight: bold; letter-spacing: 1px; }
+  .doc-title h1 .cn { display: block; font-size: 13pt; color: #444; margin-top: 2px; }
   .doc-title .doc-meta { font-size: 9pt; color: #777; margin-top: 4px; }
 
   .parties { display: flex; gap: 24px; margin-bottom: 20px; }
   .party-block { flex: 1; border: 1px solid #ddd; border-radius: 4px; padding: 10px; }
   .party-block .label { font-size: 8pt; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .party-block .label .cn { font-size: 8pt; color: #aaa; }
   .party-block .name { font-weight: bold; font-size: 11pt; }
   .party-block .phone { font-size: 9pt; color: #444; margin-top: 2px; }
 
   table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
   thead th { background: #2c3e50; color: #fff; padding: 7px 6px; font-size: 9pt; text-align: left; }
+  thead th .cn { display: block; font-size: 8pt; color: #ccc; font-weight: normal; margin-top: 1px; }
   tbody tr:nth-child(even) { background: #f8f9fa; }
   tbody td { padding: 7px 6px; font-size: 9pt; vertical-align: top; border-bottom: 1px solid #eee; }
   .num-col { text-align: right; white-space: nowrap; }
@@ -31,7 +34,6 @@
 
   .spec-text { font-size: 8pt; color: #555; white-space: pre-wrap; max-width: 140px; word-break: break-word; }
 
-  /* Totals — full width table, right-aligned, no overflow */
   .totals-block { width: 100%; margin-bottom: 20px; }
   .totals-block table { width: auto; min-width: 280px; float: right; margin-bottom: 0; }
   .totals-block table td { border: none; padding: 4px 8px; white-space: nowrap; }
@@ -49,27 +51,27 @@
 <div class="header">
   <div class="company-block">
     <strong>{{ company_name }}</strong><br>
-    {% if company_phone %}Тел: {{ company_phone }}<br>{% endif %}
+    {% if company_phone %}Тел / 电话: {{ company_phone }}<br>{% endif %}
     {% if company_email %}Email: {{ company_email }}<br>{% endif %}
   </div>
   <div style="text-align:right; font-size:9pt; color:#888;">
-    Дата: {{ order_date }}<br>
+    Дата / 日期: {{ order_date }}<br>
     № {{ order_number }}
   </div>
 </div>
 
 <div class="doc-title">
-  <h1>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</h1>
-  <div class="doc-meta">Заказ № {{ order_number }} от {{ order_date }}</div>
+  <h1>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ <span class="cn">商业报价单</span></h1>
+  <div class="doc-meta">Заказ № {{ order_number }} от {{ order_date }} / 订单号 {{ order_number }}，日期 {{ order_date }}</div>
 </div>
 
 <div class="parties">
   <div class="party-block">
-    <div class="label">Продавец</div>
+    <div class="label">Продавец <span class="cn">/ 卖方</span></div>
     <div class="name">{{ company_name }}</div>
   </div>
   <div class="party-block">
-    <div class="label">Покупатель</div>
+    <div class="label">Покупатель <span class="cn">/ 买方</span></div>
     <div class="name">{{ client_name }}</div>
     {% if client_phone %}<div class="phone">{{ client_phone }}</div>{% endif %}
   </div>
@@ -79,14 +81,14 @@
   <thead>
     <tr>
       <th style="width:24px">№</th>
-      <th style="width:25%">Наименование</th>
-      <th style="width:12%">Модель</th>
-      <th style="width:18%">Спецификация</th>
-      {% if has_photos %}<th style="width:58px">Фото</th>{% endif %}
-      <th style="width:40px;text-align:right;white-space:nowrap">Кол.</th>
-      <th style="width:28px;white-space:nowrap">Ед.</th>
-      <th style="width:12%;text-align:right;white-space:nowrap">Цена ({{ price_currency }})</th>
-      <th style="width:12%;text-align:right;white-space:nowrap">Сумма ({{ price_currency }})</th>
+      <th style="width:25%">Наименование <span class="cn">品名</span></th>
+      <th style="width:12%">Модель <span class="cn">型号</span></th>
+      <th style="width:18%">Спецификация <span class="cn">规格</span></th>
+      {% if has_photos %}<th style="width:58px">Фото <span class="cn">图片</span></th>{% endif %}
+      <th style="width:40px;text-align:right;white-space:nowrap">Кол. <span class="cn">数量</span></th>
+      <th style="width:28px;white-space:nowrap">Ед. <span class="cn">单位</span></th>
+      <th style="width:12%;text-align:right;white-space:nowrap">Цена ({{ price_currency }}) <span class="cn">单价</span></th>
+      <th style="width:12%;text-align:right;white-space:nowrap">Сумма ({{ price_currency }}) <span class="cn">金额</span></th>
     </tr>
   </thead>
   <tbody>
@@ -95,7 +97,7 @@
       <td class="center-col">{{ loop.index }}</td>
       <td>
         <strong>{{ item.name }}</strong>
-        {% if item.name_cn %}<br><span style="font-size:8pt;color:#888;">{{ item.name_cn }}</span>{% endif %}
+        {% if item.name_cn %}<br><span style="font-size:8pt;color:#555;">{{ item.name_cn }}</span>{% endif %}
       </td>
       <td style="word-break:break-word;">{{ item.model or "" }}</td>
       <td><span class="spec-text">{{ item.specification or "" }}</span></td>
@@ -121,12 +123,12 @@
   <table>
     {% if client_currency != "CNY" %}
     <tr>
-      <td>Итого ({{ client_currency }}):</td>
+      <td>Итого / 小计 ({{ client_currency }}):</td>
       <td class="num-col">{{ total_in_currency | fmt_decimal }}&nbsp;{{ client_currency }}</td>
     </tr>
     {% endif %}
     <tr class="total-row">
-      <td>ИТОГО (CNY):</td>
+      <td>ИТОГО / 总计 (CNY):</td>
       <td class="num-col">{{ total_cny | fmt_decimal }}&nbsp;CNY</td>
     </tr>
   </table>
@@ -135,13 +137,13 @@
 
 {% if notes %}
 <div class="notes-block">
-  <div class="label">Примечания:</div>
+  <div class="label">Примечания / 备注:</div>
   {{ notes }}
 </div>
 {% endif %}
 
 <div class="footer">
-  Документ сформирован автоматически · IRS ERP · {{ order_date }}
+  Документ сформирован автоматически · 自动生成文件 · IRS ERP · {{ order_date }}
 </div>
 
 </body>

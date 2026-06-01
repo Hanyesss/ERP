@@ -1,13 +1,15 @@
+import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   Button, Card, Col, Descriptions, Popconfirm, Row,
-  Space, Statistic, Table, Tabs, Tag, Typography, message,
+  Space, Statistic, Table, Tabs, Tag, Typography, Upload, message, List,
 } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined, UploadOutlined, FileOutlined } from "@ant-design/icons";
 import { getPurchase, deletePurchase } from "../api/purchases";
 import { getPaymentsForPurchase } from "../api/payments";
+import apiClient from "../api/client";
 
 const { Title, Text } = Typography;
 
@@ -45,6 +47,29 @@ export default function PurchaseDetailPage() {
   });
 
   if (isLoading || !purchase) return null;
+
+  // Purchase files
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data: purchaseFiles = [], refetch: refetchFiles } = useQuery({
+    queryKey: ["purchase-files", id],
+    queryFn: () => apiClient.get(`/api/purchases/${id}/files`).then(r => r.data),
+    enabled: !!id,
+  });
+  const uploadFileMut = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return apiClient.post(`/api/purchases/${id}/files`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    },
+    onSuccess: () => { refetchFiles(); message.success(t("common.file_uploaded") || "Файл загружен"); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+  const deleteFileMut = useMutation({
+    mutationFn: (fileId: string) => apiClient.delete(`/api/purchases/${id}/files/${fileId}`),
+    onSuccess: () => refetchFiles(),
+  });
 
   const tabItems = [
     {
@@ -142,6 +167,67 @@ export default function PurchaseDetailPage() {
               ]}
             />
           )}
+        </div>
+      ),
+    },
+    {
+      key: "files",
+      label: t("order.files") || "Файлы",
+      children: (
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            style={{ display: "none" }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) uploadFileMut.mutate(file);
+              e.target.value = "";
+            }}
+          />
+          <Button
+            icon={<UploadOutlined />}
+            onClick={() => fileInputRef.current?.click()}
+            loading={uploadFileMut.isPending}
+            style={{ marginBottom: 12 }}
+          >
+            {t("common.upload_file") || "Загрузить файл"}
+          </Button>
+          <List
+            dataSource={purchaseFiles}
+            locale={{ emptyText: t("common.no_data") || "Нет файлов" }}
+            renderItem={(f: any) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="open"
+                    type="link"
+                    size="small"
+                    href={`/files/${f.file_url}`}
+                    target="_blank"
+                  >
+                    {t("common.open")}
+                  </Button>,
+                  <Popconfirm
+                    key="del"
+                    title={t("common.delete") + "?"}
+                    onConfirm={() => deleteFileMut.mutate(f.id)}
+                    okText={t("common.yes")}
+                    cancelText={t("common.no")}
+                  >
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>,
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={<FileOutlined />}
+                  title={f.file_name}
+                  description={`${f.uploaded_by_name} · ${new Date(f.uploaded_at).toLocaleString("ru-RU")}`}
+                />
+              </List.Item>
+            )}
+          />
         </div>
       ),
     },

@@ -154,7 +154,7 @@ async def list_users(
 ):
     q = select(User).options(selectinload(User.role_entries))
 
-    filters = []
+    filters = [User.is_deleted == False]
     if is_active is not None:
         filters.append(User.is_active == is_active)
     if search:
@@ -343,3 +343,22 @@ async def toggle_active(
         select(User).options(selectinload(User.role_entries)).where(User.id == user.id)
     )
     return UserDetail.from_user(result.scalar_one())
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(_ADMIN),
+):
+    user = await _get_user_or_404(db, user_id)
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Нельзя удалить себя")
+    if UserRole.admin in [UserRole(r) for r in user.roles]:
+        count = await _count_active_admins(db)
+        if count <= 1:
+            raise HTTPException(status_code=400, detail="Нельзя удалить последнего администратора")
+    user.is_deleted = True
+    user.is_active = False
+    await write_audit(db, admin.id, "user", user.id, AuditActionEnum.delete, {"action": "deleted"})
+    await db.commit()

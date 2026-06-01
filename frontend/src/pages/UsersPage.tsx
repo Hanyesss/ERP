@@ -4,12 +4,12 @@ import {
   Form, Checkbox, Typography, message, Popconfirm, Tooltip,
 } from "antd";
 import {
-  PlusOutlined, LockOutlined, UnlockOutlined, EditOutlined, KeyOutlined,
+  PlusOutlined, LockOutlined, UnlockOutlined, EditOutlined, KeyOutlined, DeleteOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  fetchUsers, createUser, updateUser, resetPassword, toggleActive,
+  fetchUsers, createUser, updateUser, resetPassword, toggleActive, deleteUser,
   UserListItem, UserRole, UserLang,
 } from "../api/users";
 
@@ -87,6 +87,18 @@ export default function UsersPage() {
   const toggleMut = useMutation({
     mutationFn: (id: string) => toggleActive(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    onError: (e: any) => {
+      const detail = e?.response?.data?.detail ?? e?.message ?? "Error";
+      message.error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      message.success(t("user.deleted"));
+    },
     onError: (e: any) => {
       const detail = e?.response?.data?.detail ?? e?.message ?? "Error";
       message.error(typeof detail === "string" ? detail : JSON.stringify(detail));
@@ -246,6 +258,17 @@ export default function UsersPage() {
                 size="small"
                 danger={row.is_active}
               />
+            </Popconfirm>
+          </Tooltip>
+          <Tooltip title={t("user.delete")}>
+            <Popconfirm
+              title={t("user.delete_confirm")}
+              onConfirm={() => deleteMut.mutate(row.id)}
+              okText={t("common.yes")}
+              cancelText={t("common.cancel")}
+              okButtonProps={{ danger: true }}
+            >
+              <Button icon={<DeleteOutlined />} size="small" danger />
             </Popconfirm>
           </Tooltip>
         </Space>

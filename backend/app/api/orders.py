@@ -33,6 +33,7 @@ from app.schemas.order import (
 )
 from app.utils.audit import write_audit
 from app.integrations.irsway_site.service import sync_order_to_site
+from app.services.notifications import notify_role, notify
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -624,6 +625,16 @@ async def create_order(
 
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.create,
                       {"order_number": order.order_number, "total_sale_cny": str(total_sale)})
+    # Notify: accountant and admin about new order (except the creator)
+    body_notif = f"{order.order_number} · {client.name}"
+    link_notif = f"/orders/{order.id}"
+    for role in ("accountant", "admin"):
+        await notify_role(db, role, "order_created", "order_created", body_notif, link_notif,
+                          "order", order.id, exclude_user_id=current_user.id)
+    # Notify purchaser about new trade order to buy goods
+    if bt and bt.code == "trade":
+        await notify_role(db, "purchaser", "order_created", "order_created", body_notif, link_notif,
+                          "order", order.id)
     await db.commit()
 
     if is_logistics:

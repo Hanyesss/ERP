@@ -78,3 +78,7 @@ export async function toggleActive(id: string): Promise<UserListItem> {
   const res = await client.post(`/api/users/${id}/toggle-active`);
   return res.data;
 }
+
+export async function deleteUser(id: string): Promise<void> {
+  await client.delete(`/api/users/${id}`);
+}

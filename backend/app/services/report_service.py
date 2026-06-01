@@ -88,12 +88,18 @@ async def _calc_pnl_for_period(
         Expense.is_active == True,
         not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
     ]
+    # When filtering by business_type, exclude company/employee expenses (link_type="none")
+    # Services business type should only count direct order-linked expenses
+    exp_filter_for_type = list(exp_filter_base)
+    if business_type_id:
+        exp_filter_for_type.append(Expense.link_type != "none")
+
     exp_rows = await db.execute(
         select(
             Expense.link_type,
             func.coalesce(func.sum(Expense.amount_cny), Decimal("0")).label("total")
         )
-        .where(*exp_filter_base)
+        .where(*exp_filter_for_type)
         .group_by(Expense.link_type)
     )
     expenses_by_type = {row[0]: row[1] or Decimal("0") for row in exp_rows.all()}
@@ -110,7 +116,7 @@ async def _calc_pnl_for_period(
             func.coalesce(func.sum(Expense.amount_cny), Decimal("0")).label("amount_cny"),
         )
         .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
-        .where(*exp_filter_base)
+        .where(*exp_filter_for_type)
         .group_by(ExpenseCategory.name, ExpenseCategory.name_cn)
         .order_by(func.sum(Expense.amount_cny).desc())
     )

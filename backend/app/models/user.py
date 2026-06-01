@@ -34,6 +34,7 @@ class User(Base, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     lang: Mapped[UserLang] = mapped_column(Enum(UserLang, name="userlang"), default=UserLang.ru, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     role_entries: Mapped[list["UserRoleEntry"]] = relationship(  # type: ignore[name-defined]
         "UserRoleEntry", foreign_keys="UserRoleEntry.user_id", lazy="selectin"
