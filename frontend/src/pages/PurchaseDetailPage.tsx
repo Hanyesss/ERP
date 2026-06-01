@@ -46,9 +46,7 @@ export default function PurchaseDetailPage() {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
-  if (isLoading || !purchase) return null;
-
-  // Purchase files
+  // Purchase files — хуки ОБЯЗАТЕЛЬНО до любого return
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: purchaseFiles = [], refetch: refetchFiles } = useQuery({
     queryKey: ["purchase-files", id],
@@ -70,6 +68,8 @@ export default function PurchaseDetailPage() {
     mutationFn: (fileId: string) => apiClient.delete(`/api/purchases/${id}/files/${fileId}`),
     onSuccess: () => refetchFiles(),
   });
+
+  if (isLoading || !purchase) return null;
 
   const tabItems = [
     {

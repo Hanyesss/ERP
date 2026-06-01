@@ -36,6 +36,7 @@ class OrderItemPhotoResponse(BaseModel):
 
 
 class OrderItemCreate(BaseModel):
+    id: Optional[uuid.UUID] = None   # присутствует при edit (frontend передаёт существующий ID)
     name: str
     name_cn: Optional[str] = None
     model: Optional[str] = None

@@ -672,22 +672,63 @@ async def update_order(
     charges_data = update_data.pop("charges", None)
 
     if items_data is not None or charges_data is not None:
-        await db.execute(delete(OrderItem).where(OrderItem.order_id == order_id))
+        from app.schemas.order import OrderItemCreate, OrderChargeCreate
+        from app.models.purchase_item import PurchaseItem
+
+        # Позиции, на которые уже есть закупки — нельзя удалять (FK constraint)
+        purchased_item_ids_rows = (await db.execute(
+            select(PurchaseItem.order_item_id)
+            .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+            .where(OrderItem.order_id == order_id)
+        )).scalars().all()
+        purchased_item_ids = set(purchased_item_ids_rows)
+
+        # Удаляем только те позиции, которые не связаны с закупками
+        existing_items = (await db.execute(
+            select(OrderItem).where(OrderItem.order_id == order_id)
+        )).scalars().all()
+        for item in existing_items:
+            if item.id not in purchased_item_ids:
+                await db.delete(item)
+
         await db.execute(delete(OrderCharge).where(OrderCharge.order_id == order_id))
         await db.flush()
 
-        from app.schemas.order import OrderItemCreate, OrderChargeCreate
         items_list = [OrderItemCreate(**i) if isinstance(i, dict) else i for i in (items_data or [])]
         charges_list = [OrderChargeCreate(**c) if isinstance(c, dict) else c for c in (charges_data or [])]
 
+        # Обновляем существующие закупленные позиции (safe fields only)
+        for item_in in items_list:
+            if item_in.id and item_in.id in purchased_item_ids:
+                existing = next((x for x in existing_items if x.id == item_in.id), None)
+                if existing:
+                    for field in ("name", "name_cn", "model", "specification", "unit",
+                                  "sale_price", "sale_currency", "quantity"):
+                        val = getattr(item_in, field, None)
+                        if val is not None:
+                            setattr(existing, field, val)
+
+        # Новые позиции — только те, которых нет среди существующих закупленных
+        new_items = [i for i in items_list if not (i.id and i.id in purchased_item_ids)]
+
         order_date = update_data.get("order_date", order.order_date)
-        rates = await _save_items_and_charges(db, order_id, order_date, items_list, charges_list, is_logistics)
+        rates = await _save_items_and_charges(db, order_id, order_date, new_items, charges_list, is_logistics)
         await db.flush()
 
+        # Пересчёт итога со всеми позициями (новые + сохранённые закупленные)
+        all_items_for_calc = new_items + [
+            OrderItemCreate(
+                id=x.id, name=x.name, quantity=x.quantity,
+                sale_price=x.sale_price, sale_currency=x.sale_currency,
+                weight_kg=x.weight_kg, price_per_kg=x.price_per_kg,
+                price_per_kg_currency=x.price_per_kg_currency,
+            )
+            for x in existing_items if x.id in purchased_item_ids
+        ]
         if is_logistics:
-            order.total_sale_cny = _calc_logistics_totals(items_list, charges_list, rates)
+            order.total_sale_cny = _calc_logistics_totals(all_items_for_calc, charges_list, rates)
         else:
-            order.total_sale_cny = _calc_trade_totals(items_list, rates)
+            order.total_sale_cny = _calc_trade_totals(all_items_for_calc, rates)
 
     for field, value in update_data.items():
         setattr(order, field, value)

@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
-  Space, Row, Col, InputNumber, Table, message, Alert,
+  Space, Row, Col, InputNumber, Table, message, Alert, Spin,
 } from "antd";
+import { UploadOutlined, PaperClipOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createPurchase, getAvailableForPurchase, getNextPurchaseNumber } from "../api/purchases";
+import { createPurchase, updatePurchase, getPurchase, getAvailableForPurchase, getNextPurchaseNumber } from "../api/purchases";
 import { getOrders } from "../api/orders";
 import CounterpartySelect from "../components/common/CounterpartySelect";
+import apiClient from "../api/client";
 import type { AvailableForPurchaseItem } from "../types/order";
 
 const { Title, Text } = Typography;
@@ -30,6 +32,8 @@ export default function PurchaseFormPage() {
   const [form] = Form.useForm();
   const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(preselectedOrderId);
   const [itemRows, setItemRows] = useState<ItemRow[]>([]);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const purchaseDate: dayjs.Dayjs | null = Form.useWatch("purchase_date", form);
   const dateStr = purchaseDate?.format("YYYY-MM-DD");
@@ -80,7 +84,21 @@ export default function PurchaseFormPage() {
 
   const createMutation = useMutation({
     mutationFn: createPurchase,
-    onSuccess: (res) => { message.success("✓"); navigate(`/purchases/${res.data.id}`); },
+    onSuccess: async (res) => {
+      if (pendingFile) {
+        try {
+          const fd = new FormData();
+          fd.append("file", pendingFile);
+          await apiClient.post(`/api/purchases/${res.data.id}/files`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        } catch {
+          message.warning("Закупка создана, но файл не загрузился");
+        }
+      }
+      message.success("✓");
+      navigate(`/purchases/${res.data.id}`);
+    },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -228,6 +246,31 @@ export default function PurchaseFormPage() {
             <Col span={24}>
               <Form.Item name="notes" label={t("purchase.notes")}>
                 <Input.TextArea rows={2} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item label={t("common.upload_file") || "Прикрепить файл"}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  style={{ display: "none" }}
+                  onChange={e => { setPendingFile(e.target.files?.[0] || null); }}
+                />
+                <Space>
+                  <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+                    {t("common.choose_file") || "Выбрать файл"}
+                  </Button>
+                  {pendingFile && (
+                    <span style={{ color: "#52c41a" }}>
+                      <PaperClipOutlined /> {pendingFile.name}
+                      <Button type="link" size="small" danger onClick={() => setPendingFile(null)}>✕</Button>
+                    </span>
+                  )}
+                </Space>
               </Form.Item>
             </Col>
           </Row>
