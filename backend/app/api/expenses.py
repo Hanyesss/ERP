@@ -416,19 +416,37 @@ async def create_expense(
         )).scalar_one_or_none()
         reg_currency = reg.currency if reg else "CNY"
 
+        # Порядок «крупности» валют: USD > USDT > CNY > RUB
+        # cash_rate всегда: 1 {крупная} = X {мелкая}
+        _RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
+        exp_rank = _RANK.get(body.currency, 1)
+        reg_rank = _RANK.get(reg_currency, 1)
+
         if body.currency == reg_currency:
             cash_amount = body.amount
         elif reg_currency == "CNY":
+            # Касса CNY → списываем amount_cny (правильно всегда)
             cash_amount = amount_cny
         else:
             if not body.cash_rate or body.cash_rate <= 0:
+                # Формулируем подсказку по принципу «1 крупная = X мелкая»
+                if reg_rank > exp_rank:
+                    hint = f"1 {reg_currency} = X {body.currency}"
+                else:
+                    hint = f"1 {body.currency} = X {reg_currency}"
                 raise HTTPException(
                     422,
-                    f"Укажите курс конвертации: валюта расхода ({body.currency}) "
-                    f"≠ валюта кассы ({reg_currency}). Поле cash_rate обязательно "
-                    f"(сколько {reg_currency} за 1 {body.currency})."
+                    f"cross_currency_rate_required:{body.currency}:{reg_currency}"
                 )
-            cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+            # Определяем что крупнее и считаем cash_amount
+            if exp_rank > reg_rank:
+                # Расход в крупной валюте (напр. USD→CNY): cash_rate = 1 USD = X CNY
+                # Списываем: body.amount * cash_rate единиц кассы
+                cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+            else:
+                # Расход в мелкой валюте (напр. CNY→USDT): cash_rate = 1 USDT = X CNY
+                # Списываем: body.amount / cash_rate единиц кассы
+                cash_amount = (body.amount / body.cash_rate).quantize(Decimal("0.000001"))
 
         # Сохраняем сколько реально списали с кассы
         expense.cash_amount_in_register = cash_amount

@@ -36,10 +36,13 @@ export default function ExpenseFormPage({ user }: Props) {
   const [currency, setCurrency] = useState("CNY");
   const [rateToCny, setRateToCny] = useState(1);
   const [amount, setAmount] = useState(0);
+  const [cashRate, setCashRate] = useState<number>(0);
+  const [selectedRegisterId, setSelectedRegisterId] = useState<string | undefined>();
   const [linkType, setLinkType] = useState("none");
   const [isReimbursement, setIsReimbursement] = useState(!isAccountant);
   const [initialized, setInitialized] = useState(false);
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
+
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const expenseDate: dayjs.Dayjs | null = Form.useWatch("expense_date", form);
@@ -78,6 +81,20 @@ export default function ExpenseFormPage({ user }: Props) {
     queryKey: ["cash-registers"],
     queryFn: () => getCashRegisters().then(r => r.data),
   });
+
+  // Порядок «крупности» валют: USD > USDT > CNY > RUB
+  const CURRENCY_RANK: Record<string, number> = { USD: 3, USDT: 2, CNY: 1, RUB: 0 };
+  const selectedRegister = (cashRegisters as any[]).find((r: any) => r.id === selectedRegisterId);
+  const regCurrency: string = selectedRegister?.currency ?? "CNY";
+  const needCashRate = !!selectedRegisterId && currency !== regCurrency && regCurrency !== "CNY";
+  const expRank = CURRENCY_RANK[currency] ?? 1;
+  const regRank = CURRENCY_RANK[regCurrency] ?? 1;
+  const largerCurrency = expRank >= regRank ? currency : regCurrency;
+  const smallerCurrency = expRank >= regRank ? regCurrency : currency;
+  // Сколько спишется с кассы
+  const cashDeduction = needCashRate && cashRate > 0
+    ? expRank > regRank ? amount * cashRate : amount / cashRate
+    : null;
 
   // Initialize form
   useEffect(() => {
@@ -157,6 +174,12 @@ export default function ExpenseFormPage({ user }: Props) {
   });
 
   const handleSubmit = (values: any) => {
+    // Валидация cash_rate при кросс-валютном расходе
+    if (needCashRate && (!cashRate || cashRate <= 0)) {
+      message.error(t("expense.cross_currency_error"));
+      return;
+    }
+
     const payload = {
       expense_date: values.expense_date.format("YYYY-MM-DD"),
       category_id: values.category_id,
@@ -168,6 +191,7 @@ export default function ExpenseFormPage({ user }: Props) {
       client_id: values.link_type === "client" ? values.client_id : undefined,
       description: values.description,
       cash_register_id: values.cash_register_id || undefined,
+      cash_rate: needCashRate ? cashRate : undefined,
       ...(isAccountant && { reimburse_to_user_id: isReimbursement ? values.reimburse_to_user_id : undefined }),
     };
 
@@ -366,8 +390,39 @@ export default function ExpenseFormPage({ user }: Props) {
                 value: r.id,
                 label: `${r.name} (${r.currency})`,
               }))}
+              onChange={v => { setSelectedRegisterId(v); setCashRate(0); }}
             />
           </Form.Item>
+
+          {/* Поле курса кассы — показывается только при кросс-валюте */}
+          {needCashRate && (
+            <>
+              <Form.Item
+                label={t("expense.cash_rate_label", { larger: largerCurrency, smaller: smallerCurrency })}
+                required
+                validateStatus={cashRate <= 0 ? "error" : "success"}
+                help={cashRate <= 0 ? t("expense.cash_rate_hint") : undefined}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  min={0.000001}
+                  step={0.01}
+                  precision={6}
+                  value={cashRate || undefined}
+                  placeholder={`1 ${largerCurrency} = ? ${smallerCurrency}`}
+                  onChange={v => setCashRate(v ?? 0)}
+                />
+              </Form.Item>
+              {cashDeduction !== null && cashRate > 0 && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`${t("expense.cash_deduction")}: ${cashDeduction.toFixed(6)} ${regCurrency}`}
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+            </>
+          )}
 
           {isAccountant ? (
             <>

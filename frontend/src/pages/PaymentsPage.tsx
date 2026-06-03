@@ -156,18 +156,18 @@ export default function PaymentsPage() {
     <div>
       <Modal
         open={deleteModal.open}
-        title="Удаление платежа"
+        title={t("payment.delete_modal_title")}
         onOk={handleDeleteConfirm}
         onCancel={() => setDeleteModal({ open: false, paymentId: null })}
-        okText="Удалить"
+        okText={t("common.delete")}
         cancelText={t("common.cancel")}
         okButtonProps={{ danger: true, disabled: !deleteReason.trim(), loading: deleteMutation.isPending }}
         destroyOnClose
       >
-        <p style={{ marginBottom: 8 }}>Укажите причину удаления (обязательно):</p>
+        <p style={{ marginBottom: 8 }}>{t("payment.delete_reason_label")}:</p>
         <Input.TextArea
           rows={3}
-          placeholder="Например: ошибка ввода, дублирующий платёж..."
+          placeholder={t("payment.delete_reason_placeholder")}
           value={deleteReason}
           onChange={e => setDeleteReason(e.target.value)}
           autoFocus

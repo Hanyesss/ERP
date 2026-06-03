@@ -128,13 +128,13 @@ export default function PaymentDetailPage() {
               {t("common.edit")}
             </Button>
             <>
-              <Modal open={deleteModal} title="Удаление платежа"
+              <Modal open={deleteModal} title={t("payment.delete_modal_title")}
                 onOk={() => { if (deleteReason.trim()) deleteMutation.mutate(deleteReason.trim()); }}
                 onCancel={() => setDeleteModal(false)}
-                okText="Удалить" cancelText={t("common.cancel")}
+                okText={t("common.delete")} cancelText={t("common.cancel")}
                 okButtonProps={{ danger: true, disabled: !deleteReason.trim(), loading: deleteMutation.isPending }}
                 destroyOnClose>
-                <p style={{ marginBottom: 8 }}>Укажите причину удаления:</p>
+                <p style={{ marginBottom: 8 }}>{t("payment.delete_reason_label")}:</p>
                 <Input.TextArea rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} autoFocus />
               </Modal>
               <Button danger icon={<DeleteOutlined />} onClick={() => { setDeleteReason(""); setDeleteModal(true); }}>

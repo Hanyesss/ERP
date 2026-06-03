@@ -524,6 +524,10 @@ async def create_payment(
     )).scalar_one()
     reg_currency = reg.currency
 
+    _RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
+    exp_rank = _RANK.get(body.currency, 1)
+    reg_rank = _RANK.get(reg_currency, 1)
+
     if body.currency == reg_currency:
         cash_amount = body.amount
     elif reg_currency == "CNY":
@@ -532,11 +536,14 @@ async def create_payment(
         if not body.cash_rate or body.cash_rate <= 0:
             raise HTTPException(
                 422,
-                f"Укажите курс конвертации: валюта платежа ({body.currency}) "
-                f"≠ валюта кассы ({reg_currency}). Поле cash_rate обязательно "
-                f"(сколько {reg_currency} за 1 {body.currency})."
+                f"cross_currency_rate_required:{body.currency}:{reg_currency}"
             )
-        cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+        if exp_rank > reg_rank:
+            # Платёж в крупной валюте (напр. USD→CNY): cash_rate = 1 USD = X CNY
+            cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+        else:
+            # Платёж в мелкой валюте (напр. CNY→USDT): cash_rate = 1 USDT = X CNY
+            cash_amount = (body.amount / body.cash_rate).quantize(Decimal("0.000001"))
 
     current_balance = await _get_balance(db, body.cash_register_id)
     tx_direction = "in" if body.direction == "in" else "out"

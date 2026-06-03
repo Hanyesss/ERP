@@ -312,13 +312,13 @@ export default function ExpenseDetailPage({ user }: Props) {
             )}
             {canDelete && (
               <>
-                <Modal open={deleteModal} title="Удаление расхода"
+                <Modal open={deleteModal} title={t("expense.delete_modal_title")}
                   onOk={() => { if (deleteReason.trim()) deleteMutation.mutate(deleteReason.trim()); }}
                   onCancel={() => setDeleteModal(false)}
-                  okText="Удалить" cancelText={t("common.cancel")}
+                  okText={t("common.delete")} cancelText={t("common.cancel")}
                   okButtonProps={{ danger: true, disabled: !deleteReason.trim(), loading: deleteMutation.isPending }}
                   destroyOnClose>
-                  <p style={{ marginBottom: 8 }}>Укажите причину удаления:</p>
+                  <p style={{ marginBottom: 8 }}>{t("expense.delete_reason_label")}:</p>
                   <Input.TextArea rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} autoFocus />
                 </Modal>
                 <Button icon={<DeleteOutlined />} danger onClick={() => { setDeleteReason(""); setDeleteModal(true); }}>

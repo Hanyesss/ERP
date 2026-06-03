@@ -190,18 +190,18 @@ export default function OrderTable() {
     <div>
       <Modal
         open={cancelModal.open}
-        title="Отмена заказа"
+        title={t("order.cancel_modal_title")}
         onOk={handleCancelConfirm}
         onCancel={() => setCancelModal({ open: false, orderId: null })}
-        okText="Отменить заказ"
+        okText={t("order.cancel_btn")}
         cancelText={t("common.cancel")}
         okButtonProps={{ danger: true, disabled: !cancelReason.trim(), loading: cancelMutation.isPending }}
         destroyOnClose
       >
-        <p style={{ marginBottom: 8 }}>Укажите причину отмены (обязательно):</p>
+        <p style={{ marginBottom: 8 }}>{t("order.cancel_reason_label")}:</p>
         <Input.TextArea
           rows={3}
-          placeholder="Например: клиент отказался, дублирующий заказ, ошибка ввода..."
+          placeholder={t("order.cancel_reason_placeholder")}
           value={cancelReason}
           onChange={e => setCancelReason(e.target.value)}
           autoFocus

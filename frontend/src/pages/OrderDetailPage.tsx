@@ -857,15 +857,15 @@ export default function OrderDetailPage() {
               <>
                 <Modal
                   open={cancelModal}
-                  title="Отмена заказа"
+                  title={t("order.cancel_modal_title")}
                   onOk={() => { if (cancelReason.trim()) cancelMutation.mutate(cancelReason.trim()); }}
                   onCancel={() => setCancelModal(false)}
-                  okText="Отменить заказ"
+                  okText={t("order.cancel_btn")}
                   cancelText={t("common.cancel")}
                   okButtonProps={{ danger: true, disabled: !cancelReason.trim(), loading: cancelMutation.isPending }}
                   destroyOnClose
                 >
-                  <p style={{ marginBottom: 8 }}>Укажите причину отмены:</p>
+                  <p style={{ marginBottom: 8 }}>{t("order.cancel_reason_label")}:</p>
                   <Input.TextArea rows={3} value={cancelReason} onChange={e => setCancelReason(e.target.value)} autoFocus />
                 </Modal>
                 <Button danger icon={<CloseOutlined />} onClick={() => { setCancelReason(""); setCancelModal(true); }}>
