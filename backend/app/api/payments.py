@@ -31,7 +31,7 @@ from app.models.cash_register import CashRegister, CashTransaction
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-_ALLOWED = ("accountant", "admin")
+_ALLOWED = ("employee", "manager", "accountant", "admin")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -58,9 +58,12 @@ async def _recalc_order_payment_status(db: AsyncSession, order_id: uuid.UUID) ->
     paid_cny = paid_sum_row.scalar_one() or Decimal("0")
 
     total = order.total_sale_cny or Decimal("0")
+    remaining = total - paid_cny
+    # Допуск 5 CNY — курсовая погрешность при конвертации USDT/USD → CNY
+    TOLERANCE = Decimal("5")
     if paid_cny <= 0:
         order.payment_status = PaymentStatus.unpaid
-    elif paid_cny >= total:
+    elif remaining <= TOLERANCE:
         order.payment_status = PaymentStatus.paid
     else:
         order.payment_status = PaymentStatus.partial
@@ -91,7 +94,7 @@ async def _recalc_purchase_payment_status(db: AsyncSession, purchase_id: uuid.UU
 
 
 async def _recalc_order_supplier_payment_status(db: AsyncSession, order_id: uuid.UUID) -> None:
-    """Recalculate order.supplier_payment_status based on purchases linked to order items."""
+    """Recalculate order.supplier_payment_status based on ALL purchases linked to order."""
     from app.models.order_item import OrderItem
     from app.models.purchase_item import PurchaseItem
 
@@ -99,15 +102,22 @@ async def _recalc_order_supplier_payment_status(db: AsyncSession, order_id: uuid
     if not order:
         return
 
-    # Get all active purchases linked to this order's items
-    result = await db.execute(
+    # Trade purchases: linked via PurchaseItem → OrderItem
+    trade_result = await db.execute(
         select(Purchase.payment_status)
         .join(PurchaseItem, PurchaseItem.purchase_id == Purchase.id)
         .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
         .where(OrderItem.order_id == order_id, Purchase.is_deleted == False)
         .distinct()
     )
-    statuses = {row[0] for row in result.all()}
+    # Logistics purchases: linked directly via Purchase.order_id
+    logistics_result = await db.execute(
+        select(Purchase.payment_status)
+        .where(Purchase.order_id == order_id, Purchase.is_deleted == False)
+        .distinct()
+    )
+
+    statuses = {row[0] for row in trade_result.all()} | {row[0] for row in logistics_result.all()}
 
     if not statuses:
         order.supplier_payment_status = PaymentStatus.unpaid
@@ -253,24 +263,54 @@ async def _recalc_all_for_payment(db: AsyncSession, payment: Payment) -> None:
         )
         for row in alloc_rows.all():
             await _recalc_order_payment_status(db, row[0])
+            # Обновляем статус оплаты торгового заказа на сайте
+            try:
+                order_obj = (await db.execute(
+                    select(Order).where(Order.id == row[0])
+                )).scalar_one_or_none()
+                if order_obj and order_obj.sync_status == "synced":
+                    from app.models.business_type import BusinessType
+                    bt = (await db.execute(
+                        select(BusinessType).where(BusinessType.id == order_obj.business_type_id)
+                    )).scalar_one_or_none()
+                    if bt and bt.code == "trade":
+                        from app.integrations.irsway_site.service import sync_trade_order_to_site
+                        await sync_trade_order_to_site(order_obj, db)
+            except Exception:
+                pass
     else:
         link_rows = await db.execute(
             select(PurchasePaymentLink.purchase_id)
             .where(PurchasePaymentLink.payment_id == payment.id)
         )
         for row in link_rows.all():
-            await _recalc_purchase_payment_status(db, row[0])
-            # Find which orders are linked through purchase items
+            purchase_id = row[0]
+            await _recalc_purchase_payment_status(db, purchase_id)
+
+            affected_order_ids: set = set()
+
+            # Торговые закупки: order через PurchaseItem → OrderItem
             from app.models.purchase_item import PurchaseItem
             from app.models.order_item import OrderItem
             order_rows = await db.execute(
                 select(OrderItem.order_id)
                 .join(PurchaseItem, PurchaseItem.order_item_id == OrderItem.id)
-                .where(PurchaseItem.purchase_id == row[0])
+                .where(PurchaseItem.purchase_id == purchase_id)
                 .distinct()
             )
             for orow in order_rows.all():
-                await _recalc_order_supplier_payment_status(db, orow[0])
+                affected_order_ids.add(orow[0])
+
+            # Логистические закупки: order через Purchase.order_id напрямую
+            pur_row = await db.execute(
+                select(Purchase.order_id).where(Purchase.id == purchase_id)
+            )
+            direct_order_id = pur_row.scalar_one_or_none()
+            if direct_order_id:
+                affected_order_ids.add(direct_order_id)
+
+            for order_id in affected_order_ids:
+                await _recalc_order_supplier_payment_status(db, order_id)
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import { createExpense, updateExpense, getExpense, uploadReceipt } from "../api/
 import { getExpenseCategories, getEmployees } from "../api/references";
 import { getOrders } from "../api/orders";
 import { getExchangeRates } from "../api/exchangeRates";
+import { getCashRegisters } from "../api/cashRegisters";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import type { User } from "../types";
 
@@ -73,6 +74,11 @@ export default function ExpenseFormPage({ user }: Props) {
     enabled: linkType === "order",
   });
 
+  const { data: cashRegisters = [] } = useQuery({
+    queryKey: ["cash-registers"],
+    queryFn: () => getCashRegisters().then(r => r.data),
+  });
+
   // Initialize form
   useEffect(() => {
     if (initialized) return;
@@ -89,6 +95,7 @@ export default function ExpenseFormPage({ user }: Props) {
         client_id: existing.client_id,
         description: existing.description,
         reimburse_to_user_id: existing.reimburse_to_user_id,
+        cash_register_id: existing.cash_register_id,
       });
       setCurrency(existing.currency);
       setRateToCny(Number(existing.rate_to_cny));
@@ -160,6 +167,7 @@ export default function ExpenseFormPage({ user }: Props) {
       order_id: values.link_type === "order" ? values.order_id : undefined,
       client_id: values.link_type === "client" ? values.client_id : undefined,
       description: values.description,
+      cash_register_id: values.cash_register_id || undefined,
       ...(isAccountant && { reimburse_to_user_id: isReimbursement ? values.reimburse_to_user_id : undefined }),
     };
 
@@ -348,6 +356,17 @@ export default function ExpenseFormPage({ user }: Props) {
 
           <Form.Item name="description" label={t("expense.description")} rules={[{ required: true }]}>
             <Input.TextArea rows={2} />
+          </Form.Item>
+
+          <Form.Item name="cash_register_id" label={t("expense.cash_register")}>
+            <Select
+              allowClear
+              placeholder={t("expense.select_cash_register")}
+              options={(cashRegisters as any[]).filter((r: any) => r.is_active).map((r: any) => ({
+                value: r.id,
+                label: `${r.name} (${r.currency})`,
+              }))}
+            />
           </Form.Item>
 
           {isAccountant ? (

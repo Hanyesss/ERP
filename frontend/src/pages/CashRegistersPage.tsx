@@ -187,7 +187,7 @@ export default function CashRegistersPage() {
         </Col>
       </Row>
 
-      <Table columns={regColumns} dataSource={registers} rowKey="id" loading={isLoading} size="small" pagination={false} />
+      <Table columns={regColumns} dataSource={registers} rowKey="id" scroll={{ x: "max-content" }} loading={isLoading} size="small" pagination={false} />
 
       {/* Create / Edit modal */}
       <Modal open={modalOpen} title={editing ? t("cash.edit") : t("cash.add_new")}

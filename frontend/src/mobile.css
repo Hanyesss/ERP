@@ -1,0 +1,91 @@
+/* ── Mobile global overrides ────────────────────────────────────────────── */
+
+/* Prevent text zoom on iOS after input focus */
+input, select, textarea { font-size: 16px !important; }
+
+/* Tighter content on mobile */
+@media (max-width: 767px) {
+  /* Reduce Ant Design content padding */
+  .ant-layout-content {
+    margin: 8px !important;
+    padding: 12px !important;
+    border-radius: 6px !important;
+  }
+
+  /* Tables: always horizontal scroll */
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Bigger touch targets on table buttons */
+  .ant-table .ant-btn-sm {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  /* Pagination smaller */
+  .ant-pagination {
+    font-size: 12px;
+  }
+  .ant-pagination-item,
+  .ant-pagination-prev,
+  .ant-pagination-next {
+    min-width: 28px;
+    height: 28px;
+    line-height: 28px;
+  }
+
+  /* Form items tighter */
+  .ant-form-item {
+    margin-bottom: 12px;
+  }
+
+  /* Modals full width */
+  .ant-modal {
+    max-width: 100vw !important;
+    margin: 0 !important;
+    top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .ant-modal-content {
+    border-radius: 0 !important;
+    min-height: 100dvh;
+  }
+  .ant-modal-body {
+    max-height: calc(100dvh - 110px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Collapse panels */
+  .ant-collapse-header {
+    padding: 10px 12px !important;
+  }
+
+  /* Tabs compact */
+  .ant-tabs-tab {
+    padding: 8px 10px !important;
+    font-size: 13px;
+  }
+
+  /* Title smaller */
+  h1.ant-typography, .ant-typography h1 { font-size: 20px !important; }
+  h2.ant-typography, .ant-typography h2 { font-size: 18px !important; }
+  h3.ant-typography, .ant-typography h3 { font-size: 16px !important; }
+  h4.ant-typography, .ant-typography h4 { font-size: 15px !important; }
+
+  /* Selects and inputs fill width */
+  .mobile-full-width .ant-select,
+  .mobile-full-width .ant-picker,
+  .mobile-full-width .ant-input-affix-wrapper,
+  .mobile-full-width input {
+    width: 100% !important;
+  }
+
+  /* Row gutter fix */
+  .ant-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}

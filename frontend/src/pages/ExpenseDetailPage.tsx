@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Descriptions, Button, Tag, Typography, Space, Popconfirm,
-  Row, Col, Card, Modal, Form, Input, DatePicker, message,
+  Row, Col, Card, Modal, Form, Input, DatePicker, Select, message,
   Skeleton, Timeline, Upload, Tabs,
 } from "antd";
 import {
@@ -18,6 +18,7 @@ import {
   approveReimbursement, rejectReimbursement, markReimbursementPaid,
   uploadReceipt, getExpenseHistory, getFileUrl,
 } from "../api/expenses";
+import { getCashRegisters } from "../api/cashRegisters";
 import type { User } from "../types";
 
 const { Title, Text } = Typography;
@@ -68,6 +69,12 @@ export default function ExpenseDetailPage({ user }: Props) {
     enabled: !!id,
   });
 
+  const { data: cashRegisters = [] } = useQuery({
+    queryKey: ["cash-registers"],
+    queryFn: () => getCashRegisters().then(r => r.data),
+    enabled: isAccountant,
+  });
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["expense", id] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
@@ -93,7 +100,8 @@ export default function ExpenseDetailPage({ user }: Props) {
   });
 
   const paidMutation = useMutation({
-    mutationFn: (paid_date: string) => markReimbursementPaid(id!, paid_date),
+    mutationFn: (data: { paid_date: string; cash_register_id?: string }) =>
+      markReimbursementPaid(id!, data),
     onSuccess: () => { message.success("✓"); invalidate(); setPaidOpen(false); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -148,6 +156,11 @@ export default function ExpenseDetailPage({ user }: Props) {
             <Descriptions.Item label={t("expense.description")} span={2}>
               {expense.description}
             </Descriptions.Item>
+            {expense.cash_register_name && (
+              <Descriptions.Item label={t("expense.cash_register")} span={2}>
+                <Tag color="blue">{expense.cash_register_name}</Tag>
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label={t("common.created_by")}>{expense.created_by_name}</Descriptions.Item>
             <Descriptions.Item label={t("common.created_at")}>
               {new Date(expense.created_at).toLocaleString("ru-RU")}
@@ -340,10 +353,22 @@ export default function ExpenseDetailPage({ user }: Props) {
         <Form
           form={paidForm}
           layout="vertical"
-          onFinish={v => paidMutation.mutate(v.paid_date.format("YYYY-MM-DD"))}
+          onFinish={v => paidMutation.mutate({
+            paid_date: v.paid_date.format("YYYY-MM-DD"),
+            cash_register_id: v.cash_register_id || undefined,
+          })}
         >
           <Form.Item name="paid_date" label={t("expense.reimburse_paid_date")} rules={[{ required: true }]}>
             <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="cash_register_id" label={t("expense.cash_register")} rules={[{ required: true, message: t("expense.select_cash_register") }]}>
+            <Select
+              placeholder={t("expense.select_cash_register")}
+              options={(cashRegisters as any[]).filter((r: any) => r.is_active).map((r: any) => ({
+                value: r.id,
+                label: `${r.name} (${r.currency})`,
+              }))}
+            />
           </Form.Item>
         </Form>
       </Modal>

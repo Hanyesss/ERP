@@ -65,7 +65,10 @@ function ChargeRow({ type, idx, form, rates }: { type: string; idx: number; form
   const amount = Number(watcher?.amount) || 0;
   const currency = watcher?.currency || "USD";
   const rate = rates[currency] ?? null;
-  const amountCny = (rate !== null && amount > 0) ? (amount * rate).toFixed(2) : "—";
+  // insurance_percent — это процент, не денежная сумма, CNY не считаем
+  const amountCny = type === "insurance_percent"
+    ? "—"
+    : (rate !== null && amount > 0) ? (amount * rate).toFixed(2) : "—";
 
   return (
     <Row gutter={8} align="middle" style={{ marginBottom: 4 }}>

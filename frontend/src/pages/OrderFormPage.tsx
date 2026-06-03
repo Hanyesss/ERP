@@ -53,6 +53,7 @@ export default function OrderFormPage({ user }: Props) {
   const [pendingOrderFiles, setPendingOrderFiles] = useState<PendingOrderFile[]>([]);
   const [pendingFileType, setPendingFileType] = useState("cargo_photo");
   const pendingFilesInputRef = useRef<HTMLInputElement>(null);
+  const orderNumberEditedRef = useRef(false); // защита от перезаписи ручного ввода
 
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
@@ -139,15 +140,13 @@ export default function OrderFormPage({ user }: Props) {
     if (isLogistics) {
       let sale = 0;
       (charges || []).forEach((charge: any) => {
+        // insurance_percent — просто процент, не денежная сумма, не добавляем к итогу
+        if (charge?.charge_type === "insurance_percent") return;
         if (!charge?.amount) return;
         const r = rates[charge?.currency ?? "CNY"] ?? null;
         if (r !== null) sale += Number(charge.amount) * r;
       });
-      (items || []).forEach((item: any) => {
-        if (!item?.weight_kg || !item?.price_per_kg) return;
-        const r = rates[item?.price_per_kg_currency ?? "CNY"] ?? null;
-        if (r !== null) sale += Number(item.weight_kg) * Number(item.price_per_kg) * r;
-      });
+      // delivery (charges[0]) уже содержит weight × price_per_kg — не добавляем повторно
       return { totalSale: sale };
     }
     let sale = 0;
@@ -178,7 +177,7 @@ export default function OrderFormPage({ user }: Props) {
   }, [isEdit, form]);
 
   useEffect(() => {
-    if (!isEdit && nextNumber) {
+    if (!isEdit && nextNumber && !orderNumberEditedRef.current) {
       form.setFieldValue("order_number", nextNumber.order_number);
     }
   }, [nextNumber, isEdit, form]);
@@ -474,7 +473,7 @@ export default function OrderFormPage({ user }: Props) {
           <Row gutter={16}>
             <Col span={6}>
               <Form.Item name="order_number" label={t("order.number")} rules={[{ required: true }]}>
-                <Input />
+                <Input onChange={() => { orderNumberEditedRef.current = true; }} />
               </Form.Item>
             </Col>
             <Col span={4}>
@@ -611,9 +610,9 @@ export default function OrderFormPage({ user }: Props) {
           </Card>
         )}
 
-        {/* Files: pending upload during logistics creation */}
-        {isLogistics && !isEdit && (
-          <Card title={t("order.cargo_photo")} style={{ marginBottom: 16 }}>
+        {/* Files: pending upload during order creation (any type) */}
+        {!isEdit && (
+          <Card title={t("order.tab_files")} style={{ marginBottom: 16 }}>
             <Row gutter={8} align="middle" style={{ marginBottom: pendingOrderFiles.length ? 12 : 0 }}>
               <Col>
                 <Select

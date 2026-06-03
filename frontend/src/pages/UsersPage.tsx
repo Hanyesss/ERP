@@ -320,7 +320,7 @@ export default function UsersPage() {
         />
       </Space>
 
-      <Table
+      <Table scroll={{ x: "max-content" }}
         dataSource={users}
         columns={columns}
         rowKey="id"

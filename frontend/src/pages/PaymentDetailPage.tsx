@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  Button, Card, Col, Descriptions, Divider, Popconfirm, Row,
-  Space, Statistic, Table, Tag, Typography, message,
+  Button, Card, Col, Descriptions, Divider, Form, Input, InputNumber,
+  Modal, Popconfirm, Row, Select, DatePicker, Space, Statistic,
+  Table, Tag, Typography, message,
 } from "antd";
-import { DeleteOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+import { DeleteOutlined, ArrowLeftOutlined, EditOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getPayment, deletePayment } from "../api/payments";
+import dayjs from "dayjs";
+import { getPayment, deletePayment, updatePayment } from "../api/payments";
 
 const { Title, Text } = Typography;
 
@@ -21,10 +24,25 @@ export default function PaymentDetailPage() {
   const backUrl = searchParams.get("back") || "/payments";
   const qc = useQueryClient();
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm] = Form.useForm();
+
   const { data: payment, isLoading } = useQuery({
     queryKey: ["payment", id],
     queryFn: () => getPayment(id!).then(r => r.data),
     enabled: !!id,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => updatePayment(id!, data),
+    onSuccess: () => {
+      message.success("✓");
+      qc.invalidateQueries({ queryKey: ["payment", id] });
+      qc.invalidateQueries({ queryKey: ["payments"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      setEditOpen(false);
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
   const deleteMutation = useMutation({
@@ -90,16 +108,34 @@ export default function PaymentDetailPage() {
           </Space>
         </Col>
         <Col>
-          <Popconfirm
-            title={t("payment.delete_confirm")}
-            onConfirm={() => deleteMutation.mutate()}
-            okText={t("common.yes")}
-            cancelText={t("common.no")}
-          >
-            <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
-              {t("common.delete")}
+          <Space>
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => {
+                editForm.setFieldsValue({
+                  payment_date: dayjs(payment.payment_date),
+                  currency: payment.currency,
+                  amount: Number(payment.amount),
+                  rate_to_cny: Number(payment.rate_to_cny),
+                  network_fee: payment.network_fee != null ? Number(payment.network_fee) : undefined,
+                  notes: payment.notes,
+                });
+                setEditOpen(true);
+              }}
+            >
+              {t("common.edit")}
             </Button>
-          </Popconfirm>
+            <Popconfirm
+              title={t("payment.delete_confirm")}
+              onConfirm={() => deleteMutation.mutate()}
+              okText={t("common.yes")}
+              cancelText={t("common.no")}
+            >
+              <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
+                {t("common.delete")}
+              </Button>
+            </Popconfirm>
+          </Space>
         </Col>
       </Row>
 
@@ -159,7 +195,7 @@ export default function PaymentDetailPage() {
         </Row>
 
         {payment.allocations.length > 0 ? (
-          <Table
+          <Table scroll={{ x: "max-content" }}
             dataSource={payment.allocations}
             rowKey="id"
             size="small"
@@ -183,6 +219,63 @@ export default function PaymentDetailPage() {
           </Text>
         )}
       </Card>
+
+      <Modal
+        open={editOpen}
+        title={t("common.edit")}
+        onCancel={() => setEditOpen(false)}
+        onOk={() => editForm.submit()}
+        confirmLoading={updateMutation.isPending}
+        okText={t("common.save")}
+        cancelText={t("common.cancel")}
+        destroyOnClose
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={(v) => updateMutation.mutate({
+            payment_date: v.payment_date.format("YYYY-MM-DD"),
+            currency: v.currency,
+            amount: v.amount,
+            rate_to_cny: v.rate_to_cny,
+            network_fee: v.network_fee ?? null,
+            notes: v.notes ?? null,
+          })}
+        >
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="payment_date" label={t("payment.date")} rules={[{ required: true }]}>
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="currency" label={t("payment.currency")} rules={[{ required: true }]}>
+                <Select options={["CNY","RUB","USDT","USD"].map(c => ({ value: c, label: c }))} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="amount" label={t("payment.amount")} rules={[{ required: true }]}>
+                <InputNumber min={0} step={0.01} precision={2} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="rate_to_cny" label={t("payment.rate_to_cny")} rules={[{ required: true }]}>
+                <InputNumber min={0} step={0.0001} precision={8} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          {payment.currency === "USDT" && (
+            <Form.Item name="network_fee" label={t("payment.network_fee")}>
+              <InputNumber min={0} step={0.01} precision={2} style={{ width: "100%" }} />
+            </Form.Item>
+          )}
+          <Form.Item name="notes" label={t("payment.notes")}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

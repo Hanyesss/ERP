@@ -147,7 +147,7 @@ export default function ExchangeRatesPage() {
         </Col>
       </Row>
 
-      <Table
+      <Table scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={grouped}
         rowKey="date"

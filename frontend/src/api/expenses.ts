@@ -40,8 +40,10 @@ export const approveReimbursement = (id: string, amount?: number) =>
 export const rejectReimbursement = (id: string, reject_reason: string) =>
   apiClient.post(`/api/expenses/${id}/reject`, { reject_reason });
 
-export const markReimbursementPaid = (id: string, paid_date: string) =>
-  apiClient.post(`/api/expenses/${id}/mark-paid`, { paid_date });
+export const markReimbursementPaid = (
+  id: string,
+  data: { paid_date: string; cash_register_id?: string }
+) => apiClient.post(`/api/expenses/${id}/mark-paid`, data);
 
 export const getMyBalance = () =>
   apiClient.get<ReimbursementBalance>("/api/expenses/my-balance");

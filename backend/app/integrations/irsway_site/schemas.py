@@ -61,6 +61,29 @@ class ShipmentResult(BaseModel):
     error: Optional[str] = None
 
 
+class TradeOrderPayload(BaseModel):
+    """Payload для создания/обновления торгового заказа на сайте."""
+    erp_order_id: str
+    number: str
+    client_code: Optional[str] = None
+    client_name: str
+    goods_name: Optional[str] = None
+    order_date: Optional[str] = None      # YYYY-MM-DD
+    currency: str = "CNY"
+    total_amount_cny: Optional[float] = None
+    paid_amount_cny: Optional[float] = None
+    payment_status: str = "unpaid"        # unpaid / partial / paid
+    invoice_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TradeOrderResult(BaseModel):
+    id: Optional[int] = None
+    number: Optional[str] = None
+    remaining_cny: Optional[str] = None
+    error: Optional[str] = None
+
+
 class HealthResult(BaseModel):
     ok: bool
     message: Optional[str] = None

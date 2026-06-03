@@ -10,6 +10,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { createPurchase, updatePurchase, getPurchase, getAvailableForPurchase, getNextPurchaseNumber } from "../api/purchases";
 import { getOrders } from "../api/orders";
+import { getExchangeRates } from "../api/exchangeRates";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import apiClient from "../api/client";
 import type { AvailableForPurchaseItem } from "../types/order";
@@ -34,10 +35,22 @@ export default function PurchaseFormPage() {
   const [itemRows, setItemRows] = useState<ItemRow[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const purchaseNumberEditedRef = useRef(false);
 
   const purchaseDate: dayjs.Dayjs | null = Form.useWatch("purchase_date", form);
   const dateStr = purchaseDate?.format("YYYY-MM-DD");
   const currency: string = Form.useWatch("currency", form) || "CNY";
+
+  // Загружаем курсы на дату закупки
+  const { data: ratesData } = useQuery({
+    queryKey: ["purchase-rates", dateStr],
+    queryFn: () => getExchangeRates({ date_from: dateStr, date_to: dateStr }).then(r => r.data),
+    enabled: !!dateStr,
+  });
+  const ratesByCurrency: Record<string, number> = (ratesData?.items || []).reduce((acc: Record<string, number>, r) => {
+    acc[r.currency] = Number(r.rate_to_cny);
+    return acc;
+  }, { CNY: 1 });
 
   const { data: nextNumber } = useQuery({
     queryKey: ["next-purchase-number", dateStr],
@@ -46,7 +59,9 @@ export default function PurchaseFormPage() {
   });
 
   useEffect(() => {
-    if (nextNumber) form.setFieldValue("purchase_number", nextNumber.purchase_number);
+    if (nextNumber && !purchaseNumberEditedRef.current) {
+      form.setFieldValue("purchase_number", nextNumber.purchase_number);
+    }
   }, [nextNumber, form]);
 
   useEffect(() => {
@@ -56,6 +71,17 @@ export default function PurchaseFormPage() {
       rate_to_cny: 1,
     });
   }, [form]);
+
+  // При смене валюты или загрузке курсов — автоматически подставляем rate_to_cny
+  useEffect(() => {
+    if (!currency) return;
+    if (currency === "CNY") {
+      form.setFieldValue("rate_to_cny", 1);
+    } else {
+      const rate = ratesByCurrency[currency];
+      if (rate != null) form.setFieldValue("rate_to_cny", rate);
+    }
+  }, [currency, ratesData]); // ratesData (не ratesByCurrency) чтобы не было лишних ре-рендеров
 
   const { data: orders } = useQuery({
     queryKey: ["orders-list-brief"],
@@ -181,7 +207,7 @@ export default function PurchaseFormPage() {
           <Row gutter={16}>
             <Col span={6}>
               <Form.Item name="purchase_number" label={t("purchase.number")} rules={[{ required: true }]}>
-                <Input />
+                <Input onChange={() => { purchaseNumberEditedRef.current = true; }} />
               </Form.Item>
             </Col>
             <Col span={6}>
@@ -279,7 +305,7 @@ export default function PurchaseFormPage() {
         {/* Trade/services: per-item table */}
         {!isLogistics && itemRows.length > 0 && (
           <Card title={t("purchase.items")} style={{ marginBottom: 16 }}>
-            <Table
+            <Table scroll={{ x: "max-content" }}
               dataSource={itemRows}
               rowKey="id"
               size="small"

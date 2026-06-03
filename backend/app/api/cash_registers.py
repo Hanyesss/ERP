@@ -71,18 +71,30 @@ async def list_registers(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    result = await db.execute(
+    registers = (await db.execute(
         select(CashRegister).where(CashRegister.is_active == True).order_by(CashRegister.name)
+    )).scalars().all()
+
+    # Один запрос для всех балансов вместо N запросов в цикле
+    balances_result = await db.execute(
+        select(
+            CashTransaction.cash_register_id,
+            func.coalesce(func.sum(case(
+                (CashTransaction.direction == "in", CashTransaction.amount),
+                else_=-CashTransaction.amount,
+            )), Decimal("0")).label("balance"),
+        ).group_by(CashTransaction.cash_register_id)
     )
-    registers = result.scalars().all()
-    items = []
-    for r in registers:
-        balance = await _get_balance(db, r.id)
-        items.append(CashRegisterResponse(
+    balances = {row[0]: row[1] for row in balances_result.all()}
+
+    return [
+        CashRegisterResponse(
             id=r.id, name=r.name, currency=r.currency,
-            notes=r.notes, is_active=r.is_active, balance=balance,
-        ))
-    return items
+            notes=r.notes, is_active=r.is_active,
+            balance=balances.get(r.id, Decimal("0")),
+        )
+        for r in registers
+    ]
 
 
 @router.post("", response_model=CashRegisterResponse)

@@ -27,6 +27,8 @@ export interface ExpenseListItem {
   reimburse_status?: ReimburseStatus;
   description: string;
   receipt_url?: string;
+  cash_register_id?: string;
+  cash_register_name?: string;
   created_by: string;
   created_by_name: string;
   created_at: string;
@@ -37,6 +39,8 @@ export interface Expense extends ExpenseListItem {
   rate_to_cny: number;
   reimburse_paid_date?: string;
   reject_reason?: string;
+  cash_register_id?: string;
+  cash_register_name?: string;
 }
 
 export interface ExpenseListResponse {

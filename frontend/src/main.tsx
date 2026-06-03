@@ -6,6 +6,7 @@ import { initReactI18next } from "react-i18next";
 import ru from "./locales/ru.json";
 import zh from "./locales/zh.json";
 import App from "./App";
+import "./mobile.css";
 
 const savedLang = localStorage.getItem("lang") || "ru";
 

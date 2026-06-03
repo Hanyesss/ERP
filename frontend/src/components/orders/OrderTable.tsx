@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Table, Button, Space, Popconfirm, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip } from "antd";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { EyeOutlined, EditOutlined, DeleteOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -169,61 +170,67 @@ export default function OrderTable() {
   const managerOptions = (managers || []).map(m => ({ value: m.id, label: m.full_name }));
   const statusOptions = ["new", "active", "closed", "cancelled"].map(s => ({ value: s, label: t(`order.status_${s}`) }));
 
+  const isMobile = useIsMobile();
   const totalSale = data?.page_total_sale_cny ?? 0;
   const totalCost = data?.page_total_cost_cny ?? 0;
 
   return (
     <div>
-      <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
-        <Col>
-          <Input.Search placeholder={t("order.number")} allowClear style={{ width: 180 }}
+      <Row gutter={[8, 8]} style={{ marginBottom: 12 }} className="mobile-full-width">
+        <Col xs={24} sm="auto">
+          <Input.Search placeholder={t("order.number")} allowClear style={{ width: isMobile ? "100%" : 180 }}
             onSearch={v => { setSearch(v); setPage(1); }}
             onChange={e => { if (!e.target.value) { setSearch(""); setPage(1); } }}
           />
         </Col>
-        <Col>
-          <DatePicker.RangePicker style={{ width: 240 }}
+        <Col xs={24} sm="auto">
+          <DatePicker.RangePicker style={{ width: isMobile ? "100%" : 240 }}
             onChange={(_, strs) => { setDateRange(strs[0] && strs[1] ? [strs[0], strs[1]] : null); setPage(1); }}
           />
         </Col>
-        <Col>
+        <Col xs={24} sm="auto">
           <CounterpartySelect
             type="client"
             placeholder={t("order.client")}
-            style={{ width: 180 }}
+            style={{ width: isMobile ? "100%" : 180 }}
             allowClear
             onChange={v => { setClientId(v); setPage(1); }}
           />
         </Col>
-        <Col>
-          <Select allowClear placeholder={t("order.business_type")} style={{ width: 140 }} options={btOptions}
-            onChange={v => { setBtId(v); setPage(1); }} />
-        </Col>
-        <Col>
-          <Select allowClear placeholder={t("order.title")} style={{ width: 130 }} options={statusOptions}
-            onChange={v => { setStatusFilter(v); setPage(1); }} />
-        </Col>
-        <Col>
-          <Select allowClear placeholder={t("order.manager")} style={{ width: 150 }} options={managerOptions}
-            onChange={v => { setManagerId(v); setPage(1); }} />
-        </Col>
-        <Col>
-          <Select
-            allowClear
-            placeholder={t("order.sync.title")}
-            style={{ width: 130 }}
-            options={["synced", "failed", "disabled"].map(s => ({ value: s, label: t(`order.sync.${s}`) }))}
-            onChange={v => { setSyncStatusFilter(v); setPage(1); }}
-          />
-        </Col>
-        <Col flex="auto" style={{ textAlign: "right" }}>
-          <Button type="primary" onClick={() => navigate("/orders/new")}>{t("order.create_new")}</Button>
+        {!isMobile && (
+          <>
+            <Col>
+              <Select allowClear placeholder={t("order.business_type")} style={{ width: 140 }} options={btOptions}
+                onChange={v => { setBtId(v); setPage(1); }} />
+            </Col>
+            <Col>
+              <Select allowClear placeholder={t("order.title")} style={{ width: 130 }} options={statusOptions}
+                onChange={v => { setStatusFilter(v); setPage(1); }} />
+            </Col>
+            <Col>
+              <Select allowClear placeholder={t("order.manager")} style={{ width: 150 }} options={managerOptions}
+                onChange={v => { setManagerId(v); setPage(1); }} />
+            </Col>
+            <Col>
+              <Select
+                allowClear
+                placeholder={t("order.sync.title")}
+                style={{ width: 130 }}
+                options={["synced", "failed", "disabled"].map(s => ({ value: s, label: t(`order.sync.${s}`) }))}
+                onChange={v => { setSyncStatusFilter(v); setPage(1); }}
+              />
+            </Col>
+          </>
+        )}
+        <Col xs={24} sm="auto" style={{ textAlign: isMobile ? "left" : "right", flex: isMobile ? undefined : "auto" }}>
+          <Button type="primary" block={isMobile} onClick={() => navigate("/orders/new")}>{t("order.create_new")}</Button>
         </Col>
       </Row>
 
       <Table
         columns={columns} dataSource={data?.items ?? []} rowKey="id" loading={isLoading} size="small"
-        pagination={{ current: page, total: data?.total ?? 0, pageSize: 20, onChange: setPage, showTotal: t => `${t}` }}
+        scroll={{ x: "max-content" }}
+        pagination={{ current: page, total: data?.total ?? 0, pageSize: 20, onChange: setPage, showTotal: t => `${t}`, size: isMobile ? "small" : "default" }}
         footer={() => (
           <Row justify="end" gutter={24}>
             <Col><Text type="secondary">{t("order.page_totals")}:</Text></Col>

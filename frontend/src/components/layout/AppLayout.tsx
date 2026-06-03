@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { Layout, Menu, Button, Typography, Space, Tooltip } from "antd";
+import { Layout, Menu, Button, Typography, Space, Tooltip, Drawer } from "antd";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
   BarChartOutlined, DatabaseOutlined, SettingOutlined, BankOutlined,
+  MenuOutlined, CloseOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User, UserRole } from "../../types";
 import { logout } from "../../api/auth";
 import NotificationBell from "../notifications/NotificationBell";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -27,7 +29,9 @@ export default function AppLayout({ user, onLogout }: Props) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -44,13 +48,13 @@ export default function AppLayout({ user, onLogout }: Props) {
   const menuItems = [
     { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
 
-    hasRole(user, "manager", "purchaser", "accountant", "admin") && {
+    hasRole(user, "employee", "manager", "purchaser", "accountant", "admin") && {
       key: "/counterparties",
       icon: <TeamOutlined />,
       label: t("nav.counterparties"),
     },
 
-    hasRole(user, "manager", "purchaser", "accountant", "admin") && {
+    hasRole(user, "employee", "manager", "purchaser", "accountant", "admin") && {
       key: "/orders",
       icon: <ShoppingOutlined />,
       label: t("nav.orders"),
@@ -62,7 +66,7 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.purchases"),
     },
 
-    hasRole(user, "accountant", "admin") && {
+    hasRole(user, "employee", "manager", "accountant", "admin") && {
       key: "/payments",
       icon: <WalletOutlined />,
       label: t("nav.payments"),
@@ -86,7 +90,7 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.exchange_rates"),
     },
 
-    hasRole(user, "accountant", "admin") && {
+    hasRole(user, "employee", "manager", "accountant", "admin") && {
       key: "/warehouses",
       icon: <DatabaseOutlined />,
       label: t("nav.warehouses"),
@@ -133,48 +137,116 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/settings/integrations"
     : location.pathname;
 
-  return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme="light" style={{ borderRight: "1px solid #f0f0f0" }}>
-        <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", borderBottom: "1px solid #f0f0f0", padding: "0 16px" }}>
-          {!collapsed
-            ? <Text strong style={{ fontSize: 16, whiteSpace: "nowrap" }}>IRS ERP</Text>
-            : <Text strong style={{ fontSize: 14 }}>IRS</Text>
-          }
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-          style={{ border: "none" }}
-        />
-        {!collapsed && (
-          <div style={{ position: "absolute", bottom: 48, width: "100%", textAlign: "center", padding: "8px 0" }}>
-            <Tooltip title="Разработал Hanyesss">
-              <Text type="secondary" style={{ fontSize: 11 }}>by Hanyesss</Text>
-            </Tooltip>
-          </div>
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigate(key);
+    if (isMobile) setDrawerOpen(false);
+  };
+
+  const menuContent = (
+    <>
+      <div style={{
+        height: 48,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: isMobile ? "space-between" : "center",
+        borderBottom: "1px solid #f0f0f0",
+        padding: "0 16px",
+        flexShrink: 0,
+      }}>
+        <Text strong style={{ fontSize: 16, whiteSpace: "nowrap" }}>IRS ERP</Text>
+        {isMobile && (
+          <Button type="text" icon={<CloseOutlined />} onClick={() => setDrawerOpen(false)} />
         )}
-      </Sider>
+      </div>
+      <Menu
+        mode="inline"
+        selectedKeys={[selectedKey]}
+        items={menuItems}
+        onClick={handleMenuClick}
+        style={{ border: "none", flex: 1, overflowY: "auto" }}
+      />
+      {!isMobile && !collapsed && (
+        <div style={{ textAlign: "center", padding: "8px 0 48px" }}>
+          <Tooltip title="Разработал Hanyesss">
+            <Text type="secondary" style={{ fontSize: 11 }}>by Hanyesss</Text>
+          </Tooltip>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <Layout style={{ minHeight: "100dvh" }}>
+      {/* Desktop sidebar */}
+      {!isMobile && (
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          theme="light"
+          style={{ borderRight: "1px solid #f0f0f0" }}
+        >
+          {menuContent}
+        </Sider>
+      )}
+
+      {/* Mobile drawer */}
+      {isMobile && (
+        <Drawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          placement="left"
+          width={220}
+          styles={{ body: { padding: 0, display: "flex", flexDirection: "column" }, header: { display: "none" } }}
+          style={{ top: 0 }}
+        >
+          {menuContent}
+        </Drawer>
+      )}
 
       <Layout>
-        <Header style={{ background: "#fff", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f0f0f0" }}>
-          <div style={{ flex: 1 }} />
-          <Button type="text" onClick={toggleLang} style={{ fontWeight: 500 }}>
-            {t("language.switch")}
-          </Button>
-          <div style={{ flex: 1 }} />
+        <Header style={{
+          background: "#fff",
+          padding: isMobile ? "0 12px" : "0 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid #f0f0f0",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+        }}>
           <Space>
+            {isMobile && (
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={() => setDrawerOpen(true)}
+                style={{ fontSize: 18 }}
+              />
+            )}
+            {isMobile && <Text strong style={{ fontSize: 15 }}>IRS ERP</Text>}
+          </Space>
+
+          <Space size={isMobile ? 4 : 12}>
+            <Button type="text" onClick={toggleLang} style={{ fontWeight: 500, fontSize: isMobile ? 12 : 14 }}>
+              {t("language.switch")}
+            </Button>
             <NotificationBell />
-            <Text>{user.full_name}</Text>
-            <Button type="link" onClick={handleLogout} danger>
+            {!isMobile && <Text style={{ fontSize: 13 }}>{user.full_name}</Text>}
+            <Button type="link" onClick={handleLogout} danger style={{ padding: isMobile ? "0 4px" : undefined, fontSize: isMobile ? 12 : 14 }}>
               {t("nav.logout")}
             </Button>
           </Space>
         </Header>
 
-        <Content style={{ margin: 24, padding: 24, background: "#fff", borderRadius: 8, minHeight: 360 }}>
+        <Content style={{
+          margin: isMobile ? 8 : 24,
+          padding: isMobile ? 12 : 24,
+          background: "#fff",
+          borderRadius: 8,
+          minHeight: 360,
+        }}>
           <Outlet />
         </Content>
       </Layout>

@@ -160,7 +160,7 @@ export default function PurchasesPage() {
         </Col>
       </Row>
 
-      <Table
+      <Table scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={data?.items ?? []}
         rowKey="id"

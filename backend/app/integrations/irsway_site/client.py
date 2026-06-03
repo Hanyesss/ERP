@@ -4,6 +4,7 @@ from typing import Optional
 from .schemas import (
     ShipmentCreatePayload, ShipmentStatusPayload,
     ShipmentResult, ShipmentClientResult, HealthResult, ClientCreateResult,
+    TradeOrderPayload, TradeOrderResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ class IrswayClient:
         if payload.packing is not None:
             body["packing"] = payload.packing
         if payload.market_fee is not None:
-            body["loaders"] = payload.market_fee
+            body["market_fee"] = payload.market_fee
         return body
 
     def health(self) -> HealthResult:
@@ -206,6 +207,40 @@ class IrswayClient:
             return ShipmentResult(error=f"HTTP {r.status_code}: {r.text[:300]}")
         except Exception as e:
             return ShipmentResult(error=str(e))
+
+    # ── Trade Orders ──────────────────────────────────────────────────────────
+
+    def create_trade_order(self, payload: TradeOrderPayload) -> TradeOrderResult:
+        try:
+            r = httpx.post(
+                self._url("/api/v1/trade-orders/"),
+                headers=self.headers,
+                json=payload.model_dump(exclude_none=True),
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 201):
+                data = r.json()
+                return TradeOrderResult(id=data.get("id"), number=data.get("number"),
+                                        remaining_cny=data.get("remaining_cny"))
+            return TradeOrderResult(error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return TradeOrderResult(error=str(e))
+
+    def update_trade_order(self, number: str, payload: TradeOrderPayload) -> TradeOrderResult:
+        try:
+            r = httpx.patch(
+                self._url(f"/api/v1/trade-orders/{number}/"),
+                headers=self.headers,
+                json=payload.model_dump(exclude_none=True),
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                return TradeOrderResult(id=data.get("id"), number=data.get("number"),
+                                        remaining_cny=data.get("remaining_cny"))
+            return TradeOrderResult(error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return TradeOrderResult(error=str(e))
 
     def add_status(self, shipment_number: str, payload: ShipmentStatusPayload) -> ShipmentResult:
         try:

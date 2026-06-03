@@ -1,13 +1,16 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  Button, Card, Col, Descriptions, Popconfirm, Row,
+  Button, Card, Col, Descriptions, Form, Input, InputNumber,
+  Modal, Popconfirm, Row, Select, DatePicker,
   Space, Statistic, Table, Tabs, Tag, Typography, Upload, message, List,
 } from "antd";
-import { DeleteOutlined, UploadOutlined, FileOutlined } from "@ant-design/icons";
-import { getPurchase, deletePurchase } from "../api/purchases";
+import { DeleteOutlined, EditOutlined, UploadOutlined, FileOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
+import { getPurchase, deletePurchase, updatePurchase } from "../api/purchases";
+import CounterpartySelect from "../components/common/CounterpartySelect";
 import { getPaymentsForPurchase } from "../api/payments";
 import apiClient from "../api/client";
 
@@ -36,12 +39,26 @@ export default function PurchaseDetailPage() {
     enabled: !!id,
   });
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm] = Form.useForm();
+
   const deleteMutation = useMutation({
     mutationFn: () => deletePurchase(id!),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchases"] });
       message.success("✓");
       navigate("/purchases");
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => updatePurchase(id!, data),
+    onSuccess: () => {
+      message.success("✓");
+      qc.invalidateQueries({ queryKey: ["purchase", id] });
+      qc.invalidateQueries({ queryKey: ["purchases"] });
+      setEditOpen(false);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -76,7 +93,7 @@ export default function PurchaseDetailPage() {
       key: "items",
       label: t("purchase.items"),
       children: (
-        <Table
+        <Table scroll={{ x: "max-content" }}
           dataSource={purchase.items}
           rowKey="id"
           size="small"
@@ -248,16 +265,33 @@ export default function PurchaseDetailPage() {
           <Space>
             <Button onClick={() => navigate("/purchases")}>{t("common.back")}</Button>
             {purchase.payment_status !== "paid" && (
-              <Popconfirm
-                title={t("purchase.delete_confirm")}
-                onConfirm={() => deleteMutation.mutate()}
-                okText={t("common.yes")}
-                cancelText={t("common.no")}
-              >
-                <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
-                  {t("common.delete")}
+              <>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    editForm.setFieldsValue({
+                      supplier_id: purchase.supplier_id,
+                      purchase_date: dayjs(purchase.purchase_date),
+                      currency: purchase.currency,
+                      rate_to_cny: Number(purchase.rate_to_cny),
+                      notes: purchase.notes,
+                    });
+                    setEditOpen(true);
+                  }}
+                >
+                  {t("common.edit")}
                 </Button>
-              </Popconfirm>
+                <Popconfirm
+                  title={t("purchase.delete_confirm")}
+                  onConfirm={() => deleteMutation.mutate()}
+                  okText={t("common.yes")}
+                  cancelText={t("common.no")}
+                >
+                  <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
+                    {t("common.delete")}
+                  </Button>
+                </Popconfirm>
+              </>
             )}
           </Space>
         </Col>
@@ -293,6 +327,51 @@ export default function PurchaseDetailPage() {
       </Card>
 
       <Tabs items={tabItems} />
+
+      <Modal
+        open={editOpen}
+        title={t("common.edit")}
+        onCancel={() => setEditOpen(false)}
+        onOk={() => editForm.submit()}
+        confirmLoading={updateMutation.isPending}
+        okText={t("common.save")}
+        cancelText={t("common.cancel")}
+        destroyOnClose
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={(v) => updateMutation.mutate({
+            supplier_id: v.supplier_id,
+            purchase_date: v.purchase_date.format("YYYY-MM-DD"),
+            currency: v.currency,
+            rate_to_cny: v.rate_to_cny,
+            notes: v.notes ?? null,
+          })}
+        >
+          <Form.Item name="supplier_id" label={t("purchase.supplier")} rules={[{ required: true }]}>
+            <CounterpartySelect type="supplier" placeholder={t("purchase.supplier")} />
+          </Form.Item>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="purchase_date" label={t("purchase.date")} rules={[{ required: true }]}>
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="currency" label={t("purchase.currency")} rules={[{ required: true }]}>
+                <Select options={["CNY","RUB","USDT","USD"].map(c => ({ value: c, label: c }))} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="rate_to_cny" label={t("purchase.rate_to_cny")}>
+            <InputNumber min={0} step={0.0001} precision={8} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="notes" label={t("purchase.notes")}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

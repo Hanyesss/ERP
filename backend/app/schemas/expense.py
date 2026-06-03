@@ -18,6 +18,7 @@ class ExpenseCreate(BaseModel):
     receipt_url: Optional[str] = None
     is_reimbursement: bool = False
     reimburse_to_user_id: Optional[uuid.UUID] = None
+    cash_register_id: Optional[uuid.UUID] = None
 
 
 class ExpenseUpdate(BaseModel):
@@ -32,6 +33,7 @@ class ExpenseUpdate(BaseModel):
     description: Optional[str] = None
     receipt_url: Optional[str] = None
     reimburse_to_user_id: Optional[uuid.UUID] = None
+    cash_register_id: Optional[uuid.UUID] = None
 
 
 class ExpenseListItem(BaseModel):
@@ -54,6 +56,8 @@ class ExpenseListItem(BaseModel):
     reimburse_status: Optional[str] = None
     description: str
     receipt_url: Optional[str] = None
+    cash_register_id: Optional[uuid.UUID] = None
+    cash_register_name: Optional[str] = None
     created_by: uuid.UUID
     created_by_name: str
     created_at: datetime
@@ -83,6 +87,8 @@ class ExpenseResponse(BaseModel):
     reject_reason: Optional[str] = None
     description: str
     receipt_url: Optional[str] = None
+    cash_register_id: Optional[uuid.UUID] = None
+    cash_register_name: Optional[str] = None
     created_by: uuid.UUID
     created_by_name: str
     created_at: datetime
@@ -110,6 +116,7 @@ class RejectBody(BaseModel):
 
 class MarkPaidBody(BaseModel):
     paid_date: date
+    cash_register_id: Optional[uuid.UUID] = None
 
 
 class ReimbursementBalance(BaseModel):

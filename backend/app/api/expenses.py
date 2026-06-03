@@ -17,6 +17,7 @@ from app.models.expense_category import ExpenseCategory
 from app.models.order import Order
 from app.models.counterparty import Counterparty
 from app.models.company import Company
+from app.models.cash_register import CashRegister, CashTransaction, TxDirection
 from app.models.exchange_rate import ExchangeRate
 from app.models.audit_log import AuditActionEnum
 from app.schemas.expense import (
@@ -30,6 +31,36 @@ from app.services.notifications import (
 )
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
+
+
+async def _record_cash_outflow(
+    db: AsyncSession,
+    cash_register_id: uuid.UUID,
+    amount: Decimal,
+    notes: str,
+    created_by: uuid.UUID,
+) -> None:
+    """Записывает расход в кассу. Работает даже при отрицательном балансе."""
+    from sqlalchemy import func as sqlfunc, case
+    balance_result = await db.execute(
+        select(sqlfunc.coalesce(
+            sqlfunc.sum(case(
+                (CashTransaction.direction == "in", CashTransaction.amount),
+                else_=-CashTransaction.amount,
+            )), Decimal("0")
+        )).where(CashTransaction.cash_register_id == cash_register_id)
+    )
+    current_balance = balance_result.scalar_one() or Decimal("0")
+    balance_after = current_balance - amount
+    db.add(CashTransaction(
+        id=uuid.uuid4(),
+        cash_register_id=cash_register_id,
+        direction=TxDirection.outflow,
+        amount=amount,
+        balance_after=balance_after,
+        notes=notes,
+        created_by=created_by,
+    ))
 
 _ACCOUNTANT_ROLES = ("accountant", "admin")
 _ALL_ROLES = ("employee", "manager", "purchaser", "accountant", "admin")
@@ -53,6 +84,7 @@ async def _load_expense(db: AsyncSession, expense_id: uuid.UUID) -> ExpenseRespo
     ReimburseUserAlias = aliased(User)
     CreatorAlias = aliased(User)
     CategoryAlias = aliased(ExpenseCategory)
+    CashRegisterAlias = aliased(CashRegister)
 
     row = (await db.execute(
         select(
@@ -63,12 +95,14 @@ async def _load_expense(db: AsyncSession, expense_id: uuid.UUID) -> ExpenseRespo
             ClientAlias.name.label("client_name"),
             ReimburseUserAlias.full_name.label("reimburse_to_name"),
             CreatorAlias.full_name.label("creator_name"),
+            CashRegisterAlias.name.label("cash_register_name"),
         )
         .join(CategoryAlias, Expense.category_id == CategoryAlias.id)
         .outerjoin(OrderAlias, Expense.order_id == OrderAlias.id)
         .outerjoin(ClientAlias, Expense.client_id == ClientAlias.id)
         .outerjoin(ReimburseUserAlias, Expense.reimburse_to_user_id == ReimburseUserAlias.id)
         .join(CreatorAlias, Expense.created_by == CreatorAlias.id)
+        .outerjoin(CashRegisterAlias, Expense.cash_register_id == CashRegisterAlias.id)
         .where(Expense.id == expense_id, Expense.is_active == True)
     )).first()
 
@@ -86,6 +120,7 @@ async def _load_expense(db: AsyncSession, expense_id: uuid.UUID) -> ExpenseRespo
         reimburse_to_user_id=e.reimburse_to_user_id, reimburse_to_name=row.reimburse_to_name,
         reimburse_status=e.reimburse_status, reimburse_paid_date=e.reimburse_paid_date,
         reject_reason=e.reject_reason, description=e.description, receipt_url=e.receipt_url,
+        cash_register_id=e.cash_register_id, cash_register_name=row.cash_register_name,
         created_by=e.created_by, created_by_name=row.creator_name,
         created_at=e.created_at, is_active=e.is_active,
     )
@@ -118,6 +153,7 @@ async def list_expenses(
     ReimburseUserAlias = aliased(User)
     CreatorAlias = aliased(User)
     CategoryAlias = aliased(ExpenseCategory)
+    CashRegAlias = aliased(CashRegister)
 
     stmt = (
         select(
@@ -128,12 +164,14 @@ async def list_expenses(
             ClientAlias.name.label("client_name"),
             ReimburseUserAlias.full_name.label("reimburse_to_name"),
             CreatorAlias.full_name.label("creator_name"),
+            CashRegAlias.name.label("cash_register_name"),
         )
         .join(CategoryAlias, Expense.category_id == CategoryAlias.id)
         .outerjoin(OrderAlias, Expense.order_id == OrderAlias.id)
         .outerjoin(ClientAlias, Expense.client_id == ClientAlias.id)
         .outerjoin(ReimburseUserAlias, Expense.reimburse_to_user_id == ReimburseUserAlias.id)
         .join(CreatorAlias, Expense.created_by == CreatorAlias.id)
+        .outerjoin(CashRegAlias, Expense.cash_register_id == CashRegAlias.id)
         .where(Expense.is_active == True)
     )
 
@@ -221,6 +259,7 @@ async def list_expenses(
             reimburse_to_user_id=r[0].reimburse_to_user_id, reimburse_to_name=r.reimburse_to_name,
             reimburse_status=r[0].reimburse_status,
             description=r[0].description, receipt_url=r[0].receipt_url,
+            cash_register_id=r[0].cash_register_id, cash_register_name=r.cash_register_name,
             created_by=r[0].created_by, created_by_name=r.creator_name,
             created_at=r[0].created_at, is_active=r[0].is_active,
         )
@@ -357,6 +396,7 @@ async def create_expense(
         reimburse_status=reimburse_status,
         description=body.description,
         receipt_url=body.receipt_url,
+        cash_register_id=body.cash_register_id,
         is_active=True,
         created_by=current_user.id,
     )
@@ -366,6 +406,12 @@ async def create_expense(
                        "is_reimbursement": body.is_reimbursement})
     if body.is_reimbursement:
         await on_reimbursement_created(db, expense.id, str(amount_cny), current_user.full_name)
+    # Списание с кассы (только для прямых расходов — не возмещений)
+    if body.cash_register_id and not body.is_reimbursement:
+        await _record_cash_outflow(
+            db, body.cash_register_id, amount_cny,
+            f"Расход: {body.description[:80]}", current_user.id,
+        )
     await db.commit()
     return await _load_expense(db, expense.id)
 
@@ -420,11 +466,32 @@ async def delete_expense(
 
     if not current_user.has_role(*_ACCOUNTANT_ROLES) and expense.created_by != current_user.id:
         raise HTTPException(403, "Access denied")
-    if expense.reimburse_status == ReimburseStatusEnum.paid:
+    if expense.reimburse_status == ReimburseStatusEnum.paid and not current_user.has_role("admin"):
         raise HTTPException(422, "Cannot delete a paid reimbursement")
 
     expense.is_active = False
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.delete, {})
+
+    # Возврат в кассу если был списан прямой расход (не возмещение)
+    if expense.cash_register_id and not expense.is_reimbursement:
+        from sqlalchemy import func as sqlfunc, case as sqcase
+        bal_res = await db.execute(
+            select(sqlfunc.coalesce(sqlfunc.sum(sqcase(
+                (CashTransaction.direction == "in", CashTransaction.amount),
+                else_=-CashTransaction.amount,
+            )), Decimal("0"))).where(CashTransaction.cash_register_id == expense.cash_register_id)
+        )
+        cur_bal = bal_res.scalar_one() or Decimal("0")
+        db.add(CashTransaction(
+            id=uuid.uuid4(),
+            cash_register_id=expense.cash_register_id,
+            direction=TxDirection.inflow,
+            amount=expense.amount_cny,
+            balance_after=cur_bal + expense.amount_cny,
+            notes=f"Отмена расхода: {expense.description[:80]}",
+            created_by=current_user.id,
+        ))
+
     await db.commit()
 
 
@@ -512,8 +579,15 @@ async def mark_reimbursement_paid(
 
     expense.reimburse_status = ReimburseStatusEnum.paid
     expense.reimburse_paid_date = body.paid_date
+    if body.cash_register_id:
+        expense.cash_register_id = body.cash_register_id
+        await _record_cash_outflow(
+            db, body.cash_register_id, expense.amount_cny,
+            f"Возмещение: {expense.description[:80]}", current_user.id,
+        )
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
-                      {"reimburse_status": "paid", "paid_date": str(body.paid_date)})
+                      {"reimburse_status": "paid", "paid_date": str(body.paid_date),
+                       "cash_register_id": str(body.cash_register_id) if body.cash_register_id else None})
     if expense.reimburse_to_user_id:
         await on_reimbursement_status_changed(
             db, expense.id, expense.reimburse_to_user_id,

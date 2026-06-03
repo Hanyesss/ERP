@@ -8,7 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 120 --retries 10 \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple/ \
+    --extra-index-url https://pypi.org/simple/ \
+    -r requirements.txt
 COPY . .
 RUN mkdir -p /app/uploads
 EXPOSE 8000

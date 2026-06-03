@@ -32,13 +32,13 @@ from app.schemas.order import (
     PurchaseItemBrief, AvailableForPurchaseItem,
 )
 from app.utils.audit import write_audit
-from app.integrations.irsway_site.service import sync_order_to_site
+from app.integrations.irsway_site.service import sync_order_to_site, sync_trade_order_to_site
 from app.services.notifications import notify_role, notify
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 _PURCHASER_ROLES = ("purchaser", "accountant", "admin")
-_ALL_EXCEPT_EMPLOYEE = ("manager", "purchaser", "accountant", "admin")
+_ALL_EXCEPT_EMPLOYEE = ("employee", "manager", "purchaser", "accountant", "admin")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ async def _get_rates(db: AsyncSession, order_date: date, currencies: set[str]) -
 async def _load_order_detail(
     db: AsyncSession, order_id: uuid.UUID, user: User
 ) -> Union[OrderResponseManager, OrderResponseFull]:
-    is_manager_only = user.has_role("manager") and not user.has_role(*_PURCHASER_ROLES)
+    is_manager_only = (user.has_role("manager") or user.has_role("employee")) and not user.has_role(*_PURCHASER_ROLES)
 
     ClientAlias = aliased(Counterparty)
     ManagerAlias = aliased(User)
@@ -308,11 +308,14 @@ def _calc_trade_totals(items_data, rates: dict[str, Decimal]) -> Decimal:
 
 def _calc_logistics_totals(items_data, charges_data, rates: dict[str, Decimal]) -> Decimal:
     total_sale = Decimal("0")
-    for item in items_data:
-        if item.weight_kg and item.price_per_kg:
-            r = rates.get(item.price_per_kg_currency or "CNY", Decimal("1"))
-            total_sale += item.weight_kg * item.price_per_kg * r
+    # Доставка уже содержится в charge_type="delivery" (= weight × price_per_kg),
+    # поэтому items НЕ суммируем — иначе двойной счёт.
+    # insurance_percent — просто процент, не денежная сумма — пропускаем.
     for charge in charges_data:
+        if charge.charge_type == "insurance_percent":
+            continue
+        if not charge.amount:
+            continue
         r = rates.get(charge.currency or "CNY", Decimal("1"))
         total_sale += charge.amount * r
     return total_sale.quantize(Decimal("0.01"))
@@ -347,12 +350,14 @@ async def _save_items_and_charges(
 
     for charge_data in charges_data:
         r = rates.get(charge_data.currency or "CNY", Decimal("1"))
+        # insurance_percent — число-процент, не валюта, amount_cny = 0
+        is_pct = charge_data.charge_type == "insurance_percent"
         db.add(OrderCharge(
             id=uuid.uuid4(), order_id=order_id,
             charge_type=charge_data.charge_type, amount=charge_data.amount,
             currency=charge_data.currency,
-            amount_cny=(charge_data.amount * r).quantize(Decimal("0.01")),
-            rate_to_cny=r, notes=charge_data.notes,
+            amount_cny=Decimal("0") if is_pct else (charge_data.amount * r).quantize(Decimal("0.01")),
+            rate_to_cny=Decimal("1") if is_pct else r, notes=charge_data.notes,
         ))
 
     return rates
@@ -643,6 +648,12 @@ async def create_order(
             await db.commit()
         except Exception:
             pass
+    elif bt and bt.code == "trade":
+        try:
+            await sync_trade_order_to_site(order, db)
+            await db.commit()
+        except Exception:
+            pass
 
     return await _load_order_detail(db, order.id, current_user)
 
@@ -740,6 +751,12 @@ async def update_order(
     if is_logistics:
         try:
             await sync_order_to_site(order, db)
+            await db.commit()
+        except Exception:
+            pass
+    elif bt and bt.code == "trade":
+        try:
+            await sync_trade_order_to_site(order, db)
             await db.commit()
         except Exception:
             pass

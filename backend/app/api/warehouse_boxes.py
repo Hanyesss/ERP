@@ -1,0 +1,655 @@
+import uuid
+import io
+import base64
+from decimal import Decimal
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, Form, status
+from fastapi.responses import Response
+from jinja2 import Environment, FileSystemLoader
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+
+from app.database import get_db
+from app.core.deps import get_current_user, require_roles
+from app.models.user import User
+from app.models.warehouse_box import WarehouseBox, PackingList, BoxStatus
+from app.models.counterparty import Counterparty
+from app.models.warehouse import Warehouse
+
+router = APIRouter(prefix="/api/warehouse-boxes", tags=["warehouse-boxes"])
+
+_BOX_ROLES = ("employee", "manager", "accountant", "admin")
+
+UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates" / "pdf"
+MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+# ── Pydantic schemas ─────────────────────────────────────────────────────────
+
+class BoxCreate(BaseModel):
+    counterparty_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    weight: Decimal
+    volume: Decimal
+    item_name: str
+    description: Optional[str] = None
+
+
+class BoxUpdate(BaseModel):
+    weight: Optional[Decimal] = None
+    volume: Optional[Decimal] = None
+    item_name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class PackingListRequest(BaseModel):
+    box_ids: list[uuid.UUID]
+
+
+class ShipRequest(BaseModel):
+    box_codes: list[str]
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _calc_density(weight: Decimal, volume: Decimal) -> Decimal:
+    if not volume or volume == 0:
+        return Decimal("0")
+    return (weight / volume).quantize(Decimal("0.001"))
+
+
+def _box_dir(box_id: uuid.UUID) -> Path:
+    d = UPLOADS_DIR / "boxes" / str(box_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _packing_list_dir() -> Path:
+    d = UPLOADS_DIR / "packing_lists"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _photo_url(photo_path: Optional[str]) -> Optional[str]:
+    if not photo_path:
+        return None
+    return f"/files/{photo_path}"
+
+
+def _photo_to_base64(photo_path: Optional[str]) -> Optional[str]:
+    if not photo_path:
+        return None
+    full = UPLOADS_DIR / photo_path
+    if not full.exists():
+        return None
+    data = full.read_bytes()
+    b64 = base64.b64encode(data).decode()
+    ext = full.suffix.lower()
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    mime = mime_map.get(ext, "image/jpeg")
+    return f"data:{mime};base64,{b64}"
+
+
+def _generate_qr_base64(data: str) -> str:
+    import qrcode
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}"
+
+
+def _fmt_decimal(value) -> str:
+    if value is None:
+        return "—"
+    try:
+        v = float(value)
+        return f"{v:,.3f}".rstrip("0").rstrip(".")
+    except Exception:
+        return str(value)
+
+
+def _fmt_dec2(value) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):.2f}"
+    except Exception:
+        return str(value)
+
+
+async def _generate_packing_list_pdf(boxes_data: list[dict]) -> bytes:
+    """Build packing list PDF. boxes_data is list of dicts with box + counterparty info."""
+    from collections import defaultdict
+
+    # Group by counterparty
+    groups: dict[str, dict] = {}
+    for b in boxes_data:
+        cid = b["counterparty_id"]
+        if cid not in groups:
+            groups[cid] = {
+                "counterparty_code": b["counterparty_code"],
+                "counterparty_name": b["counterparty_name"],
+                "boxes": [],
+            }
+        groups[cid]["boxes"].append(b)
+
+    # Build template context
+    client_groups = []
+    grand_weight = Decimal("0")
+    grand_volume = Decimal("0")
+    grand_count = 0
+
+    for cid, g in groups.items():
+        sum_w = sum(Decimal(str(b["weight"])) for b in g["boxes"])
+        sum_v = sum(Decimal(str(b["volume"])) for b in g["boxes"])
+        density = _calc_density(sum_w, sum_v)
+        for b in g["boxes"]:
+            b["photo_b64"] = _photo_to_base64(b.get("photo_path"))
+        client_groups.append({
+            "counterparty_code": g["counterparty_code"],
+            "counterparty_name": g["counterparty_name"],
+            "boxes": g["boxes"],
+            "sum_weight": sum_w,
+            "sum_volume": sum_v,
+            "density": density,
+        })
+        grand_weight += sum_w
+        grand_volume += sum_v
+        grand_count += len(g["boxes"])
+
+    grand_density = _calc_density(grand_weight, grand_volume)
+    now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M")
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    env.filters["fmt_decimal"] = _fmt_decimal
+    tmpl = env.get_template("packing_list.html")
+    html = tmpl.render(
+        client_groups=client_groups,
+        grand_weight=grand_weight,
+        grand_volume=grand_volume,
+        grand_density=grand_density,
+        grand_count=grand_count,
+        generated_at=now_str,
+    )
+
+    try:
+        import weasyprint
+        return weasyprint.HTML(string=html).write_pdf()
+    except Exception as e:
+        raise HTTPException(500, f"PDF generation failed: {e}")
+
+
+async def _next_box_code(db: AsyncSession, client_code: str) -> str:
+    prefix = f"BOX-{client_code}-"
+    result = await db.execute(
+        select(WarehouseBox.box_code)
+        .where(WarehouseBox.box_code.like(f"{prefix}%"))
+        .order_by(WarehouseBox.box_code.desc())
+        .limit(1)
+    )
+    last = result.scalar_one_or_none()
+    num = 1
+    if last:
+        try:
+            num = int(last.rsplit("-", 1)[-1]) + 1
+        except ValueError:
+            pass
+    return f"{prefix}{num:05d}"
+
+
+def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None) -> dict:
+    return {
+        "id": str(box.id),
+        "box_code": box.box_code,
+        "counterparty_id": str(box.counterparty_id),
+        "counterparty_code": cp.code if cp else None,
+        "counterparty_name": cp.name if cp else None,
+        "warehouse_id": str(box.warehouse_id),
+        "weight": float(box.weight),
+        "volume": float(box.volume),
+        "density": float(box.density),
+        "item_name": box.item_name,
+        "description": box.description,
+        "photo_url": _photo_url(box.photo_path),
+        "photo_path": box.photo_path,
+        "status": box.status.value,
+        "received_at": box.received_at.isoformat() if box.received_at else None,
+        "shipped_at": box.shipped_at.isoformat() if box.shipped_at else None,
+    }
+
+
+# ── Endpoints (static paths BEFORE {id}) ─────────────────────────────────────
+
+@router.get("/check/{box_code}")
+async def check_box_code(
+    box_code: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    """Быстрая проверка статуса коробки по коду — для валидации при сканировании."""
+    box = (await db.execute(
+        select(WarehouseBox).where(WarehouseBox.box_code == box_code.upper())
+    )).scalar_one_or_none()
+    if not box:
+        return {"found": False, "status": None, "box_code": box_code.upper()}
+    return {"found": True, "status": box.status.value, "box_code": box.box_code}
+
+
+@router.get("/balance")
+async def get_balance(
+    warehouse_id: Optional[uuid.UUID] = None,
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    stmt = (
+        select(WarehouseBox, Counterparty)
+        .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .where(WarehouseBox.status == BoxStatus.on_warehouse)
+    )
+    if warehouse_id:
+        stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
+    if search:
+        stmt = stmt.where(Counterparty.code.ilike(f"%{search}%"))
+    stmt = stmt.order_by(Counterparty.code, WarehouseBox.received_at)
+
+    rows = (await db.execute(stmt)).all()
+
+    # Group by counterparty preserving order
+    from collections import OrderedDict
+    groups: dict[str, dict] = OrderedDict()
+    for box, cp in rows:
+        cid = str(cp.id)
+        if cid not in groups:
+            groups[cid] = {
+                "counterparty_id": cid,
+                "counterparty_code": cp.code or "",
+                "counterparty_name": cp.name,
+                "boxes": [],
+            }
+        groups[cid]["boxes"].append(_box_to_dict(box, cp))
+
+    result = []
+    for cid, g in groups.items():
+        boxes = g["boxes"]
+        sum_w = sum(b["weight"] for b in boxes)
+        sum_v = sum(b["volume"] for b in boxes)
+        density = float(_calc_density(Decimal(str(sum_w)), Decimal(str(sum_v))))
+        result.append({
+            **g,
+            "sum_weight": sum_w,
+            "sum_volume": sum_v,
+            "total_density": density,
+            "boxes_count": len(boxes),
+        })
+    return result
+
+
+@router.get("/shipped")
+async def get_shipped(
+    warehouse_id: Optional[uuid.UUID] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    stmt = (
+        select(WarehouseBox, Counterparty)
+        .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .where(WarehouseBox.status == BoxStatus.shipped)
+    )
+    if warehouse_id:
+        stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
+    stmt = stmt.order_by(WarehouseBox.shipped_at.desc())
+    rows = (await db.execute(stmt)).all()
+    return [_box_to_dict(box, cp) for box, cp in rows]
+
+
+@router.get("/packing-lists")
+async def get_packing_lists(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    packing_lists = (await db.execute(
+        select(PackingList).order_by(PackingList.created_at.desc()).limit(100)
+    )).scalars().all()
+
+    result = []
+    for pl in packing_lists:
+        # Получаем уникальных клиентов из коробок этого пакинг-листа
+        clients: list[str] = []
+        if pl.box_ids:
+            box_ids_parsed = [uuid.UUID(bid) for bid in pl.box_ids if bid]
+            if box_ids_parsed:
+                cp_rows = (await db.execute(
+                    select(Counterparty.code, Counterparty.name)
+                    .join(WarehouseBox, WarehouseBox.counterparty_id == Counterparty.id)
+                    .where(WarehouseBox.id.in_(box_ids_parsed))
+                    .distinct()
+                )).all()
+                clients = [r.code or r.name for r in cp_rows]
+        result.append({
+            "id": str(pl.id),
+            "created_at": pl.created_at.isoformat(),
+            "total_boxes": pl.total_boxes,
+            "total_weight": float(pl.total_weight) if pl.total_weight else None,
+            "total_volume": float(pl.total_volume) if pl.total_volume else None,
+            "pdf_url": f"/files/{pl.pdf_path}" if pl.pdf_path else None,
+            "box_count": len(pl.box_ids) if pl.box_ids else 0,
+            "clients": clients,
+        })
+    return result
+
+
+@router.post("/packing-list")
+async def generate_packing_list_preview(
+    body: PackingListRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    if not body.box_ids:
+        raise HTTPException(400, "No boxes selected")
+
+    rows = (await db.execute(
+        select(WarehouseBox, Counterparty)
+        .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .where(WarehouseBox.id.in_(body.box_ids))
+    )).all()
+
+    if not rows:
+        raise HTTPException(404, "Boxes not found")
+
+    boxes_data = []
+    for box, cp in rows:
+        boxes_data.append({
+            "counterparty_id": str(cp.id),
+            "counterparty_code": cp.code or cp.name,
+            "counterparty_name": cp.name,
+            "box_code": box.box_code,
+            "item_name": box.item_name,
+            "weight": float(box.weight),
+            "volume": float(box.volume),
+            "density": float(box.density),
+            "description": box.description or "",
+            "photo_path": box.photo_path,
+        })
+
+    pdf_bytes = await _generate_packing_list_pdf(boxes_data)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="packing_list_preview.pdf"'},
+    )
+
+
+@router.post("/ship")
+async def ship_boxes(
+    body: ShipRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    if not body.box_codes:
+        raise HTTPException(400, "No box codes provided")
+
+    # Проверяем уже отгруженные
+    already_shipped = (await db.execute(
+        select(WarehouseBox.box_code)
+        .where(
+            WarehouseBox.box_code.in_(body.box_codes),
+            WarehouseBox.status == BoxStatus.shipped,
+        )
+    )).scalars().all()
+    if already_shipped:
+        raise HTTPException(
+            422,
+            f"Уже отгружено: {', '.join(already_shipped)}. Отгрузка отменена."
+        )
+
+    rows = (await db.execute(
+        select(WarehouseBox, Counterparty)
+        .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .where(
+            WarehouseBox.box_code.in_(body.box_codes),
+            WarehouseBox.status == BoxStatus.on_warehouse,
+        )
+    )).all()
+
+    if not rows:
+        raise HTTPException(404, "Коробки не найдены на складе")
+
+    now = datetime.now(timezone.utc)
+    shipped_ids = []
+    boxes_data = []
+    total_weight = Decimal("0")
+    total_volume = Decimal("0")
+
+    for box, cp in rows:
+        box.status = BoxStatus.shipped
+        box.shipped_at = now
+        box.updated_at = now
+        shipped_ids.append(str(box.id))
+        total_weight += box.weight
+        total_volume += box.volume
+        boxes_data.append({
+            "counterparty_id": str(cp.id),
+            "counterparty_code": cp.code or cp.name,
+            "counterparty_name": cp.name,
+            "box_code": box.box_code,
+            "item_name": box.item_name,
+            "weight": float(box.weight),
+            "volume": float(box.volume),
+            "density": float(box.density),
+            "description": box.description or "",
+            "photo_path": box.photo_path,
+        })
+
+    # Generate and save the final packing list PDF
+    pdf_bytes = await _generate_packing_list_pdf(boxes_data)
+    pdf_name = f"packing_list_{now.strftime('%Y%m%d_%H%M%S')}.pdf"
+    pdf_path = _packing_list_dir() / pdf_name
+    pdf_path.write_bytes(pdf_bytes)
+    relative_pdf = f"packing_lists/{pdf_name}"
+
+    pl = PackingList(
+        id=uuid.uuid4(),
+        pdf_path=relative_pdf,
+        box_ids=shipped_ids,
+        total_weight=total_weight,
+        total_volume=total_volume,
+        total_boxes=len(shipped_ids),
+        created_by=current_user.id,
+    )
+    db.add(pl)
+    await db.commit()
+
+    not_found = [c for c in body.box_codes if c not in {b.box_code for b, _ in rows}]
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{pdf_name}"',
+            "X-Shipped-Count": str(len(shipped_ids)),
+            "X-Not-Found": ",".join(not_found),
+        },
+    )
+
+
+# ── CRUD with dynamic {id} ────────────────────────────────────────────────────
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_box(
+    body: BoxCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    cp = (await db.execute(
+        select(Counterparty).where(Counterparty.id == body.counterparty_id)
+    )).scalar_one_or_none()
+    if not cp:
+        raise HTTPException(404, "Counterparty not found")
+
+    wh = (await db.execute(
+        select(Warehouse).where(Warehouse.id == body.warehouse_id, Warehouse.is_active == True)
+    )).scalar_one_or_none()
+    if not wh:
+        raise HTTPException(404, "Warehouse not found")
+
+    client_code = cp.code or cp.name[:10].upper().replace(" ", "")
+    box_code = await _next_box_code(db, client_code)
+
+    density = _calc_density(body.weight, body.volume)
+    box = WarehouseBox(
+        id=uuid.uuid4(),
+        box_code=box_code,
+        counterparty_id=body.counterparty_id,
+        warehouse_id=body.warehouse_id,
+        weight=body.weight,
+        volume=body.volume,
+        density=density,
+        item_name=body.item_name,
+        description=body.description,
+        status=BoxStatus.on_warehouse,
+    )
+    db.add(box)
+    await db.commit()
+    await db.refresh(box)
+    return _box_to_dict(box, cp)
+
+
+@router.post("/{box_id}/photo")
+async def upload_box_photo(
+    box_id: uuid.UUID,
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    box = (await db.execute(
+        select(WarehouseBox).where(WarehouseBox.id == box_id)
+    )).scalar_one_or_none()
+    if not box:
+        raise HTTPException(404, "Box not found")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(422, "File too large (max 10 MB)")
+
+    mime = file.content_type or ""
+    if mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(422, f"File type not allowed: {mime}")
+
+    ext = Path(file.filename or "photo").suffix.lower() or ".jpg"
+    stored_name = f"{uuid.uuid4()}{ext}"
+    dest = _box_dir(box_id) / stored_name
+    dest.write_bytes(content)
+
+    relative = f"boxes/{box_id}/{stored_name}"
+    box.photo_path = relative
+    box.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {"photo_url": _photo_url(relative), "photo_path": relative}
+
+
+@router.get("/{box_id}/qr")
+async def get_qr_label(
+    box_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    result = (await db.execute(
+        select(WarehouseBox, Counterparty)
+        .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .where(WarehouseBox.id == box_id)
+    )).first()
+    if not result:
+        raise HTTPException(404, "Box not found")
+    box, cp = result
+
+    qr_b64 = _generate_qr_base64(box.box_code)
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    tmpl = env.get_template("box_label.html")
+    html = tmpl.render(
+        qr_image=qr_b64,
+        box_code=box.box_code,
+        client_code=cp.code or cp.name,
+        client_name=cp.name,
+        item_name=box.item_name,
+        weight=float(box.weight),
+        volume=float(box.volume),
+        density=float(box.density),
+        received_at=box.received_at.strftime("%d.%m.%Y") if box.received_at else "",
+    )
+
+    try:
+        import weasyprint
+        pdf_bytes = weasyprint.HTML(string=html).write_pdf()
+    except Exception as e:
+        raise HTTPException(500, f"PDF generation failed: {e}")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{box.box_code}.pdf"'},
+    )
+
+
+@router.patch("/{box_id}")
+async def update_box(
+    box_id: uuid.UUID,
+    body: BoxUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    box = (await db.execute(
+        select(WarehouseBox).where(WarehouseBox.id == box_id)
+    )).scalar_one_or_none()
+    if not box:
+        raise HTTPException(404, "Box not found")
+    if box.status != BoxStatus.on_warehouse:
+        raise HTTPException(400, "Cannot edit shipped box")
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(box, field, value)
+
+    if body.weight is not None or body.volume is not None:
+        box.density = _calc_density(box.weight, box.volume)
+
+    box.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    cp = (await db.execute(
+        select(Counterparty).where(Counterparty.id == box.counterparty_id)
+    )).scalar_one_or_none()
+    return _box_to_dict(box, cp)
+
+
+@router.delete("/{box_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_box(
+    box_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    box = (await db.execute(
+        select(WarehouseBox).where(WarehouseBox.id == box_id)
+    )).scalar_one_or_none()
+    if not box:
+        raise HTTPException(404, "Box not found")
+    if box.status != BoxStatus.on_warehouse:
+        raise HTTPException(400, "Cannot delete shipped box")
+    await db.delete(box)
+    await db.commit()

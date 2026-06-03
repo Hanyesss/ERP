@@ -389,7 +389,7 @@ export default function OrderDetailPage() {
       label: t("order.items"),
       children: (
         <>
-          <Table
+          <Table scroll={{ x: "max-content" }}
             columns={isLogistics ? logisticsItemColumns : tradeItemColumns}
             dataSource={order.items}
             rowKey="id"

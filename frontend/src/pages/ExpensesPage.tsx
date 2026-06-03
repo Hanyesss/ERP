@@ -118,6 +118,15 @@ export default function ExpensesPage({ user }: Props) {
       ellipsis: true,
     },
     {
+      title: t("expense.cash_register"),
+      key: "cash_register",
+      width: 130,
+      render: (_: any, row: ExpenseListItem) =>
+        row.cash_register_name
+          ? <Tag color="blue" style={{ fontSize: 11 }}>{row.cash_register_name}</Tag>
+          : null,
+    },
+    {
       title: t("expense.reimbursement"),
       key: "reimburse",
       width: 140,
@@ -257,7 +266,7 @@ export default function ExpensesPage({ user }: Props) {
         </Col>
       </Row>
 
-      <Table
+      <Table scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={data?.items ?? []}
         rowKey="id"

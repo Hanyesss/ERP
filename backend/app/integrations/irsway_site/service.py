@@ -12,7 +12,7 @@ from app.models.order_item import OrderItem
 from app.models.order_charge import OrderCharge
 from app.models.counterparty import Counterparty
 from .client import IrswayClient
-from .schemas import ShipmentCreatePayload, ShipmentItemPayload, ShipmentStatusPayload
+from .schemas import ShipmentCreatePayload, ShipmentItemPayload, ShipmentStatusPayload, TradeOrderPayload
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +180,87 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
         settings_row.last_sync_status = "ok"
         settings_row.last_sync_error = None
 
+    return True, "ok"
+
+
+async def sync_trade_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]:
+    """Синхронизирует торговый заказ на сайт irsway.com."""
+    client = await get_active_client(db)
+    if client is None:
+        order.sync_status = "disabled"
+        return False, "Integration disabled"
+
+    client_row = (await db.execute(
+        select(Counterparty).where(Counterparty.id == order.client_id)
+    )).scalar_one_or_none()
+
+    # Формируем наименование товаров из позиций
+    from app.models.order_item import OrderItem
+    items_rows = (await db.execute(
+        select(OrderItem).where(OrderItem.order_id == order.id)
+    )).scalars().all()
+    goods_name = ", ".join(i.name for i in items_rows if i.name) or ""
+
+    # Статус оплаты
+    from app.models.order import PaymentStatus
+    ps = order.payment_status
+    if hasattr(ps, 'value'):
+        ps = ps.value
+    status_map = {"unpaid": "unpaid", "partial": "partial", "paid": "paid"}
+    payment_status = status_map.get(str(ps), "unpaid")
+
+    payload = TradeOrderPayload(
+        erp_order_id=str(order.id),
+        number=order.order_number,
+        client_code=client_row.code.upper() if client_row and client_row.code else None,
+        client_name=client_row.name if client_row else "",
+        goods_name=goods_name,
+        order_date=order.order_date.isoformat() if order.order_date else None,
+        currency=str(order.client_currency.value if hasattr(order.client_currency, 'value') else order.client_currency),
+        total_amount_cny=float(order.total_sale_cny) if order.total_sale_cny else None,
+        paid_amount_cny=float(order.total_sale_cny - order.remaining_amount_cny)
+            if order.total_sale_cny and hasattr(order, 'remaining_amount_cny') else 0.0,
+        payment_status=payment_status,
+        notes=order.notes,
+    )
+
+    loop = asyncio.get_event_loop()
+
+    if order.external_shipment_number:
+        result = await loop.run_in_executor(
+            None, lambda: client.update_trade_order(order.external_shipment_number, payload)
+        )
+    else:
+        result = await loop.run_in_executor(
+            None, lambda: client.create_trade_order(payload)
+        )
+        # Если уже существует — обновляем
+        if result.error and "already exists" in (result.error or ""):
+            result = await loop.run_in_executor(
+                None, lambda: client.update_trade_order(payload.number, payload)
+            )
+
+    if result.error:
+        order.sync_status = "failed"
+        order.sync_error = result.error
+        order.synced_at = datetime.now(timezone.utc)
+        return False, result.error
+
+    order.sync_status = "synced"
+    order.sync_error = None
+    order.synced_at = datetime.now(timezone.utc)
+    if result.number:
+        order.external_shipment_number = result.number
+
+    settings_row = (await db.execute(
+        select(IntegrationSettings).where(IntegrationSettings.integration_name == INTEGRATION_NAME)
+    )).scalar_one_or_none()
+    if settings_row:
+        settings_row.last_sync_at = datetime.now(timezone.utc)
+        settings_row.last_sync_status = "ok"
+
+    logger.info("Trade order synced: %s → status=%s remaining=%s",
+                order.order_number, payment_status, result.remaining_cny)
     return True, "ok"
 
 

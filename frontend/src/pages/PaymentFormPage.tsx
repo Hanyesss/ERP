@@ -386,7 +386,7 @@ export default function PaymentFormPage() {
             }
             style={{ marginBottom: 16 }}
           >
-            <Table
+            <Table scroll={{ x: "max-content" }}
               dataSource={allocRows}
               rowKey="id"
               size="small"
