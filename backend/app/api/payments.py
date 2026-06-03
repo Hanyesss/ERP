@@ -521,7 +521,7 @@ async def create_payment(
     current_balance = await _get_balance(db, body.cash_register_id)
     tx_direction = "in" if body.direction == "in" else "out"
     new_balance = current_balance + body.amount if tx_direction == "in" else current_balance - body.amount
-    db.add(CashTransaction(
+    cash_tx = CashTransaction(
         id=uuid.uuid4(),
         cash_register_id=body.cash_register_id,
         payment_id=payment.id,
@@ -530,8 +530,16 @@ async def create_payment(
         balance_after=new_balance,
         notes=body.notes,
         created_by=current_user.id,
-    ))
+    )
+    db.add(cash_tx)
     await db.flush()
+    await write_audit(db, current_user.id, "cash_transaction", cash_tx.id, AuditActionEnum.create, {
+        "register_id": str(body.cash_register_id),
+        "direction": tx_direction,
+        "amount": str(body.amount),
+        "reason": "payment",
+        "payment_id": str(payment.id),
+    })
 
     await _apply_allocations(db, payment, body.allocations)
     await db.flush()
@@ -613,12 +621,46 @@ async def delete_payment(
     payment.is_active = False
     await db.flush()
 
+    # Откат кассы: для каждой активной транзакции этого платежа создаём компенсирующую
+    cash_txs = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.payment_id == payment_id,
+            CashTransaction.is_active == True,
+        )
+    )).scalars().all()
+
+    from app.api.cash_registers import _get_balance
+    for tx in cash_txs:
+        comp_direction = "out" if tx.direction == "in" else "in"
+        cur_bal = await _get_balance(db, tx.cash_register_id)
+        comp_amount = tx.amount
+        new_bal = cur_bal + comp_amount if comp_direction == "in" else cur_bal - comp_amount
+        comp_tx = CashTransaction(
+            id=uuid.uuid4(),
+            cash_register_id=tx.cash_register_id,
+            direction=comp_direction,
+            amount=comp_amount,
+            balance_after=new_bal,
+            notes=f"Отмена платежа: {payment.notes or str(payment.id)[:8]}",
+            created_by=current_user.id,
+        )
+        db.add(comp_tx)
+        await db.flush()
+        await write_audit(db, current_user.id, "cash_transaction", comp_tx.id, AuditActionEnum.create, {
+            "register_id": str(tx.cash_register_id),
+            "direction": comp_direction,
+            "amount": str(comp_amount),
+            "reason": "payment_deleted",
+            "original_tx_id": str(tx.id),
+            "payment_id": str(payment_id),
+        })
+
     # Recalculate affected statuses
     await _recalc_all_for_payment(db, payment)
 
     await write_audit(
         db, current_user.id, "payment", payment.id, AuditActionEnum.delete,
-        {"soft_deleted": True}
+        {"soft_deleted": True, "cash_compensations": len(cash_txs)}
     )
     await db.commit()
 

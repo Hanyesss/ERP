@@ -7,6 +7,7 @@ export interface CashRegister {
   notes?: string;
   is_active: boolean;
   balance: number;
+  initial_balance: number;
 }
 
 export interface CashTransaction {
@@ -16,6 +17,7 @@ export interface CashTransaction {
   amount: number;
   balance_after: number;
   notes?: string;
+  is_active: boolean;
   created_by_name: string;
   created_at: string;
 }
@@ -23,10 +25,10 @@ export interface CashTransaction {
 export const getCashRegisters = () =>
   apiClient.get<CashRegister[]>("/api/cash-registers");
 
-export const createCashRegister = (data: { name: string; currency: string; notes?: string }) =>
+export const createCashRegister = (data: { name: string; currency: string; notes?: string; initial_balance?: number }) =>
   apiClient.post<CashRegister>("/api/cash-registers", data);
 
-export const updateCashRegister = (id: string, data: Partial<{ name: string; currency: string; notes: string; is_active: boolean }>) =>
+export const updateCashRegister = (id: string, data: Partial<{ name: string; currency: string; notes: string; is_active: boolean; initial_balance: number }>) =>
   apiClient.patch<CashRegister>(`/api/cash-registers/${id}`, data);
 
 export const getCashTransactions = (id: string, params?: { page?: number; page_size?: number }) =>

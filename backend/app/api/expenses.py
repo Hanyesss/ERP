@@ -39,20 +39,13 @@ async def _record_cash_outflow(
     amount: Decimal,
     notes: str,
     created_by: uuid.UUID,
+    reason: str = "expense",
 ) -> None:
     """Записывает расход в кассу. Работает даже при отрицательном балансе."""
-    from sqlalchemy import func as sqlfunc, case
-    balance_result = await db.execute(
-        select(sqlfunc.coalesce(
-            sqlfunc.sum(case(
-                (CashTransaction.direction == "in", CashTransaction.amount),
-                else_=-CashTransaction.amount,
-            )), Decimal("0")
-        )).where(CashTransaction.cash_register_id == cash_register_id)
-    )
-    current_balance = balance_result.scalar_one() or Decimal("0")
+    from app.api.cash_registers import _get_balance
+    current_balance = await _get_balance(db, cash_register_id)
     balance_after = current_balance - amount
-    db.add(CashTransaction(
+    tx = CashTransaction(
         id=uuid.uuid4(),
         cash_register_id=cash_register_id,
         direction=TxDirection.outflow,
@@ -60,7 +53,15 @@ async def _record_cash_outflow(
         balance_after=balance_after,
         notes=notes,
         created_by=created_by,
-    ))
+    )
+    db.add(tx)
+    await db.flush()
+    await write_audit(db, created_by, "cash_transaction", tx.id, AuditActionEnum.create, {
+        "register_id": str(cash_register_id),
+        "direction": "out",
+        "amount": str(amount),
+        "reason": reason,
+    })
 
 _ACCOUNTANT_ROLES = ("accountant", "admin")
 _ALL_ROLES = ("employee", "manager", "purchaser", "accountant", "admin")
@@ -474,23 +475,26 @@ async def delete_expense(
 
     # Возврат в кассу если был списан прямой расход (не возмещение)
     if expense.cash_register_id and not expense.is_reimbursement:
-        from sqlalchemy import func as sqlfunc, case as sqcase
-        bal_res = await db.execute(
-            select(sqlfunc.coalesce(sqlfunc.sum(sqcase(
-                (CashTransaction.direction == "in", CashTransaction.amount),
-                else_=-CashTransaction.amount,
-            )), Decimal("0"))).where(CashTransaction.cash_register_id == expense.cash_register_id)
-        )
-        cur_bal = bal_res.scalar_one() or Decimal("0")
-        db.add(CashTransaction(
+        from app.api.cash_registers import _get_balance
+        cur_bal = await _get_balance(db, expense.cash_register_id)
+        comp_tx = CashTransaction(
             id=uuid.uuid4(),
             cash_register_id=expense.cash_register_id,
             direction=TxDirection.inflow,
             amount=expense.amount_cny,
             balance_after=cur_bal + expense.amount_cny,
-            notes=f"Отмена расхода: {expense.description[:80]}",
+            notes=f"Отмена расхода: {expense.description[:80] if expense.description else ''}",
             created_by=current_user.id,
-        ))
+        )
+        db.add(comp_tx)
+        await db.flush()
+        await write_audit(db, current_user.id, "cash_transaction", comp_tx.id, AuditActionEnum.create, {
+            "register_id": str(expense.cash_register_id),
+            "direction": "in",
+            "amount": str(expense.amount_cny),
+            "reason": "expense_deleted",
+            "expense_id": str(expense_id),
+        })
 
     await db.commit()
 
@@ -584,6 +588,7 @@ async def mark_reimbursement_paid(
         await _record_cash_outflow(
             db, body.cash_register_id, expense.amount_cny,
             f"Возмещение: {expense.description[:80]}", current_user.id,
+            reason="reimbursement",
         )
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"reimburse_status": "paid", "paid_date": str(body.paid_date),

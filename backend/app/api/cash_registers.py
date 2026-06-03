@@ -12,6 +12,8 @@ from app.core.deps import get_current_user, require_roles
 from app.models.user import User
 from app.models.cash_register import CashRegister, CashTransaction
 from app.models.cash_transfer import CashTransfer
+from app.models.audit_log import AuditActionEnum
+from app.utils.audit import write_audit
 
 router = APIRouter(prefix="/api/cash-registers", tags=["cash-registers"])
 
@@ -22,6 +24,7 @@ class CashRegisterCreate(BaseModel):
     name: str
     currency: str
     notes: Optional[str] = None
+    initial_balance: Decimal = Decimal("0")
 
 
 class CashRegisterUpdate(BaseModel):
@@ -29,6 +32,7 @@ class CashRegisterUpdate(BaseModel):
     currency: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    initial_balance: Optional[Decimal] = None   # только admin
 
 
 class CashRegisterResponse(BaseModel):
@@ -38,6 +42,7 @@ class CashRegisterResponse(BaseModel):
     notes: Optional[str] = None
     is_active: bool
     balance: Decimal
+    initial_balance: Decimal
 
 
 class CashTransactionResponse(BaseModel):
@@ -47,11 +52,18 @@ class CashTransactionResponse(BaseModel):
     amount: Decimal
     balance_after: Decimal
     notes: Optional[str] = None
+    is_active: bool
     created_by_name: str
     created_at: str
 
 
 async def _get_balance(db: AsyncSession, register_id: uuid.UUID) -> Decimal:
+    """Баланс = initial_balance + SUM(активных транзакций)."""
+    reg = (await db.execute(
+        select(CashRegister.initial_balance).where(CashRegister.id == register_id)
+    )).scalar_one_or_none()
+    initial = reg if reg is not None else Decimal("0")
+
     result = await db.execute(
         select(func.coalesce(
             func.sum(
@@ -61,9 +73,13 @@ async def _get_balance(db: AsyncSession, register_id: uuid.UUID) -> Decimal:
                 )
             ),
             Decimal("0"),
-        )).where(CashTransaction.cash_register_id == register_id)
+        )).where(
+            CashTransaction.cash_register_id == register_id,
+            CashTransaction.is_active == True,
+        )
     )
-    return result.scalar_one() or Decimal("0")
+    tx_sum = result.scalar_one() or Decimal("0")
+    return initial + tx_sum
 
 
 @router.get("", response_model=List[CashRegisterResponse])
@@ -75,23 +91,25 @@ async def list_registers(
         select(CashRegister).where(CashRegister.is_active == True).order_by(CashRegister.name)
     )).scalars().all()
 
-    # Один запрос для всех балансов вместо N запросов в цикле
+    # Суммируем только активные транзакции
     balances_result = await db.execute(
         select(
             CashTransaction.cash_register_id,
             func.coalesce(func.sum(case(
                 (CashTransaction.direction == "in", CashTransaction.amount),
                 else_=-CashTransaction.amount,
-            )), Decimal("0")).label("balance"),
-        ).group_by(CashTransaction.cash_register_id)
+            )), Decimal("0")).label("tx_sum"),
+        ).where(CashTransaction.is_active == True)
+        .group_by(CashTransaction.cash_register_id)
     )
-    balances = {row[0]: row[1] for row in balances_result.all()}
+    tx_sums = {row[0]: row[1] for row in balances_result.all()}
 
     return [
         CashRegisterResponse(
             id=r.id, name=r.name, currency=r.currency,
             notes=r.notes, is_active=r.is_active,
-            balance=balances.get(r.id, Decimal("0")),
+            initial_balance=r.initial_balance,
+            balance=r.initial_balance + tx_sums.get(r.id, Decimal("0")),
         )
         for r in registers
     ]
@@ -101,14 +119,28 @@ async def list_registers(
 async def create_register(
     body: CashRegisterCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(_EDIT_ROLES),
+    current_user: User = Depends(_EDIT_ROLES),
 ):
-    reg = CashRegister(id=uuid.uuid4(), name=body.name, currency=body.currency, notes=body.notes)
+    reg = CashRegister(
+        id=uuid.uuid4(),
+        name=body.name,
+        currency=body.currency,
+        notes=body.notes,
+        initial_balance=body.initial_balance,
+    )
     db.add(reg)
+    await db.flush()
+    await write_audit(db, current_user.id, "cash_register", reg.id, AuditActionEnum.create,
+                      {"name": body.name, "currency": body.currency,
+                       "initial_balance": str(body.initial_balance)})
     await db.commit()
     await db.refresh(reg)
-    return CashRegisterResponse(id=reg.id, name=reg.name, currency=reg.currency,
-                                notes=reg.notes, is_active=reg.is_active, balance=Decimal("0"))
+    return CashRegisterResponse(
+        id=reg.id, name=reg.name, currency=reg.currency,
+        notes=reg.notes, is_active=reg.is_active,
+        initial_balance=reg.initial_balance,
+        balance=reg.initial_balance,
+    )
 
 
 @router.patch("/{register_id}", response_model=CashRegisterResponse)
@@ -116,11 +148,14 @@ async def update_register(
     register_id: uuid.UUID,
     body: CashRegisterUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(_EDIT_ROLES),
+    current_user: User = Depends(_EDIT_ROLES),
 ):
     reg = (await db.execute(select(CashRegister).where(CashRegister.id == register_id))).scalar_one_or_none()
     if not reg:
         raise HTTPException(404, "Cash register not found")
+
+    changes: dict = {}
+
     if body.name is not None:
         reg.name = body.name
     if body.currency is not None:
@@ -129,11 +164,24 @@ async def update_register(
         reg.notes = body.notes
     if body.is_active is not None:
         reg.is_active = body.is_active
+
+    # initial_balance — только admin, с аудитом
+    if body.initial_balance is not None:
+        if not current_user.has_role("admin"):
+            raise HTTPException(403, "Только admin может менять начальный баланс кассы")
+        old_initial = reg.initial_balance
+        reg.initial_balance = body.initial_balance
+        changes["initial_balance"] = {"old": str(old_initial), "new": str(body.initial_balance)}
+
+    await write_audit(db, current_user.id, "cash_register", reg.id, AuditActionEnum.update, changes or None)
     await db.commit()
     await db.refresh(reg)
     balance = await _get_balance(db, reg.id)
-    return CashRegisterResponse(id=reg.id, name=reg.name, currency=reg.currency,
-                                notes=reg.notes, is_active=reg.is_active, balance=balance)
+    return CashRegisterResponse(
+        id=reg.id, name=reg.name, currency=reg.currency,
+        notes=reg.notes, is_active=reg.is_active,
+        initial_balance=reg.initial_balance, balance=balance,
+    )
 
 
 @router.get("/{register_id}/transactions", response_model=List[CashTransactionResponse])
@@ -172,6 +220,7 @@ async def get_transactions(
             amount=t.amount,
             balance_after=t.balance_after,
             notes=t.notes,
+            is_active=t.is_active,
             created_by_name=users_map.get(t.created_by, ""),
             created_at=t.created_at.isoformat(),
         )
@@ -226,7 +275,6 @@ async def create_transfer(
 
     now = datetime.now(timezone.utc)
 
-    # Создаём запись перевода
     transfer = CashTransfer(
         id=uuid.uuid4(),
         from_register_id=body.from_register_id,
@@ -242,9 +290,9 @@ async def create_transfer(
     db.add(transfer)
     await db.flush()
 
-    # Транзакция списания из источника
+    # Транзакция списания
     from_balance = await _get_balance(db, body.from_register_id)
-    db.add(CashTransaction(
+    out_tx = CashTransaction(
         id=uuid.uuid4(),
         cash_register_id=body.from_register_id,
         direction="out",
@@ -253,11 +301,12 @@ async def create_transfer(
         notes=f"Перевод → {to_reg.name}" + (f": {body.notes}" if body.notes else ""),
         created_by=current_user.id,
         created_at=now,
-    ))
+    )
+    db.add(out_tx)
 
-    # Транзакция зачисления в получатель
+    # Транзакция зачисления
     to_balance = await _get_balance(db, body.to_register_id)
-    db.add(CashTransaction(
+    in_tx = CashTransaction(
         id=uuid.uuid4(),
         cash_register_id=body.to_register_id,
         direction="in",
@@ -266,7 +315,27 @@ async def create_transfer(
         notes=f"Перевод ← {from_reg.name}" + (f": {body.notes}" if body.notes else ""),
         created_by=current_user.id,
         created_at=now,
-    ))
+    )
+    db.add(in_tx)
+    await db.flush()
+
+    # Аудит перевода
+    await write_audit(db, current_user.id, "cash_transfer", transfer.id, AuditActionEnum.create, {
+        "from_register": from_reg.name, "from_currency": from_reg.currency,
+        "from_amount": str(body.from_amount),
+        "to_register": to_reg.name, "to_currency": to_reg.currency,
+        "to_amount": str(body.to_amount),
+        "exchange_rate": str(body.exchange_rate),
+    })
+    # Аудит транзакций
+    await write_audit(db, current_user.id, "cash_transaction", out_tx.id, AuditActionEnum.create, {
+        "register": from_reg.name, "direction": "out",
+        "amount": str(body.from_amount), "reason": "transfer",
+    })
+    await write_audit(db, current_user.id, "cash_transaction", in_tx.id, AuditActionEnum.create, {
+        "register": to_reg.name, "direction": "in",
+        "amount": str(body.to_amount), "reason": "transfer",
+    })
 
     await db.commit()
 

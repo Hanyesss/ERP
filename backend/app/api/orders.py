@@ -669,6 +669,8 @@ async def update_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Order not found")
+    if order.status == OrderStatus.cancelled:
+        raise HTTPException(422, "Отменённый заказ нельзя редактировать или реактивировать")
     if order.status == OrderStatus.closed and not current_user.has_role("admin"):
         raise HTTPException(403, "Only admin can modify a closed order")
 

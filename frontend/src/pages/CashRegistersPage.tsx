@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Form, Input, Select, Space, Tag, Typography,
-  Drawer, Popconfirm, message, Row, Col, Tabs, InputNumber, DatePicker,
+  Drawer, Popconfirm, message, Row, Col, Tabs, InputNumber, DatePicker, Tooltip,
 } from "antd";
-import { PlusOutlined, HistoryOutlined, EditOutlined, SwapOutlined } from "@ant-design/icons";
+import { PlusOutlined, HistoryOutlined, EditOutlined, SwapOutlined, LockOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
@@ -12,6 +12,7 @@ import {
   getCashTransactions, getTransfers, createTransfer,
   type CashRegister, type CashTransaction, type CashTransfer,
 } from "../api/cashRegisters";
+import { useHasAnyRole } from "../hooks/useRole";
 
 const { Title, Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
@@ -22,6 +23,7 @@ const fmt = (v: number | string, cur: string) =>
 export default function CashRegistersPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const isAdmin = useHasAnyRole("admin");
 
   // Режим редактирования/создания кассы
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,8 +90,8 @@ export default function CashRegistersPage() {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
-  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ currency: "CNY" }); setModalOpen(true); };
-  const openEdit = (reg: CashRegister) => { setEditing(reg); form.setFieldsValue({ name: reg.name, currency: reg.currency, notes: reg.notes }); setModalOpen(true); };
+  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ currency: "CNY", initial_balance: 0 }); setModalOpen(true); };
+  const openEdit = (reg: CashRegister) => { setEditing(reg); form.setFieldsValue({ name: reg.name, currency: reg.currency, notes: reg.notes, initial_balance: reg.initial_balance }); setModalOpen(true); };
   const openHistory = (reg: CashRegister) => { setSelectedReg(reg); setDrawerOpen(true); };
   const openTransfer = (reg: CashRegister) => {
     setTransferFrom(reg);
@@ -118,16 +120,25 @@ export default function CashRegistersPage() {
   const txColumns = [
     { title: t("common.date"), dataIndex: "created_at", key: "d", width: 155,
       render: (v: string) => new Date(v).toLocaleString("ru-RU") },
-    { title: t("cash.direction"), dataIndex: "direction", key: "dir", width: 90,
-      render: (v: string) => <Tag color={v === "in" ? "green" : "red"}>{v === "in" ? `▲ ${t("payment.direction_in")}` : `▼ ${t("payment.direction_out")}`}</Tag> },
+    { title: t("cash.direction"), key: "dir", width: 110,
+      render: (_: any, row: CashTransaction) => (
+        <Space size={4}>
+          <Tag color={row.direction === "in" ? "green" : "red"}>
+            {row.direction === "in" ? `▲ ${t("payment.direction_in")}` : `▼ ${t("payment.direction_out")}`}
+          </Tag>
+          {!row.is_active && <Tag color="default" style={{ fontSize: 10 }}>отменена</Tag>}
+        </Space>
+      )},
     { title: t("cash.amount"), dataIndex: "amount", key: "a", align: "right" as const,
       render: (v: number, row: CashTransaction) => (
-        <Text strong style={{ color: row.direction === "in" ? "#389e0d" : "#cf1322" }}>
+        <Text strong style={{ color: row.is_active ? (row.direction === "in" ? "#389e0d" : "#cf1322") : "#bfbfbf", textDecoration: row.is_active ? undefined : "line-through" }}>
           {row.direction === "in" ? "+" : "−"}{fmt(v, selectedReg?.currency || "")}
         </Text>
       )},
     { title: t("cash.balance_after"), dataIndex: "balance_after", key: "b", align: "right" as const,
-      render: (v: number) => fmt(v, selectedReg?.currency || "") },
+      render: (v: number, row: CashTransaction) => (
+        <Text style={{ color: row.is_active ? undefined : "#bfbfbf" }}>{fmt(v, selectedReg?.currency || "")}</Text>
+      )},
     { title: t("payment.notes"), dataIndex: "notes", key: "n", render: (v: string) => v || "—" },
   ];
 
@@ -156,11 +167,18 @@ export default function CashRegistersPage() {
           {!row.is_active && <Tag color="default">{t("user.blocked")}</Tag>}
         </Space>
       )},
-    { title: t("cash.balance"), dataIndex: "balance", key: "balance", align: "right" as const,
-      render: (v: number, row: CashRegister) => (
-        <Text strong style={{ color: Number(v) >= 0 ? "#389e0d" : "#cf1322", fontSize: 15 }}>
-          {fmt(v, row.currency)}
-        </Text>
+    { title: t("cash.balance"), key: "balance", align: "right" as const,
+      render: (_: any, row: CashRegister) => (
+        <Space direction="vertical" size={0} style={{ textAlign: "right" }}>
+          <Text strong style={{ color: Number(row.balance) >= 0 ? "#389e0d" : "#cf1322", fontSize: 15 }}>
+            {fmt(row.balance, row.currency)}
+          </Text>
+          {Number(row.initial_balance) !== 0 && (
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              нач. {fmt(row.initial_balance, row.currency)}
+            </Text>
+          )}
+        </Space>
       )},
     { title: t("cash.notes"), dataIndex: "notes", key: "notes", render: (v: string) => v || "—" },
     { title: t("common.actions"), key: "actions", width: 140,
@@ -201,6 +219,28 @@ export default function CashRegistersPage() {
             <Select options={CURRENCIES.map(c => ({ value: c, label: c }))} />
           </Form.Item>
           <Form.Item name="notes" label={t("cash.notes")}><Input.TextArea rows={2} /></Form.Item>
+
+          {/* Начальный баланс — только admin */}
+          {isAdmin ? (
+            <Form.Item
+              name="initial_balance"
+              label={
+                <Space size={4}>
+                  <span>Начальный баланс</span>
+                  <Tooltip title="Сумма, с которой касса начинает работу. Влияет на текущий баланс. Только admin.">
+                    <LockOutlined style={{ color: "#faad14", fontSize: 12 }} />
+                  </Tooltip>
+                </Space>
+              }
+            >
+              <InputNumber style={{ width: "100%" }} step={0.01} precision={2} />
+            </Form.Item>
+          ) : editing ? (
+            <Form.Item label="Начальный баланс">
+              <InputNumber style={{ width: "100%" }} disabled value={editing.initial_balance} />
+            </Form.Item>
+          ) : null}
+
           {editing && (
             <Form.Item name="is_active" label={t("user.status")}>
               <Select options={[{ value: true, label: t("user.active") }, { value: false, label: t("user.blocked") }]} />

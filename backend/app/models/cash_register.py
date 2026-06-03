@@ -17,6 +17,7 @@ class CashRegister(Base, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(10), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    initial_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), nullable=False)
 
 
 class TxDirection(str, PyEnum):
@@ -37,4 +38,5 @@ class CashTransaction(Base, TimestampMixin):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     balance_after: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
