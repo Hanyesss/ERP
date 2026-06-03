@@ -24,6 +24,9 @@ class PaymentCreate(BaseModel):
     network_fee: Optional[Decimal] = None
     notes: Optional[str] = None
     allocations: List[AllocationIn] = []
+    # Курс в валюту кассы (если валюта платежа ≠ валюта кассы)
+    # Сколько единиц валюты кассы за 1 единицу валюты платежа
+    cash_rate: Optional[Decimal] = None
 
 
 class PaymentUpdate(BaseModel):

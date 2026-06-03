@@ -19,6 +19,10 @@ class ExpenseCreate(BaseModel):
     is_reimbursement: bool = False
     reimburse_to_user_id: Optional[uuid.UUID] = None
     cash_register_id: Optional[uuid.UUID] = None
+    # Курс конвертации в валюту кассы (если валюта расхода ≠ валюта кассы).
+    # Сколько единиц валюты кассы за 1 единицу валюты расхода.
+    # Пример: расход CNY, касса USDT → cash_rate = 1/7.25 ≈ 0.138 (1 CNY = 0.138 USDT)
+    cash_rate: Optional[Decimal] = None
 
 
 class ExpenseUpdate(BaseModel):

@@ -4,6 +4,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, validator as pydantic_validator
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -36,20 +37,20 @@ router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 async def _record_cash_outflow(
     db: AsyncSession,
     cash_register_id: uuid.UUID,
-    amount: Decimal,
+    cash_amount: Decimal,       # сумма В ВАЛЮТЕ КАССЫ (не в CNY!)
     notes: str,
     created_by: uuid.UUID,
     reason: str = "expense",
 ) -> None:
-    """Записывает расход в кассу. Работает даже при отрицательном балансе."""
+    """Записывает расход в кассу. cash_amount — уже в валюте кассы."""
     from app.api.cash_registers import _get_balance
     current_balance = await _get_balance(db, cash_register_id)
-    balance_after = current_balance - amount
+    balance_after = current_balance - cash_amount
     tx = CashTransaction(
         id=uuid.uuid4(),
         cash_register_id=cash_register_id,
         direction=TxDirection.outflow,
-        amount=amount,
+        amount=cash_amount,
         balance_after=balance_after,
         notes=notes,
         created_by=created_by,
@@ -59,7 +60,7 @@ async def _record_cash_outflow(
     await write_audit(db, created_by, "cash_transaction", tx.id, AuditActionEnum.create, {
         "register_id": str(cash_register_id),
         "direction": "out",
-        "amount": str(amount),
+        "amount": str(cash_amount),
         "reason": reason,
     })
 
@@ -398,6 +399,7 @@ async def create_expense(
         description=body.description,
         receipt_url=body.receipt_url,
         cash_register_id=body.cash_register_id,
+        cash_amount_in_register=None,  # заполним ниже после расчёта
         is_active=True,
         created_by=current_user.id,
     )
@@ -409,8 +411,29 @@ async def create_expense(
         await on_reimbursement_created(db, expense.id, str(amount_cny), current_user.full_name)
     # Списание с кассы (только для прямых расходов — не возмещений)
     if body.cash_register_id and not body.is_reimbursement:
+        reg = (await db.execute(
+            select(CashRegister).where(CashRegister.id == body.cash_register_id)
+        )).scalar_one_or_none()
+        reg_currency = reg.currency if reg else "CNY"
+
+        if body.currency == reg_currency:
+            cash_amount = body.amount
+        elif reg_currency == "CNY":
+            cash_amount = amount_cny
+        else:
+            if not body.cash_rate or body.cash_rate <= 0:
+                raise HTTPException(
+                    422,
+                    f"Укажите курс конвертации: валюта расхода ({body.currency}) "
+                    f"≠ валюта кассы ({reg_currency}). Поле cash_rate обязательно "
+                    f"(сколько {reg_currency} за 1 {body.currency})."
+                )
+            cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+
+        # Сохраняем сколько реально списали с кассы
+        expense.cash_amount_in_register = cash_amount
         await _record_cash_outflow(
-            db, body.cash_register_id, amount_cny,
+            db, body.cash_register_id, cash_amount,
             f"Расход: {body.description[:80]}", current_user.id,
         )
     await db.commit()
@@ -453,9 +476,20 @@ async def update_expense(
 
 # ── delete ────────────────────────────────────────────────────────────────────
 
+class ExpenseDeleteBody(BaseModel):
+    reason: str
+
+    @pydantic_validator("reason")
+    def reason_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Укажите причину удаления")
+        return v.strip()
+
+
 @router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_expense(
     expense_id: uuid.UUID,
+    body: ExpenseDeleteBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -471,18 +505,22 @@ async def delete_expense(
         raise HTTPException(422, "Cannot delete a paid reimbursement")
 
     expense.is_active = False
-    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.delete, {})
+    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.delete,
+                      {"reason": body.reason, "amount_cny": str(expense.amount_cny),
+                       "currency": expense.currency, "description": expense.description})
 
     # Возврат в кассу если был списан прямой расход (не возмещение)
     if expense.cash_register_id and not expense.is_reimbursement:
         from app.api.cash_registers import _get_balance
+        # Возвращаем ровно столько, сколько было списано с кассы (в валюте кассы)
+        refund_amount = expense.cash_amount_in_register or expense.amount_cny
         cur_bal = await _get_balance(db, expense.cash_register_id)
         comp_tx = CashTransaction(
             id=uuid.uuid4(),
             cash_register_id=expense.cash_register_id,
             direction=TxDirection.inflow,
-            amount=expense.amount_cny,
-            balance_after=cur_bal + expense.amount_cny,
+            amount=refund_amount,
+            balance_after=cur_bal + refund_amount,
             notes=f"Отмена расхода: {expense.description[:80] if expense.description else ''}",
             created_by=current_user.id,
         )

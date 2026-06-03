@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Table, Button, Tag, Row, Col, Input, Select, DatePicker,
-  Typography, Space, Popconfirm, Statistic, message,
+  Typography, Space, Statistic, message, Modal,
 } from "antd";
 import { PlusOutlined, EyeOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +33,9 @@ export default function ExpensesPage({ user }: Props) {
   const qc = useQueryClient();
 
   const isAccountant = user.roles?.some(r => ["accountant", "admin"].includes(r));
+
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; expenseId: string | null }>({ open: false, expenseId: null });
+  const [deleteReason, setDeleteReason] = useState("");
 
   const [search, setSearch] = useState("");
   const [linkType, setLinkType] = useState<string | undefined>();
@@ -153,14 +156,12 @@ export default function ExpensesPage({ user }: Props) {
       render: (_: any, row: ExpenseListItem) => (
         <Space>
           <Button icon={<EyeOutlined />} size="small" onClick={() => navigate(`/expenses/${row.id}`)} />
-          <Popconfirm
-            title={t("expense.delete_confirm")}
-            onConfirm={() => deleteMutation.mutate(row.id)}
-            okText={t("common.yes")}
-            cancelText={t("common.no")}
-          >
-            <Button icon={<DeleteOutlined />} size="small" danger />
-          </Popconfirm>
+          <Button
+            icon={<DeleteOutlined />}
+            size="small"
+            danger
+            onClick={() => { setDeleteReason(""); setDeleteModal({ open: true, expenseId: row.id }); }}
+          />
         </Space>
       ),
     },
@@ -171,8 +172,33 @@ export default function ExpensesPage({ user }: Props) {
   const clientTotal = data?.total_client_cny ?? 0;
   const noneTotal = data?.total_none_cny ?? 0;
 
+  const handleDeleteConfirm = () => {
+    if (!deleteModal.expenseId || !deleteReason.trim()) return;
+    deleteMutation.mutate({ id: deleteModal.expenseId, reason: deleteReason.trim() });
+    setDeleteModal({ open: false, expenseId: null });
+  };
+
   return (
     <div>
+      <Modal
+        open={deleteModal.open}
+        title="Удаление расхода"
+        onOk={handleDeleteConfirm}
+        onCancel={() => setDeleteModal({ open: false, expenseId: null })}
+        okText="Удалить"
+        cancelText={t("common.cancel")}
+        okButtonProps={{ danger: true, disabled: !deleteReason.trim(), loading: deleteMutation.isPending }}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 8 }}>Укажите причину удаления (обязательно):</p>
+        <Input.TextArea
+          rows={3}
+          placeholder="Например: ошибка ввода, дублирующий расход..."
+          value={deleteReason}
+          onChange={e => setDeleteReason(e.target.value)}
+          autoFocus
+        />
+      </Modal>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Title level={4} style={{ margin: 0 }}>{t("expense.title")}</Title>

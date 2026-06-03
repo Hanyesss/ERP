@@ -28,8 +28,8 @@ export const createPayment = (data: PaymentCreateInput) =>
 export const updatePayment = (id: string, data: Partial<PaymentCreateInput>) =>
   apiClient.patch<Payment>(`/api/payments/${id}`, data);
 
-export const deletePayment = (id: string) =>
-  apiClient.delete(`/api/payments/${id}`);
+export const deletePayment = ({ id, reason }: { id: string; reason: string }) =>
+  apiClient.delete(`/api/payments/${id}`, { data: { reason } });
 
 export const addAllocations = (id: string, allocations: AllocationInput[]) =>
   apiClient.post<Payment>(`/api/payments/${id}/allocate`, allocations);

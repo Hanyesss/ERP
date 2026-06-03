@@ -46,5 +46,7 @@ class Expense(Base, TimestampMixin):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     receipt_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     cash_register_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("cash_registers.id"), nullable=True)
+    # Сумма в валюте кассы (может отличаться от amount при кросс-валютном расходе)
+    cash_amount_in_register: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

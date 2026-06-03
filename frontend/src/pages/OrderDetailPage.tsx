@@ -37,6 +37,8 @@ export default function OrderDetailPage() {
   const canSync = useHasAnyRole("manager", "accountant", "admin");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [logisticsPdfLoading, setLogisticsPdfLoading] = useState(false);
+  const [cancelModal, setCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [pushStatusOpen, setPushStatusOpen] = useState(false);
   const [pushStatusForm] = Form.useForm();
 
@@ -81,11 +83,12 @@ export default function OrderDetailPage() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => cancelOrder(id!),
+    mutationFn: (reason: string) => cancelOrder({ id: id!, reason }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["order", id] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       message.success(t("order.status_cancelled") + " ✓");
+      setCancelModal(false);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -851,16 +854,24 @@ export default function OrderDetailPage() {
               </Popconfirm>
             )}
             {canCancel && (
-              <Popconfirm
-                title={t("order.cancel_confirm")}
-                onConfirm={() => cancelMutation.mutate()}
-                okText={t("common.yes")}
-                cancelText={t("common.no")}
-              >
-                <Button danger icon={<CloseOutlined />} loading={cancelMutation.isPending}>
+              <>
+                <Modal
+                  open={cancelModal}
+                  title="Отмена заказа"
+                  onOk={() => { if (cancelReason.trim()) cancelMutation.mutate(cancelReason.trim()); }}
+                  onCancel={() => setCancelModal(false)}
+                  okText="Отменить заказ"
+                  cancelText={t("common.cancel")}
+                  okButtonProps={{ danger: true, disabled: !cancelReason.trim(), loading: cancelMutation.isPending }}
+                  destroyOnClose
+                >
+                  <p style={{ marginBottom: 8 }}>Укажите причину отмены:</p>
+                  <Input.TextArea rows={3} value={cancelReason} onChange={e => setCancelReason(e.target.value)} autoFocus />
+                </Modal>
+                <Button danger icon={<CloseOutlined />} onClick={() => { setCancelReason(""); setCancelModal(true); }}>
                   {t("order.cancel_order")}
                 </Button>
-              </Popconfirm>
+              </>
             )}
           </Space>
         </Col>

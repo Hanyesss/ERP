@@ -31,8 +31,8 @@ export const createExpense = (data: ExpenseCreateInput) =>
 export const updateExpense = (id: string, data: Partial<ExpenseCreateInput>) =>
   apiClient.patch<Expense>(`/api/expenses/${id}`, data);
 
-export const deleteExpense = (id: string) =>
-  apiClient.delete(`/api/expenses/${id}`);
+export const deleteExpense = ({ id, reason }: { id: string; reason: string }) =>
+  apiClient.delete(`/api/expenses/${id}`, { data: { reason } });
 
 export const approveReimbursement = (id: string, amount?: number) =>
   apiClient.post(`/api/expenses/${id}/approve`, amount !== undefined ? { amount } : {});

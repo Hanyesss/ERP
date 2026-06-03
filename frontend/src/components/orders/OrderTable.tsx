@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Table, Button, Space, Popconfirm, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip } from "antd";
+import { Table, Button, Space, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip, Modal } from "antd";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { EyeOutlined, EditOutlined, DeleteOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +24,9 @@ export default function OrderTable() {
   const qc = useQueryClient();
   const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
   const canSeeMargin = useHasAnyRole("accountant", "admin");
+
+  const [cancelModal, setCancelModal] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
+  const [cancelReason, setCancelReason] = useState("");
 
   const [search, setSearch] = useState("");
   const [clientId, setClientId] = useState<string | undefined>();
@@ -158,9 +161,12 @@ export default function OrderTable() {
         <Space>
           <Button icon={<EyeOutlined />} size="small" onClick={() => navigate(`/orders/${row.id}`)} />
           <Button icon={<EditOutlined />} size="small" onClick={() => navigate(`/orders/${row.id}/edit`)} />
-          <Popconfirm title={t("order.cancel_confirm")} onConfirm={() => cancelMutation.mutate(row.id)} okText={t("common.yes")} cancelText={t("common.no")}>
-            <Button icon={<DeleteOutlined />} size="small" danger />
-          </Popconfirm>
+          <Button
+            icon={<DeleteOutlined />}
+            size="small"
+            danger
+            onClick={() => { setCancelReason(""); setCancelModal({ open: true, orderId: row.id }); }}
+          />
         </Space>
       ),
     },
@@ -174,8 +180,33 @@ export default function OrderTable() {
   const totalSale = data?.page_total_sale_cny ?? 0;
   const totalCost = data?.page_total_cost_cny ?? 0;
 
+  const handleCancelConfirm = () => {
+    if (!cancelModal.orderId || !cancelReason.trim()) return;
+    cancelMutation.mutate({ id: cancelModal.orderId, reason: cancelReason.trim() });
+    setCancelModal({ open: false, orderId: null });
+  };
+
   return (
     <div>
+      <Modal
+        open={cancelModal.open}
+        title="Отмена заказа"
+        onOk={handleCancelConfirm}
+        onCancel={() => setCancelModal({ open: false, orderId: null })}
+        okText="Отменить заказ"
+        cancelText={t("common.cancel")}
+        okButtonProps={{ danger: true, disabled: !cancelReason.trim(), loading: cancelMutation.isPending }}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 8 }}>Укажите причину отмены (обязательно):</p>
+        <Input.TextArea
+          rows={3}
+          placeholder="Например: клиент отказался, дублирующий заказ, ошибка ввода..."
+          value={cancelReason}
+          onChange={e => setCancelReason(e.target.value)}
+          autoFocus
+        />
+      </Modal>
       <Row gutter={[8, 8]} style={{ marginBottom: 12 }} className="mobile-full-width">
         <Col xs={24} sm="auto">
           <Input.Search placeholder={t("order.number")} allowClear style={{ width: isMobile ? "100%" : 180 }}

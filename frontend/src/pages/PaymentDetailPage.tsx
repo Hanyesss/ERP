@@ -26,6 +26,8 @@ export default function PaymentDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const { data: payment, isLoading } = useQuery({
     queryKey: ["payment", id],
@@ -46,7 +48,7 @@ export default function PaymentDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deletePayment(id!),
+    mutationFn: (reason: string) => deletePayment({ id: id!, reason }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payments"] });
       qc.invalidateQueries({ queryKey: ["orders"] });
@@ -125,16 +127,20 @@ export default function PaymentDetailPage() {
             >
               {t("common.edit")}
             </Button>
-            <Popconfirm
-              title={t("payment.delete_confirm")}
-              onConfirm={() => deleteMutation.mutate()}
-              okText={t("common.yes")}
-              cancelText={t("common.no")}
-            >
-              <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
+            <>
+              <Modal open={deleteModal} title="Удаление платежа"
+                onOk={() => { if (deleteReason.trim()) deleteMutation.mutate(deleteReason.trim()); }}
+                onCancel={() => setDeleteModal(false)}
+                okText="Удалить" cancelText={t("common.cancel")}
+                okButtonProps={{ danger: true, disabled: !deleteReason.trim(), loading: deleteMutation.isPending }}
+                destroyOnClose>
+                <p style={{ marginBottom: 8 }}>Укажите причину удаления:</p>
+                <Input.TextArea rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} autoFocus />
+              </Modal>
+              <Button danger icon={<DeleteOutlined />} onClick={() => { setDeleteReason(""); setDeleteModal(true); }}>
                 {t("common.delete")}
               </Button>
-            </Popconfirm>
+            </>
           </Space>
         </Col>
       </Row>

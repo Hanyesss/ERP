@@ -34,8 +34,8 @@ export const createOrder = (data: OrderFormData) =>
 export const updateOrder = (id: string, data: Partial<OrderFormData>) =>
   apiClient.patch<Order>(`/api/orders/${id}`, data);
 
-export const cancelOrder = (id: string) =>
-  apiClient.delete(`/api/orders/${id}`);
+export const cancelOrder = ({ id, reason }: { id: string; reason: string }) =>
+  apiClient.delete(`/api/orders/${id}`, { data: { reason } });
 
 export const closeOrder = (id: string) =>
   apiClient.post<Order>(`/api/orders/${id}/close`);

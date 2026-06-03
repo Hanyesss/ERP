@@ -50,6 +50,8 @@ export default function ExpenseDetailPage({ user }: Props) {
   const qc = useQueryClient();
 
   const isAccountant = user.roles?.some(r => ["accountant", "admin"].includes(r));
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [paidOpen, setPaidOpen] = useState(false);
@@ -82,8 +84,8 @@ export default function ExpenseDetailPage({ user }: Props) {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteExpense(id!),
-    onSuccess: () => { message.success("✓"); navigate(backUrl); },
+    mutationFn: (reason: string) => deleteExpense({ id: id!, reason }),
+    onSuccess: () => { message.success("✓"); navigate(backUrl); setDeleteModal(false); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -309,16 +311,20 @@ export default function ExpenseDetailPage({ user }: Props) {
               </Button>
             )}
             {canDelete && (
-              <Popconfirm
-                title={t("expense.delete_confirm")}
-                onConfirm={() => deleteMutation.mutate()}
-                okText={t("common.yes")}
-                cancelText={t("common.no")}
-              >
-                <Button icon={<DeleteOutlined />} danger loading={deleteMutation.isPending}>
+              <>
+                <Modal open={deleteModal} title="Удаление расхода"
+                  onOk={() => { if (deleteReason.trim()) deleteMutation.mutate(deleteReason.trim()); }}
+                  onCancel={() => setDeleteModal(false)}
+                  okText="Удалить" cancelText={t("common.cancel")}
+                  okButtonProps={{ danger: true, disabled: !deleteReason.trim(), loading: deleteMutation.isPending }}
+                  destroyOnClose>
+                  <p style={{ marginBottom: 8 }}>Укажите причину удаления:</p>
+                  <Input.TextArea rows={3} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} autoFocus />
+                </Modal>
+                <Button icon={<DeleteOutlined />} danger onClick={() => { setDeleteReason(""); setDeleteModal(true); }}>
                   {t("common.delete")}
                 </Button>
-              </Popconfirm>
+              </>
             )}
           </Space>
         </Col>

@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, not_, and_
 from sqlalchemy.orm import aliased
@@ -437,8 +438,14 @@ async def list_orders(
         .join(ManagerAlias, Order.manager_id == ManagerAlias.id)
         .join(BusinessType, Order.business_type_id == BusinessType.id)
         .outerjoin(paid_sq, Order.id == paid_sq.c.order_id)
-        .where(Order.status != OrderStatus.cancelled)
     )
+
+    # Баг А: жёсткий != cancelled убран.
+    # По умолчанию (без ?status=) скрываем отменённые, при ?status=cancelled — показываем только их.
+    if order_status:
+        stmt = stmt.where(Order.status == order_status)
+    else:
+        stmt = stmt.where(Order.status != OrderStatus.cancelled)
 
     if search:
         stmt = stmt.where(Order.order_number.ilike(f"%{search}%"))
@@ -446,8 +453,6 @@ async def list_orders(
         stmt = stmt.where(Order.client_id == client_id)
     if business_type_id:
         stmt = stmt.where(Order.business_type_id == business_type_id)
-    if order_status:
-        stmt = stmt.where(Order.status == order_status)
     if manager_id:
         stmt = stmt.where(Order.manager_id == manager_id)
     if date_from:
@@ -766,9 +771,20 @@ async def update_order(
     return await _load_order_detail(db, order.id, current_user)
 
 
+class CancelOrderBody(BaseModel):
+    reason: str
+
+    @validator("reason")
+    def reason_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Укажите причину отмены")
+        return v.strip()
+
+
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_order(
     order_id: uuid.UUID,
+    body: CancelOrderBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
 ):
@@ -776,9 +792,52 @@ async def cancel_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Order not found")
+    if order.status == OrderStatus.cancelled:
+        raise HTTPException(422, "Заказ уже отменён")
+
+    # Снимок для аудита
+    snapshot = {
+        "order_number": order.order_number,
+        "total_sale_cny": str(order.total_sale_cny),
+        "total_cost_cny": str(order.total_cost_cny),
+        "payment_status": str(order.payment_status),
+        "supplier_payment_status": str(order.supplier_payment_status),
+        "client_id": str(order.client_id),
+        "manager_id": str(order.manager_id),
+        "business_type_id": str(order.business_type_id),
+        "sync_status": order.sync_status,
+        "cancel_reason": body.reason,
+    }
+
     order.status = OrderStatus.cancelled
-    await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.delete,
-                      {"order_number": order.order_number})
+    order.cancel_reason = body.reason
+
+    # Bug Д: отвязываем аллокации платежей от этого заказа
+    allocs = (await db.execute(
+        select(PaymentAllocation).where(PaymentAllocation.order_id == order_id)
+    )).scalars().all()
+    affected_payment_ids = [a.payment_id for a in allocs]
+    for a in allocs:
+        await db.delete(a)
+    await db.flush()
+
+    # Пересчитываем статусы платежей, чьи аллокации удалили
+    for pay_id in affected_payment_ids:
+        pay = (await db.execute(select(Payment).where(Payment.id == pay_id))).scalar_one_or_none()
+        if pay:
+            remaining = (await db.execute(
+                select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
+                .where(PaymentAllocation.payment_id == pay_id)
+            )).scalar_one() or Decimal("0")
+            snapshot["freed_allocations_cny"] = str(
+                Decimal(snapshot.get("freed_allocations_cny", "0")) +
+                (pay.amount_cny - remaining)
+            )
+
+    # Сбрасываем payment_status заказа
+    order.payment_status = PaymentStatus.unpaid
+
+    await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.delete, snapshot)
     await db.commit()
 
 

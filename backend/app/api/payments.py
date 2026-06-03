@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
@@ -516,17 +517,36 @@ async def create_payment(
     db.add(payment)
     await db.flush()
 
-    # Создаём транзакцию кассы
+    # Создаём транзакцию кассы — сумма в ВАЛЮТЕ КАССЫ
     from app.api.cash_registers import _get_balance
+    reg = (await db.execute(
+        select(CashRegister).where(CashRegister.id == body.cash_register_id)
+    )).scalar_one()
+    reg_currency = reg.currency
+
+    if body.currency == reg_currency:
+        cash_amount = body.amount
+    elif reg_currency == "CNY":
+        cash_amount = amount_cny
+    else:
+        if not body.cash_rate or body.cash_rate <= 0:
+            raise HTTPException(
+                422,
+                f"Укажите курс конвертации: валюта платежа ({body.currency}) "
+                f"≠ валюта кассы ({reg_currency}). Поле cash_rate обязательно "
+                f"(сколько {reg_currency} за 1 {body.currency})."
+            )
+        cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+
     current_balance = await _get_balance(db, body.cash_register_id)
     tx_direction = "in" if body.direction == "in" else "out"
-    new_balance = current_balance + body.amount if tx_direction == "in" else current_balance - body.amount
+    new_balance = current_balance + cash_amount if tx_direction == "in" else current_balance - cash_amount
     cash_tx = CashTransaction(
         id=uuid.uuid4(),
         cash_register_id=body.cash_register_id,
         payment_id=payment.id,
         direction=tx_direction,
-        amount=body.amount,
+        amount=cash_amount,
         balance_after=new_balance,
         notes=body.notes,
         created_by=current_user.id,
@@ -606,11 +626,22 @@ async def update_payment(
     return await _load_payment(db, payment.id)
 
 
+class DeleteBody(BaseModel):
+    reason: str
+
+    @validator("reason")
+    def reason_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Укажите причину удаления")
+        return v.strip()
+
+
 @router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_payment(
     payment_id: uuid.UUID,
+    body: DeleteBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(*_ALLOWED)),
+    current_user: User = Depends(require_roles("admin")),
 ):
     payment = (await db.execute(
         select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
@@ -660,7 +691,8 @@ async def delete_payment(
 
     await write_audit(
         db, current_user.id, "payment", payment.id, AuditActionEnum.delete,
-        {"soft_deleted": True, "cash_compensations": len(cash_txs)}
+        {"soft_deleted": True, "cash_compensations": len(cash_txs), "reason": body.reason,
+         "amount_cny": str(payment.amount_cny), "direction": payment.direction}
     )
     await db.commit()
 

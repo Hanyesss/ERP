@@ -62,3 +62,4 @@ class Order(Base, TimestampMixin):
     sync_status: Mapped[str | None] = mapped_column(Text, nullable=True)
     sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
