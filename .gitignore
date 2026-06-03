@@ -52,3 +52,5 @@ frontend/build/
 # IDE-файлы
 .DS_Store
 *.swp
+erp-backend.tar.gz
+*.tar.gz
