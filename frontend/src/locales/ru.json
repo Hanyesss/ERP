@@ -40,7 +40,18 @@
     "exchange_rate": "Курс конвертации",
     "history": "История транзакций",
     "transactions": "Транзакции",
-    "transfers": "Переводы"
+    "transfers": "Переводы",
+    "op": {
+      "payment_in":     "Входящий платёж",
+      "payment_out":    "Исходящий платёж",
+      "payment_cancel": "Отмена платежа",
+      "expense":        "Расход",
+      "reimbursement":  "Выплата возмещения",
+      "expense_cancel": "Отмена расхода",
+      "transfer_out":   "Перевод →",
+      "transfer_in":    "Перевод ←",
+      "data_fix":       "Корректировка данных"
+    }
   },
   "dashboard": {
     "welcome": "Добро пожаловать",

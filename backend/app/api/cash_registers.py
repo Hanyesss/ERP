@@ -51,7 +51,8 @@ class CashTransactionResponse(BaseModel):
     direction: str
     amount: Decimal
     balance_after: Decimal
-    notes: Optional[str] = None
+    operation_type: Optional[str] = None   # системный ключ (переводится по языку)
+    notes: Optional[str] = None            # пользовательский текст (не переводится)
     is_active: bool
     created_by_name: str
     created_at: str
@@ -219,6 +220,7 @@ async def get_transactions(
             direction=t.direction,
             amount=t.amount,
             balance_after=t.balance_after,
+            operation_type=t.operation_type,
             notes=t.notes,
             is_active=t.is_active,
             created_by_name=users_map.get(t.created_by, ""),
@@ -298,7 +300,8 @@ async def create_transfer(
         direction="out",
         amount=body.from_amount,
         balance_after=from_balance - body.from_amount,
-        notes=f"Перевод → {to_reg.name}" + (f": {body.notes}" if body.notes else ""),
+        operation_type="transfer_out",
+        notes=f"{to_reg.name}" + (f": {body.notes}" if body.notes else ""),
         created_by=current_user.id,
         created_at=now,
     )
@@ -312,7 +315,8 @@ async def create_transfer(
         direction="in",
         amount=body.to_amount,
         balance_after=to_balance + body.to_amount,
-        notes=f"Перевод ← {from_reg.name}" + (f": {body.notes}" if body.notes else ""),
+        operation_type="transfer_in",
+        notes=f"{from_reg.name}" + (f": {body.notes}" if body.notes else ""),
         created_by=current_user.id,
         created_at=now,
     )

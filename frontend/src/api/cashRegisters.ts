@@ -16,7 +16,8 @@ export interface CashTransaction {
   direction: "in" | "out";
   amount: number;
   balance_after: number;
-  notes?: string;
+  operation_type?: string;  // системный ключ — переводится через t("cash.op.{key}")
+  notes?: string;           // пользовательский текст — показывается как есть
   is_active: boolean;
   created_by_name: string;
   created_at: string;

@@ -67,7 +67,18 @@
     "exchange_rate": "换算汇率",
     "history": "交易记录",
     "transactions": "交易记录",
-    "transfers": "转账记录"
+    "transfers": "转账记录",
+    "op": {
+      "payment_in":     "收款",
+      "payment_out":    "付款",
+      "payment_cancel": "取消付款",
+      "expense":        "支出",
+      "reimbursement":  "报销支出",
+      "expense_cancel": "取消费用",
+      "transfer_out":   "转出 →",
+      "transfer_in":    "转入 ←",
+      "data_fix":       "数据校正"
+    }
   },
   "dashboard": {
     "welcome": "欢迎",

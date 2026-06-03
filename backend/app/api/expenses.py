@@ -52,7 +52,8 @@ async def _record_cash_outflow(
         direction=TxDirection.outflow,
         amount=cash_amount,
         balance_after=balance_after,
-        notes=notes,
+        operation_type=reason,   # "expense", "reimbursement", etc. — уже системный ключ
+        notes=notes,             # пользовательский текст
         created_by=created_by,
     )
     db.add(tx)
@@ -452,7 +453,8 @@ async def create_expense(
         expense.cash_amount_in_register = cash_amount
         await _record_cash_outflow(
             db, body.cash_register_id, cash_amount,
-            f"Расход: {body.description[:80]}", current_user.id,
+            body.description[:80],  # только пользовательский текст
+            current_user.id,
         )
     await db.commit()
     return await _load_expense(db, expense.id)
@@ -539,7 +541,8 @@ async def delete_expense(
             direction=TxDirection.inflow,
             amount=refund_amount,
             balance_after=cur_bal + refund_amount,
-            notes=f"Отмена расхода: {expense.description[:80] if expense.description else ''}",
+            operation_type="expense_cancel",
+            notes=expense.description[:80] if expense.description else "",  # пользовательский текст
             created_by=current_user.id,
         )
         db.add(comp_tx)
@@ -643,7 +646,8 @@ async def mark_reimbursement_paid(
         expense.cash_register_id = body.cash_register_id
         await _record_cash_outflow(
             db, body.cash_register_id, expense.amount_cny,
-            f"Возмещение: {expense.description[:80]}", current_user.id,
+            expense.description[:80],   # пользовательский текст
+            current_user.id,
             reason="reimbursement",
         )
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,

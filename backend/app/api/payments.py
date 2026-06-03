@@ -555,7 +555,8 @@ async def create_payment(
         direction=tx_direction,
         amount=cash_amount,
         balance_after=new_balance,
-        notes=body.notes,
+        operation_type="payment_in" if tx_direction == "in" else "payment_out",
+        notes=body.notes,   # пользовательский текст (примечание к платежу)
         created_by=current_user.id,
     )
     db.add(cash_tx)
@@ -679,7 +680,8 @@ async def delete_payment(
             direction=comp_direction,
             amount=comp_amount,
             balance_after=new_bal,
-            notes=f"Отмена платежа: {payment.notes or str(payment.id)[:8]}",
+            operation_type="payment_cancel",
+            notes=payment.notes or str(payment.id)[:8],  # пользовательский текст платежа
             created_by=current_user.id,
         )
         db.add(comp_tx)

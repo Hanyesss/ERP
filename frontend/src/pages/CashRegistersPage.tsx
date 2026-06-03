@@ -117,29 +117,46 @@ export default function CashRegistersPage() {
     });
   };
 
+  // Отмены: payment_cancel, expense_cancel, data_fix
+  const CANCEL_OPS = new Set(["payment_cancel", "expense_cancel", "data_fix"]);
+
   const txColumns = [
     { title: t("common.date"), dataIndex: "created_at", key: "d", width: 155,
       render: (v: string) => new Date(v).toLocaleString("ru-RU") },
-    { title: t("cash.direction"), key: "dir", width: 110,
-      render: (_: any, row: CashTransaction) => (
-        <Space size={4}>
-          <Tag color={row.direction === "in" ? "green" : "red"}>
-            {row.direction === "in" ? `▲ ${t("payment.direction_in")}` : `▼ ${t("payment.direction_out")}`}
-          </Tag>
-          {!row.is_active && <Tag color="default" style={{ fontSize: 10 }}>отменена</Tag>}
-        </Space>
-      )},
+    { title: t("cash.direction"), key: "dir", width: 160,
+      render: (_: any, row: CashTransaction) => {
+        const isCancel = row.operation_type ? CANCEL_OPS.has(row.operation_type) : false;
+        const opLabel = row.operation_type
+          ? (t(`cash.op.${row.operation_type}`, { defaultValue: "" }) || row.operation_type)
+          : (row.direction === "in" ? t("payment.direction_in") : t("payment.direction_out"));
+        return (
+          <Space size={4} wrap>
+            <Tag color={!row.is_active ? "default" : isCancel ? "red" : row.direction === "in" ? "green" : "orange"}
+                 style={isCancel ? { border: "1px solid #ff4d4f" } : undefined}>
+              {row.direction === "in" ? "▲" : "▼"} {opLabel}
+            </Tag>
+            {!row.is_active && <Tag color="default" style={{ fontSize: 10 }}>{t("common.cancelled") || "отменена"}</Tag>}
+          </Space>
+        );
+      }},
     { title: t("cash.amount"), dataIndex: "amount", key: "a", align: "right" as const,
-      render: (v: number, row: CashTransaction) => (
-        <Text strong style={{ color: row.is_active ? (row.direction === "in" ? "#389e0d" : "#cf1322") : "#bfbfbf", textDecoration: row.is_active ? undefined : "line-through" }}>
-          {row.direction === "in" ? "+" : "−"}{fmt(v, selectedReg?.currency || "")}
-        </Text>
-      )},
+      render: (v: number, row: CashTransaction) => {
+        const isCancel = row.operation_type ? CANCEL_OPS.has(row.operation_type) : false;
+        return (
+          <Text strong style={{
+            color: !row.is_active ? "#bfbfbf" : isCancel ? "#ff4d4f" : row.direction === "in" ? "#389e0d" : "#cf1322",
+            textDecoration: !row.is_active ? "line-through" : undefined,
+          }}>
+            {row.direction === "in" ? "+" : "−"}{fmt(v, selectedReg?.currency || "")}
+          </Text>
+        );
+      }},
     { title: t("cash.balance_after"), dataIndex: "balance_after", key: "b", align: "right" as const,
       render: (v: number, row: CashTransaction) => (
         <Text style={{ color: row.is_active ? undefined : "#bfbfbf" }}>{fmt(v, selectedReg?.currency || "")}</Text>
       )},
-    { title: t("payment.notes"), dataIndex: "notes", key: "n", render: (v: string) => v || "—" },
+    { title: t("payment.notes"), key: "n",
+      render: (_: any, row: CashTransaction) => row.notes || "—" },
   ];
 
   const trColumns = [
