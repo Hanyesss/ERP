@@ -66,17 +66,19 @@ async def run(apply: bool = False):
             # Компенсация — транзакция с обратным направлением, без payment_id,
             # с notes содержащим "Отмена платежа" или "Корректировка" и тем же register
             comp_direction = "out" if tx.direction == "in" else "in"
+            from sqlalchemy import or_ as sa_or
             comp_check = await db.execute(
                 select(func.count(CashTransaction.id)).where(
                     CashTransaction.cash_register_id == tx.cash_register_id,
                     CashTransaction.payment_id.is_(None),
                     CashTransaction.direction == comp_direction,
                     CashTransaction.amount == tx.amount,
-                    CashTransaction.notes.in_([
-                        f"Отмена платежа: {str(payment.id)[:8]}",
-                        "Корректировка: откат удалённого платежа (миграция целостности)",
-                    ]) if False else  # fallback to LIKE
-                    CashTransaction.notes.like("%Отмена платеж%") | CashTransaction.notes.like("%Корректировка%"),
+                    # Компенсация от нового delete_payment: "Отмена платежа: xxxxxxxx"
+                    # Компенсация от скрипта миграции:     "Корректировка: откат ..."
+                    sa_or(
+                        CashTransaction.notes.like("%Отмена платеж%"),
+                        CashTransaction.notes.like("%Корректировка%"),
+                    ),
                 )
             )
             already_compensated = comp_check.scalar_one() > 0
