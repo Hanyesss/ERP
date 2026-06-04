@@ -44,6 +44,8 @@ export default function PurchasesPage() {
       title: t("purchase.number"),
       dataIndex: "purchase_number",
       key: "number",
+      fixed: "left" as const,
+      width: 160,
       render: (num, row) => (
         <Button type="link" size="small" onClick={() => navigate(`/purchases/${row.id}`)}>
           {num}
@@ -161,6 +163,7 @@ export default function PurchasesPage() {
       </Row>
 
       <Table scroll={{ x: "max-content" }}
+        className="sticky-scroll-top"
         columns={columns}
         dataSource={data?.items ?? []}
         rowKey="id"

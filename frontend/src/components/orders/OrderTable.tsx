@@ -71,6 +71,7 @@ export default function OrderTable() {
       dataIndex: "order_number",
       key: "order_number",
       width: 160,
+      fixed: "left" as const,
       render: (num, row) => (
         <Button type="link" style={{ padding: 0 }} onClick={() => navigate(`/orders/${row.id}`)}>
           {num}
@@ -261,6 +262,7 @@ export default function OrderTable() {
       <Table
         columns={columns} dataSource={data?.items ?? []} rowKey="id" loading={isLoading} size="small"
         scroll={{ x: "max-content" }}
+        className="sticky-scroll-top"
         pagination={{ current: page, total: data?.total ?? 0, pageSize: 20, onChange: setPage, showTotal: t => `${t}`, size: isMobile ? "small" : "default" }}
         footer={() => (
           <Row justify="end" gutter={24}>
