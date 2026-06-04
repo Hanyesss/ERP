@@ -3,11 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  @page {
-    size: 80mm 60mm;
-    margin: 0;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
+  @page { size: 80mm 60mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      font-family: "DejaVu Sans", Arial, sans-serif; }
   body { width: 80mm; height: 60mm; overflow: hidden; background: #fff; }
 
   .label {
@@ -15,36 +13,36 @@
     flex-direction: row;
     width: 80mm;
     height: 60mm;
-    padding: 2mm;
-    gap: 2mm;
+    padding: 1.5mm;
+    gap: 1.5mm;
   }
 
-  /* QR — левая колонка, ~42мм чтобы читался при 203 DPI */
+  /* QR — 40мм × 40мм: читается при 203 DPI, «тихая зона» 2мм от края */
   .qr-col {
-    flex: 0 0 42mm;
+    flex: 0 0 40mm;
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .qr-col img {
-    width: 42mm;
-    height: 42mm;
+    width: 40mm;
+    height: 40mm;
     display: block;
     image-rendering: pixelated;
   }
 
-  /* Тонкий разделитель */
   .divider {
-    width: 0.3pt;
-    background: #bbb;
+    width: 0.4pt;
+    background: #888;
     align-self: stretch;
     flex-shrink: 0;
+    margin: 1mm 0;
   }
 
-  /* Текстовая часть — правая колонка */
+  /* Правая колонка: 80 - 3 - 40 - 1.5 - 1.5 = 34мм */
   .info-col {
     flex: 1;
-    padding-left: 1.5mm;
+    padding-left: 1mm;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -52,37 +50,50 @@
     min-width: 0;
   }
 
+  /* ── Код коробки — самый важный, самый крупный ── */
   .box-code {
-    font-size: 7pt;
+    font-size: 9pt;
     font-weight: bold;
-    letter-spacing: 0.2px;
-    border-bottom: 0.5pt solid #000;
-    padding-bottom: 1mm;
-    margin-bottom: 1mm;
+    letter-spacing: 0.3px;
     word-break: break-all;
-    line-height: 1.2;
+    line-height: 1.15;
+    border-bottom: 0.6pt solid #000;
+    padding-bottom: 0.8mm;
   }
 
-  .field {
-    margin-bottom: 0.7mm;
-    line-height: 1.2;
-  }
-  .field .lbl {
-    font-size: 5.5pt;
-    color: #777;
+  /* ── Код клиента — второй по важности ── */
+  .field-client .lbl {
+    font-size: 5pt;
+    color: #666;
     display: block;
+    line-height: 1.1;
+  }
+  .field-client .val {
+    font-size: 10pt;
+    font-weight: bold;
+    line-height: 1.15;
+  }
+
+  /* ── Остальные поля ── */
+  .field .lbl {
+    font-size: 5pt;
+    color: #666;
+    display: block;
+    line-height: 1.1;
   }
   .field .val {
-    font-size: 7pt;
+    font-size: 8.5pt;
     font-weight: bold;
+    line-height: 1.2;
   }
 
+  /* ── Наименование товара ── */
   .item-name {
-    font-size: 6.5pt;
-    color: #222;
-    margin-top: 1mm;
-    padding-top: 1mm;
-    border-top: 0.3pt dashed #aaa;
+    font-size: 7.5pt;
+    font-weight: bold;
+    color: #111;
+    border-top: 0.4pt dashed #999;
+    padding-top: 0.8mm;
     word-break: break-word;
     line-height: 1.2;
     overflow: hidden;
@@ -97,7 +108,7 @@
   <div class="divider"></div>
   <div class="info-col">
     <div class="box-code">{{ box_code }}</div>
-    <div class="field">
+    <div class="field-client">
       <span class="lbl">Клиент / 客户</span>
       <span class="val">{{ client_code }}</span>
     </div>
