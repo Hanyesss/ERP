@@ -287,7 +287,6 @@ function ReceiptModal({
 
   const handleSubmit = async (values: any) => {
     const validItems = items.filter(i => i.name.trim());
-    if (!validItems.length) { message.error(t("warehouse.items_required")); return; }
 
     setCreating(true);
     try {
