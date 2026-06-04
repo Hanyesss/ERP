@@ -16,7 +16,8 @@ from sqlalchemy import select, func
 from app.database import get_db
 from app.core.deps import get_current_user, require_roles
 from app.models.user import User
-from app.models.warehouse_box import WarehouseBox, PackingList, BoxStatus
+from app.models.warehouse_box import WarehouseBox, BoxItem, PackingList, BoxStatus
+from sqlalchemy.orm import selectinload
 from app.models.counterparty import Counterparty
 from app.models.warehouse import Warehouse
 
@@ -32,13 +33,21 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 # ── Pydantic schemas ─────────────────────────────────────────────────────────
 
+class BoxItemIn(BaseModel):
+    name: str
+    quantity: int = 1
+    sort_order: int = 0
+
+
 class BoxCreate(BaseModel):
     counterparty_id: uuid.UUID
     warehouse_id: uuid.UUID
     weight: Decimal
     volume: Decimal
-    item_name: str
+    item_name: str                        # главное наименование (для совместимости)
     description: Optional[str] = None
+    items: list[BoxItemIn] = []           # детальные позиции (новое)
+    count: int = 1                        # сколько одинаковых коробок создать (задача 2)
 
 
 class BoxUpdate(BaseModel):
@@ -46,6 +55,7 @@ class BoxUpdate(BaseModel):
     volume: Optional[Decimal] = None
     item_name: Optional[str] = None
     description: Optional[str] = None
+    items: Optional[list[BoxItemIn]] = None
 
 
 class PackingListRequest(BaseModel):
@@ -213,6 +223,18 @@ async def _next_box_code(db: AsyncSession, client_code: str) -> str:
 
 
 def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None) -> dict:
+    # Позиции коробки (если загружены через selectinload)
+    items_data = []
+    if hasattr(box, "items") and box.items is not None:
+        for it in sorted(box.items, key=lambda x: x.sort_order):
+            items_data.append({
+                "id": str(it.id),
+                "name": it.name,
+                "quantity": it.quantity,
+                "photo_url": _photo_url(it.photo_path),
+                "photo_path": it.photo_path,
+                "sort_order": it.sort_order,
+            })
     return {
         "id": str(box.id),
         "box_code": box.box_code,
@@ -225,6 +247,7 @@ def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None) -> dict:
         "density": float(box.density),
         "item_name": box.item_name,
         "description": box.description,
+        "items": items_data,
         "photo_url": _photo_url(box.photo_path),
         "photo_path": box.photo_path,
         "status": box.status.value,
@@ -261,6 +284,7 @@ async def get_balance(
         select(WarehouseBox, Counterparty)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .where(WarehouseBox.status == BoxStatus.on_warehouse)
+        .options(selectinload(WarehouseBox.items))
     )
     if warehouse_id:
         stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
@@ -509,25 +533,92 @@ async def create_box(
         raise HTTPException(404, "Warehouse not found")
 
     client_code = cp.code or cp.name[:10].upper().replace(" ", "")
-    box_code = await _next_box_code(db, client_code)
-
     density = _calc_density(body.weight, body.volume)
-    box = WarehouseBox(
-        id=uuid.uuid4(),
-        box_code=box_code,
-        counterparty_id=body.counterparty_id,
-        warehouse_id=body.warehouse_id,
-        weight=body.weight,
-        volume=body.volume,
-        density=density,
-        item_name=body.item_name,
-        description=body.description,
-        status=BoxStatus.on_warehouse,
-    )
-    db.add(box)
+    count = max(1, min(body.count or 1, 500))  # от 1 до 500 коробок
+
+    created_boxes = []
+    for _ in range(count):
+        box_code = await _next_box_code(db, client_code)
+        box = WarehouseBox(
+            id=uuid.uuid4(),
+            box_code=box_code,
+            counterparty_id=body.counterparty_id,
+            warehouse_id=body.warehouse_id,
+            weight=body.weight,
+            volume=body.volume,
+            density=density,
+            item_name=body.item_name,
+            description=body.description,
+            status=BoxStatus.on_warehouse,
+        )
+        db.add(box)
+        await db.flush()
+
+        # Создаём позиции товаров (если переданы)
+        items_src = body.items if body.items else [BoxItemIn(name=body.item_name, quantity=1)]
+        for idx, item_in in enumerate(items_src):
+            db.add(BoxItem(
+                id=uuid.uuid4(),
+                box_id=box.id,
+                name=item_in.name,
+                quantity=item_in.quantity,
+                sort_order=item_in.sort_order if item_in.sort_order else idx,
+            ))
+        created_boxes.append(box)
+
     await db.commit()
-    await db.refresh(box)
-    return _box_to_dict(box, cp)
+
+    # Возвращаем одну или список
+    if count == 1:
+        await db.refresh(created_boxes[0])
+        # Загружаем items
+        box_with_items = (await db.execute(
+            select(WarehouseBox).where(WarehouseBox.id == created_boxes[0].id)
+            .options(selectinload(WarehouseBox.items))
+        )).scalar_one()
+        return _box_to_dict(box_with_items, cp)
+
+    # Несколько коробок — возвращаем список
+    box_ids = [b.id for b in created_boxes]
+    boxes_loaded = (await db.execute(
+        select(WarehouseBox).where(WarehouseBox.id.in_(box_ids))
+        .options(selectinload(WarehouseBox.items))
+        .order_by(WarehouseBox.box_code)
+    )).scalars().all()
+    return [_box_to_dict(b, cp) for b in boxes_loaded]
+
+
+@router.post("/{box_id}/items/{item_id}/photo")
+async def upload_box_item_photo(
+    box_id: uuid.UUID,
+    item_id: uuid.UUID,
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    """Загрузить фото для конкретной позиции товара в коробке."""
+    item = (await db.execute(
+        select(BoxItem).where(BoxItem.id == item_id, BoxItem.box_id == box_id)
+    )).scalar_one_or_none()
+    if not item:
+        raise HTTPException(404, "Box item not found")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(422, "File too large (max 10 MB)")
+    mime = file.content_type or ""
+    if mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(422, f"File type not allowed: {mime}")
+
+    ext = Path(file.filename or "photo").suffix.lower() or ".jpg"
+    stored_name = f"item_{item_id}_{uuid.uuid4()}{ext}"
+    dest = _box_dir(box_id) / stored_name
+    dest.write_bytes(content)
+
+    relative = f"boxes/{box_id}/{stored_name}"
+    item.photo_path = relative
+    await db.commit()
+    return {"photo_url": _photo_url(relative), "photo_path": relative}
 
 
 @router.post("/{box_id}/photo")

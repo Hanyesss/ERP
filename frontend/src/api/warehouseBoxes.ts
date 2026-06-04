@@ -1,5 +1,14 @@
 import apiClient from "./client";
 
+export interface BoxItemData {
+  id: string;
+  name: string;
+  quantity: number;
+  photo_url: string | null;
+  photo_path: string | null;
+  sort_order: number;
+}
+
 export interface WarehouseBox {
   id: string;
   box_code: string;
@@ -12,6 +21,7 @@ export interface WarehouseBox {
   density: number;
   item_name: string;
   description: string | null;
+  items: BoxItemData[];      // позиции товаров внутри коробки
   photo_url: string | null;
   status: "on_warehouse" | "shipped";
   received_at: string | null;
@@ -29,6 +39,12 @@ export interface ClientGroup {
   boxes: WarehouseBox[];
 }
 
+export interface BoxItemIn {
+  name: string;
+  quantity: number;
+  sort_order?: number;
+}
+
 export interface BoxCreate {
   counterparty_id: string;
   warehouse_id: string;
@@ -36,6 +52,8 @@ export interface BoxCreate {
   volume: number;
   item_name: string;
   description?: string;
+  items?: BoxItemIn[];   // детальные позиции
+  count?: number;        // сколько одинаковых коробок создать
 }
 
 export interface BoxUpdate {
@@ -43,6 +61,7 @@ export interface BoxUpdate {
   volume?: number;
   item_name?: string;
   description?: string;
+  items?: BoxItemIn[];
 }
 
 export const getBalance = (params?: { warehouse_id?: string; search?: string }) =>
@@ -52,7 +71,7 @@ export const getShipped = (params?: { warehouse_id?: string }) =>
   apiClient.get<WarehouseBox[]>("/api/warehouse-boxes/shipped", { params });
 
 export const createBox = (data: BoxCreate) =>
-  apiClient.post<WarehouseBox>("/api/warehouse-boxes", data);
+  apiClient.post<WarehouseBox | WarehouseBox[]>("/api/warehouse-boxes", data);
 
 export const updateBox = (id: string, data: BoxUpdate) =>
   apiClient.patch<WarehouseBox>(`/api/warehouse-boxes/${id}`, data);
@@ -65,6 +84,16 @@ export const uploadBoxPhoto = (boxId: string, file: File) => {
   fd.append("file", file);
   return apiClient.post<{ photo_url: string; photo_path: string }>(
     `/api/warehouse-boxes/${boxId}/photo`,
+    fd,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+};
+
+export const uploadBoxItemPhoto = (boxId: string, itemId: string, file: File) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiClient.post<{ photo_url: string; photo_path: string }>(
+    `/api/warehouse-boxes/${boxId}/items/${itemId}/photo`,
     fd,
     { headers: { "Content-Type": "multipart/form-data" } }
   );

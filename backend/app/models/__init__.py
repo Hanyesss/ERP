@@ -18,7 +18,7 @@ from app.models.purchase import Purchase, PurchaseCurrency, PurchasePaymentStatu
 from app.models.purchase_item import PurchaseItem
 from app.models.purchase_payment_link import PurchasePaymentLink
 from app.models.warehouse import Warehouse
-from app.models.warehouse_box import WarehouseBox, PackingList, BoxStatus
+from app.models.warehouse_box import WarehouseBox, BoxItem, PackingList, BoxStatus
 
 __all__ = [
     "TimestampMixin",
@@ -35,5 +35,5 @@ __all__ = [
     "Session",
     "Purchase", "PurchaseCurrency", "PurchasePaymentStatus",
     "PurchaseItem", "PurchasePaymentLink",
-    "Warehouse", "WarehouseBox", "PackingList", "BoxStatus",
+    "Warehouse", "WarehouseBox", "BoxItem", "PackingList", "BoxStatus",
 ]

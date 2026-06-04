@@ -16,10 +16,11 @@ import {
   type Warehouse,
 } from "../api/warehouses";
 import {
-  getBalance, createBox, updateBox, deleteBox, uploadBoxPhoto,
+  getBalance, createBox, updateBox, deleteBox, uploadBoxPhoto, uploadBoxItemPhoto,
   getQrLabelUrl, generatePackingListPreview, shipBoxes,
   getShipped, getPackingLists, checkBoxCode,
-  type ClientGroup, type WarehouseBox, type BoxCreate, type PackingListRecord,
+  type ClientGroup, type WarehouseBox, type BoxCreate, type BoxItemIn,
+  type BoxItemData, type PackingListRecord,
 } from "../api/warehouseBoxes";
 import apiClient from "../api/client";
 import { getCounterparties } from "../api/counterparties";
@@ -219,68 +220,84 @@ function QrScanModal({
 
 // ── Receipt Modal ─────────────────────────────────────────────────────────────
 
+interface ItemRow { name: string; qty: number; file: File | null; preview: string | null; }
+
 function ReceiptModal({
-  open,
-  warehouses,
-  onSuccess,
-  onClose,
+  open, warehouses, onSuccess, onClose, defaultClientId,
 }: {
-  open: boolean;
-  warehouses: Warehouse[];
-  onSuccess: (box: WarehouseBox) => void;
+  open: boolean; warehouses: Warehouse[];
+  onSuccess: (boxes: WarehouseBox[]) => void;
   onClose: () => void;
+  defaultClientId?: string;
 }) {
   const { t } = useTranslation();
   const [form] = Form.useForm();
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [createdBox, setCreatedBox] = useState<WarehouseBox | null>(null);
+  const [createdBoxes, setCreatedBoxes] = useState<WarehouseBox[]>([]);
+  // Динамический список позиций товаров
+  const [items, setItems] = useState<ItemRow[]>([{ name: "", qty: 1, file: null, preview: null }]);
 
   const { data: counterparties = [] } = useQuery({
     queryKey: ["counterparties-select"],
     queryFn: () => getCounterparties({ page_size: 500 }).then((r) => r.data.items),
   });
+  const clients = counterparties.filter((c: any) => c.type === "client" || c.type === "both");
 
-  const clients = counterparties.filter(
-    (c: any) => c.type === "client" || c.type === "both"
-  );
-
-  const handlePhotoChange = (info: any) => {
-    const file: File = info.file.originFileObj || info.file;
-    if (file) {
-      setPhotoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setPhotoPreview(reader.result as string);
-      reader.readAsDataURL(file);
+  // Предзаполняем клиента из предыдущего сеанса
+  useEffect(() => {
+    if (open && defaultClientId) {
+      form.setFieldValue("counterparty_id", defaultClientId);
     }
-    return false;
+  }, [open, defaultClientId, form]);
+
+  const setItemField = (idx: number, field: keyof ItemRow, value: any) =>
+    setItems(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+
+  const handleItemPhoto = (idx: number, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => setItemField(idx, "preview", reader.result as string);
+    reader.readAsDataURL(file);
+    setItemField(idx, "file", file);
   };
 
+  const addItem = () => setItems(prev => [...prev, { name: "", qty: 1, file: null, preview: null }]);
+  const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
+
   const handleSubmit = async (values: any) => {
+    const validItems = items.filter(i => i.name.trim());
+    if (!validItems.length) { message.error("Добавьте хотя бы одну позицию товара"); return; }
+
     setCreating(true);
     try {
+      const mainName = validItems[0].name;
       const payload: BoxCreate = {
         counterparty_id: values.counterparty_id,
         warehouse_id: values.warehouse_id,
         weight: values.weight,
         volume: values.volume,
-        item_name: values.item_name,
+        item_name: mainName,
         description: values.description,
+        count: values.box_count || 1,
+        items: validItems.map((it, idx) => ({ name: it.name, quantity: it.qty, sort_order: idx })),
       };
-      const res = await createBox(payload);
-      const box = res.data;
 
-      if (photoFile) {
-        try {
-          await uploadBoxPhoto(box.id, photoFile);
-        } catch (e) {
-          message.warning(t("warehouse.photo_upload_warning"));
+      const res = await createBox(payload);
+      const rawBoxes = Array.isArray(res.data) ? res.data : [res.data];
+
+      // Загружаем фото позиций для первой коробки (остальные одинаковые)
+      const firstBox = rawBoxes[0];
+      if (firstBox && firstBox.items) {
+        for (let idx = 0; idx < validItems.length; idx++) {
+          const f = validItems[idx].file;
+          const savedItem = firstBox.items[idx];
+          if (f && savedItem) {
+            try { await uploadBoxItemPhoto(firstBox.id, savedItem.id, f); } catch {}
+          }
         }
       }
 
-      setCreatedBox(box);
-      onSuccess(box);
+      setCreatedBoxes(rawBoxes);
+      onSuccess(rawBoxes);
     } catch (e: any) {
       message.error(e.response?.data?.detail || "Ошибка создания");
     } finally {
@@ -290,126 +307,124 @@ function ReceiptModal({
 
   const handleClose = () => {
     form.resetFields();
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    setCreatedBox(null);
+    setItems([{ name: "", qty: 1, file: null, preview: null }]);
+    setCreatedBoxes([]);
     onClose();
   };
 
-  const openQrLabel = async () => {
-    if (!createdBox) return;
+  const handleAddMore = () => {
+    form.setFieldValue("box_count", 1);
+    setItems([{ name: "", qty: 1, file: null, preview: null }]);
+    setCreatedBoxes([]);
+    // Оставляем клиента и склад
+  };
+
+  const openQrLabel = async (box: WarehouseBox) => {
     try {
-      const res = await apiClient.get(getQrLabelUrl(createdBox.id), { responseType: "blob" });
-      downloadBlob(res.data as Blob, `${createdBox.box_code}.pdf`);
-    } catch {
-      message.error("Ошибка генерации наклейки");
-    }
+      const res = await apiClient.get(getQrLabelUrl(box.id), { responseType: "blob" });
+      downloadBlob(res.data as Blob, `${box.box_code}.pdf`);
+    } catch { message.error("Ошибка генерации наклейки"); }
   };
 
   return (
-    <Modal
-      open={open}
-      title={t("warehouse.receipt_title")}
-      onCancel={handleClose}
-      footer={null}
-      width={520}
-      style={{ maxWidth: "100vw" }}
-      destroyOnClose
-    >
-      {!createdBox ? (
+    <Modal open={open} title={t("warehouse.receipt_title")} onCancel={handleClose}
+      footer={null} width={580} style={{ maxWidth: "100vw" }} destroyOnClose>
+
+      {createdBoxes.length === 0 ? (
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          {/* Клиент + Склад */}
           <Row gutter={12}>
-            <Col span={24}>
-              <Form.Item
-                name="counterparty_id"
-                label={t("warehouse.client")}
-                rules={[{ required: true }]}
-              >
-                <Select
-                  showSearch
-                  placeholder={t("warehouse.select_client")}
-                  optionFilterProp="children"
-                  filterOption={(input, option) =>
-                    String(option?.children ?? "")
-                      .toLowerCase()
-                      .includes(input.toLowerCase())
-                  }
-                >
-                  {clients.map((c: any) => (
-                    <Option key={c.id} value={c.id}>
-                      {c.code ? `[${c.code}] ` : ""}{c.name}
-                    </Option>
-                  ))}
-                </Select>
+            <Col span={14}>
+              <Form.Item name="counterparty_id" label={t("warehouse.client")} rules={[{ required: true }]}>
+                <Select showSearch placeholder={t("warehouse.select_client")} optionFilterProp="label"
+                  options={clients.map((c: any) => ({
+                    value: c.id, label: `${c.code ? `[${c.code}] ` : ""}${c.name}`
+                  }))} />
               </Form.Item>
             </Col>
-            <Col span={24}>
-              <Form.Item
-                name="warehouse_id"
-                label={t("warehouse.select_warehouse")}
-                rules={[{ required: true }]}
-              >
-                <Select placeholder={t("warehouse.select_warehouse")}>
-                  {warehouses.map((w) => (
-                    <Option key={w.id} value={w.id}>
-                      {w.name}{w.city ? ` (${w.city})` : ""}
-                    </Option>
-                  ))}
-                </Select>
+            <Col span={10}>
+              <Form.Item name="warehouse_id" label={t("warehouse.select_warehouse")} rules={[{ required: true }]}>
+                <Select placeholder={t("warehouse.select_warehouse")}
+                  options={warehouses.map(w => ({ value: w.id, label: w.name + (w.city ? ` (${w.city})` : "") }))} />
               </Form.Item>
             </Col>
           </Row>
 
-          <Form.Item
-            name="item_name"
-            label={t("warehouse.item_name")}
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-
+          {/* Вес / Объём / Количество коробок */}
           <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item
-                name="weight"
-                label={t("warehouse.weight")}
-                rules={[{ required: true }]}
-              >
+            <Col span={8}>
+              <Form.Item name="weight" label={t("warehouse.weight")} rules={[{ required: true }]}>
                 <InputNumber min={0} step={0.1} precision={3} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <Form.Item
-                name="volume"
-                label={t("warehouse.volume")}
-                rules={[{ required: true }]}
-              >
+            <Col span={8}>
+              <Form.Item name="volume" label={t("warehouse.volume")} rules={[{ required: true }]}>
                 <InputNumber min={0} step={0.001} precision={4} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="box_count" label="Кол-во коробок" initialValue={1}>
+                <InputNumber min={1} max={500} precision={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item name="description" label={t("warehouse.description")}>
-            <Input.TextArea rows={2} />
+            <Input.TextArea rows={1} />
           </Form.Item>
 
-          <Form.Item label={t("warehouse.photo_optional")}>
-            {photoPreview && (
-              <div style={{ marginBottom: 8 }}>
-                <Image src={photoPreview} width={80} height={80} style={{ objectFit: "cover", borderRadius: 4 }} />
+          {/* Позиции товаров — с отступом вправо */}
+          <Divider style={{ margin: "8px 0" }}>Позиции товара в коробке</Divider>
+          <div style={{ paddingLeft: 16, borderLeft: "3px solid #f0f0f0" }}>
+            {items.map((item, idx) => (
+              <div key={idx} style={{ marginBottom: 8, background: "#fafafa", borderRadius: 6, padding: "8px 10px" }}>
+                <Row gutter={8} align="middle">
+                  <Col flex="auto">
+                    <Input
+                      placeholder="Название товара"
+                      value={item.name}
+                      onChange={e => setItemField(idx, "name", e.target.value)}
+                    />
+                  </Col>
+                  <Col style={{ width: 80 }}>
+                    <InputNumber
+                      min={1} precision={0} placeholder="Кол-во"
+                      value={item.qty}
+                      onChange={v => setItemField(idx, "qty", v ?? 1)}
+                      style={{ width: "100%" }}
+                    />
+                  </Col>
+                  <Col>
+                    <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
+                      beforeUpload={f => { handleItemPhoto(idx, f); return false; }}>
+                      <Button size="small" icon={<UploadOutlined />}
+                        style={{ background: item.preview ? "#f6ffed" : undefined }}>
+                        {item.preview ? "✓" : "Фото"}
+                      </Button>
+                    </Upload>
+                  </Col>
+                  {item.preview && (
+                    <Col>
+                      <Image src={item.preview} width={36} height={36}
+                        style={{ objectFit: "cover", borderRadius: 4 }} />
+                    </Col>
+                  )}
+                  {items.length > 1 && (
+                    <Col>
+                      <Button size="small" danger icon={<DeleteOutlined />}
+                        onClick={() => removeItem(idx)} />
+                    </Col>
+                  )}
+                </Row>
               </div>
-            )}
-            <Upload
-              accept="image/jpeg,image/png,image/webp"
-              showUploadList={false}
-              beforeUpload={() => false}
-              onChange={handlePhotoChange}
-            >
-              <Button icon={<UploadOutlined />}>{t("warehouse.upload_photo")}</Button>
-            </Upload>
-          </Form.Item>
+            ))}
+            <Button type="dashed" icon={<PlusOutlined />} size="small" onClick={addItem}
+              style={{ marginTop: 4 }}>
+              Добавить позицию
+            </Button>
+          </div>
 
-          <Row justify="end" gutter={8}>
+          <Row justify="end" gutter={8} style={{ marginTop: 16 }}>
             <Col><Button onClick={handleClose}>{t("common.cancel")}</Button></Col>
             <Col>
               <Button type="primary" htmlType="submit" loading={creating} icon={<InboxOutlined />}>
@@ -420,30 +435,36 @@ function ReceiptModal({
         </Form>
       ) : (
         <div style={{ textAlign: "center", padding: "16px 0" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-          <Title level={5}>{createdBox.box_code}</Title>
-          <Text type="secondary">{createdBox.item_name}</Text>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+          {createdBoxes.length === 1 ? (
+            <>
+              <Title level={5}>{createdBoxes[0].box_code}</Title>
+              <Text type="secondary">{createdBoxes[0].item_name}</Text>
+              <div style={{ margin: "12px 0" }}>
+                <Space>
+                  <Tag color="green">{fmtNum(createdBoxes[0].weight)} кг</Tag>
+                  <Tag color="blue">{fmtNum(createdBoxes[0].volume, 4)} м³</Tag>
+                </Space>
+              </div>
+            </>
+          ) : (
+            <>
+              <Title level={5}>Создано {createdBoxes.length} коробок</Title>
+              <Text type="secondary">{createdBoxes[0].box_code} … {createdBoxes[createdBoxes.length - 1].box_code}</Text>
+            </>
+          )}
           <div style={{ margin: "16px 0" }}>
-            <Space>
-              <Tag color="green">{fmtNum(createdBox.weight)} кг</Tag>
-              <Tag color="blue">{fmtNum(createdBox.volume, 4)} м³</Tag>
-              <Tag>{fmtNum(createdBox.density)}</Tag>
+            <Space wrap>
+              {createdBoxes.slice(0, 3).map(b => (
+                <Button key={b.id} icon={<QrcodeOutlined />} size="small" onClick={() => openQrLabel(b)}>
+                  {b.box_code}
+                </Button>
+              ))}
+              {createdBoxes.length > 3 && <Text type="secondary">+ {createdBoxes.length - 3} ещё</Text>}
             </Space>
           </div>
           <Space>
-            <Button icon={<QrcodeOutlined />} type="primary" onClick={openQrLabel}>
-              {t("warehouse.print_label")}
-            </Button>
-            <Button
-              onClick={() => {
-                form.resetFields();
-                setPhotoFile(null);
-                setPhotoPreview(null);
-                setCreatedBox(null);
-              }}
-            >
-              + {t("warehouse.add_one_more")}
-            </Button>
+            <Button onClick={handleAddMore} icon={<PlusOutlined />}>+ Ещё коробку</Button>
             <Button onClick={handleClose}>{t("common.close")}</Button>
           </Space>
         </div>
@@ -531,6 +552,7 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set());
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [lastClientId, setLastClientId] = useState<string | undefined>(); // задача 4: запоминаем клиента
   const [shipOpen, setShipOpen] = useState(false);
   const [editBox, setEditBox] = useState<WarehouseBox | null>(null);
   const [expandedClients, setExpandedClients] = useState<string[]>([]);
@@ -666,7 +688,24 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
           {b.description && (
             <div style={{ fontSize: 11, color: "#888" }}>{b.description}</div>
           )}
-          <div style={{ fontSize: 11, color: "#aaa" }}>{b.box_code}</div>
+          {/* Позиции товаров с отступом вправо */}
+          {b.items && b.items.length > 0 && (
+            <div style={{ paddingLeft: 12, borderLeft: "2px solid #e8e8e8", marginTop: 4 }}>
+              {b.items.map((it: BoxItemData) => (
+                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                  {it.photo_url && (
+                    <Image src={it.photo_url} width={22} height={22}
+                      style={{ objectFit: "cover", borderRadius: 3, flexShrink: 0 }} preview={false} />
+                  )}
+                  <Text style={{ fontSize: 12 }}>{it.name}</Text>
+                  <Tag style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
+                    ×{it.quantity}
+                  </Tag>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{b.box_code}</div>
         </div>
       ),
     },
@@ -925,7 +964,12 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
       <ReceiptModal
         open={receiptOpen}
         warehouses={warehouses}
-        onSuccess={() => qc.invalidateQueries({ queryKey: ["warehouse-balance"] })}
+        defaultClientId={lastClientId}
+        onSuccess={(boxes) => {
+          // Запоминаем клиента для следующей приёмки (задача 4)
+          if (boxes.length > 0) setLastClientId(boxes[0].counterparty_id);
+          qc.invalidateQueries({ queryKey: ["warehouse-balance"] });
+        }}
         onClose={() => setReceiptOpen(false)}
       />
       <QrScanModal
