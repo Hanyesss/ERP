@@ -793,9 +793,8 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
   const handleShip = async (codes: string[]) => {
     try {
       const res = await shipBoxes(codes);
-      // X-Shipped-Count из header (если доступен через CORS), иначе количество кодов
-      const headerCount = res.headers?.["x-shipped-count"];
-      const shippedCount = headerCount != null ? Number(headerCount) : codes.length;
+      // Используем количество отправленных кодов — надёжнее header (CORS может блокировать)
+      const shippedCount = codes.length;
       downloadBlob(res.data as Blob, `packing_list_${new Date().toISOString().slice(0, 10)}.pdf`);
       message.success(
         t("warehouse.ship_success", { count: shippedCount })
