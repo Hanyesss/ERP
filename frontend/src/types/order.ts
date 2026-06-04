@@ -131,6 +131,7 @@ export interface OrderListItem {
   order_date: string;
   client_id: string;
   client_name: string;
+  client_code?: string;
   business_type_id: string;
   business_type_name: string;
   business_type_name_cn?: string;

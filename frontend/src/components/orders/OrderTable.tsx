@@ -80,7 +80,14 @@ export default function OrderTable() {
       ),
     },
     { title: t("order.date"), dataIndex: "order_date", key: "order_date", width: 100 },
-    { title: t("order.client"), dataIndex: "client_name", key: "client_name", width: 160, ellipsis: { showTitle: true } },
+    {
+      title: t("order.client"),
+      key: "client",
+      width: 80,
+      render: (_: any, row: OrderListItem) => row.client_code
+        ? <Tooltip title={row.client_name}><span style={{ fontWeight: 600 }}>{row.client_code}</span></Tooltip>
+        : <span style={{ fontSize: 11, color: "#999" }}>{row.client_name}</span>,
+    },
     {
       title: t("order.business_type"),
       key: "bt",

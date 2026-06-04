@@ -428,6 +428,7 @@ async def list_orders(
             Order.client_id, Order.business_type_id, Order.manager_id,
             Order.sync_status,
             ClientAlias.name.label("client_name"),
+            ClientAlias.code.label("client_code"),
             ManagerAlias.full_name.label("manager_name"),
             BusinessType.name.label("business_type_name"),
             BusinessType.name_cn.label("business_type_name_cn"),
@@ -470,7 +471,7 @@ async def list_orders(
     items = [
         OrderListItem(
             id=r.id, order_number=r.order_number, order_date=r.order_date,
-            client_id=r.client_id, client_name=r.client_name,
+            client_id=r.client_id, client_name=r.client_name, client_code=r.client_code,
             business_type_id=r.business_type_id, business_type_name=r.business_type_name,
             business_type_name_cn=r.business_type_name_cn,
             business_type_code=r.business_type_code,
