@@ -99,17 +99,6 @@ async def get_client_detail(
     return await report_service.get_client_detail(db, client_id, date_from, date_to)
 
 
-@router.get("/by-supplier/{supplier_id}")
-async def get_supplier_detail(
-    supplier_id: uuid.UUID,
-    date_from: date = Query(...),
-    date_to: date = Query(...),
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_roles(*_FINANCE_ROLES)),
-):
-    return await report_service.get_supplier_detail(db, supplier_id, date_from, date_to)
-
-
 @router.get("/by-supplier")
 async def get_by_supplier_report(
     date_from: date = Query(...),
@@ -131,6 +120,17 @@ async def export_by_supplier_report(
     data = await report_service.get_by_supplier(db, date_from, date_to)
     data_bytes = export_by_supplier(data, lang)
     return _excel_response(data_bytes, f"by_supplier_{date_from}_{date_to}.xlsx")
+
+
+@router.get("/by-supplier/{supplier_id}")
+async def get_supplier_detail(
+    supplier_id: uuid.UUID,
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_FINANCE_ROLES)),
+):
+    return await report_service.get_supplier_detail(db, supplier_id, date_from, date_to)
 
 
 @router.get("/expenses")

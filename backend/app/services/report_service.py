@@ -450,16 +450,29 @@ async def get_client_detail(
     orders_raw = order_rows.all()
 
     if not orders_raw:
+        # Still need to check client expenses (representative) even without orders
+        client_exp_row = await db.execute(
+            select(func.coalesce(func.sum(Expense.amount_cny), Decimal("0")))
+            .where(
+                Expense.link_type == "client",
+                Expense.client_id == client_id,
+                Expense.expense_date >= date_from,
+                Expense.expense_date <= date_to,
+                Expense.is_active == True,
+                not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
+            )
+        )
+        client_expenses = client_exp_row.scalar_one() or Decimal("0")
         return {
-            "client_id": client_id,
+            "client_id": str(client_id),
             "client_name": client_name,
             "orders": [],
-            "client_expenses": Decimal("0"),
+            "client_expenses": client_expenses,
             "total_revenue": Decimal("0"),
             "total_cogs": Decimal("0"),
             "total_direct_expenses": Decimal("0"),
             "total_paid": Decimal("0"),
-            "total_profit": Decimal("0"),
+            "total_profit": -client_expenses,
             "balance": Decimal("0"),
         }
 
