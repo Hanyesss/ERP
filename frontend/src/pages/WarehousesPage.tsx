@@ -81,29 +81,20 @@ function QrScanModal({
     }
     setStreaming(false);
 
-    // Показываем что отсканировали (для отладки)
-    message.info({ content: `Отсканировано: "${c}"`, duration: 2, key: "scanned-debug" });
-
     // Проверяем статус коробки
     try {
       const res = await checkBoxCode(c);
       const { found, status } = res.data;
       if (!found) {
-        // Пробуем без приведения к верхнему регистру (на случай lowercase)
-        const res2 = await checkBoxCode(code.trim());
-        if (!res2.data.found) {
-          message.error({ content: `"${c}": ${t("warehouse.scan_not_found_warehouse")}`, duration: 5 });
-          return;
-        }
-        if (res2.data.status === "shipped") {
-          message.error({ content: `"${c}": ${t("warehouse.scan_already_shipped")}`, duration: 4 });
-          return;
-        }
-      } else if (status === "shipped") {
-        message.error({ content: `"${c}": ${t("warehouse.scan_already_shipped")}`, duration: 4 });
+        // Показываем что именно отсканировалось чтобы найти расхождение
+        message.error({ content: `${t("warehouse.scan_not_found_warehouse")}: «${c}»`, duration: 6 });
         return;
       }
-    } catch (e) {
+      if (status === "shipped") {
+        message.error({ content: `${c}: ${t("warehouse.scan_already_shipped")}`, duration: 4 });
+        return;
+      }
+    } catch {
       // Если проверка недоступна — добавляем без проверки
     }
 
@@ -142,7 +133,7 @@ function QrScanModal({
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: "environment" },
-        { fps: 15, qrbox: { width: 280, height: 120 } }, // вытянутый для штрихкодов
+        { fps: 15, qrbox: { width: 250, height: 250 } },
         (text: string) => addCode(text),
         () => {}
       );
