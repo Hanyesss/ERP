@@ -129,17 +129,18 @@ def _photo_to_base64(photo_path: Optional[str], max_px: int = 400) -> Optional[s
 
 def _generate_qr_base64(data: str) -> str:
     import qrcode
+    # box_size=12, border=2 → (21+4)×12 = 300px ≈ 40мм при 203 DPI — чётко сканируется
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=6,   # уменьшили с 10→6, QR получается ~180px вместо ~300px
-        border=3,
+        box_size=12,
+        border=2,
     )
     qr.add_data(data)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
+    img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f"data:image/png;base64,{b64}"
 
@@ -800,12 +801,12 @@ async def get_qr_png(
         raise HTTPException(404, "Box not found")
     import qrcode
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M,
-                       box_size=6, border=3)
+                       box_size=12, border=2)
     qr.add_data(box.box_code)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
+    img.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png",
                     headers={"Cache-Control": "max-age=3600"})
 

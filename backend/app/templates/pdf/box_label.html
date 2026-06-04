@@ -5,55 +5,57 @@
 <style>
   @page {
     size: 80mm 60mm;
-    margin: 1.5mm;
+    margin: 0;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
-  body { font-size: 7.5pt; color: #000; width: 77mm; height: 57mm; overflow: hidden; }
+  body { width: 80mm; height: 60mm; overflow: hidden; background: #fff; }
 
   .label {
     display: flex;
     flex-direction: row;
-    align-items: stretch;
-    width: 77mm;
-    height: 57mm;
+    width: 80mm;
+    height: 60mm;
+    padding: 2mm;
+    gap: 2mm;
   }
 
-  /* QR — левая колонка, большой и квадратный */
+  /* QR — левая колонка, ~42мм чтобы читался при 203 DPI */
   .qr-col {
-    flex: 0 0 44mm;
+    flex: 0 0 42mm;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-right: 2mm;
   }
   .qr-col img {
-    width: 44mm;
-    height: 44mm;
+    width: 42mm;
+    height: 42mm;
     display: block;
+    image-rendering: pixelated;
   }
 
-  /* Разделитель */
+  /* Тонкий разделитель */
   .divider {
     width: 0.3pt;
-    background: #ccc;
-    margin: 1mm 0;
+    background: #bbb;
+    align-self: stretch;
     flex-shrink: 0;
   }
 
   /* Текстовая часть — правая колонка */
   .info-col {
     flex: 1;
-    padding-left: 2mm;
+    padding-left: 1.5mm;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     overflow: hidden;
+    min-width: 0;
   }
 
   .box-code {
-    font-size: 7.5pt;
+    font-size: 7pt;
     font-weight: bold;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
     border-bottom: 0.5pt solid #000;
     padding-bottom: 1mm;
     margin-bottom: 1mm;
@@ -62,25 +64,25 @@
   }
 
   .field {
-    margin-bottom: 0.8mm;
+    margin-bottom: 0.7mm;
     line-height: 1.2;
   }
   .field .lbl {
-    font-size: 6pt;
-    color: #888;
+    font-size: 5.5pt;
+    color: #777;
     display: block;
   }
   .field .val {
-    font-size: 7.5pt;
+    font-size: 7pt;
     font-weight: bold;
   }
 
   .item-name {
-    font-size: 7pt;
-    color: #333;
+    font-size: 6.5pt;
+    color: #222;
     margin-top: 1mm;
     padding-top: 1mm;
-    border-top: 0.3pt dashed #bbb;
+    border-top: 0.3pt dashed #aaa;
     word-break: break-word;
     line-height: 1.2;
     overflow: hidden;
@@ -89,39 +91,30 @@
 </head>
 <body>
 <div class="label">
-
   <div class="qr-col">
     <img src="{{ qr_image }}" alt="QR" />
   </div>
-
   <div class="divider"></div>
-
   <div class="info-col">
     <div class="box-code">{{ box_code }}</div>
-
     <div class="field">
       <span class="lbl">Клиент / 客户</span>
       <span class="val">{{ client_code }}</span>
     </div>
-
     <div class="field">
       <span class="lbl">Вес / 重量</span>
       <span class="val">{{ weight }} кг</span>
     </div>
-
     <div class="field">
       <span class="lbl">Объём / 体积</span>
       <span class="val">{{ volume }} м³</span>
     </div>
-
     <div class="field">
       <span class="lbl">Плотн. / 密度</span>
       <span class="val">{{ density }}</span>
     </div>
-
     <div class="item-name">{{ item_name }}</div>
   </div>
-
 </div>
 </body>
 </html>

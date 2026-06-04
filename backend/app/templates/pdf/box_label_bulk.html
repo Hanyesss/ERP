@@ -3,46 +3,89 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: 80mm 60mm; margin: 1.5mm; }
+  @page {
+    size: 80mm 60mm;
+    margin: 0;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
-  body { font-size: 7.5pt; color: #000; background: #fff; }
+  body { background: #fff; }
 
+  /* Каждая этикетка = отдельная страница */
   .label {
-    display: flex; flex-direction: row; align-items: stretch;
-    width: 77mm; height: 57mm; overflow: hidden;
-    page-break-inside: avoid;
+    display: flex;
+    flex-direction: row;
+    width: 80mm;
+    height: 60mm;
+    padding: 2mm;
+    gap: 2mm;
+    page-break-after: always;
+    overflow: hidden;
   }
+  .label:last-child { page-break-after: auto; }
+
+  /* QR ~42мм — читается чётко при 203 DPI */
   .qr-col {
-    flex: 0 0 44mm; display: flex;
-    align-items: center; justify-content: center; padding-right: 2mm;
+    flex: 0 0 42mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .qr-col img { width: 44mm; height: 44mm; display: block; }
-  .divider { width: 0.3pt; background: #ccc; margin: 1mm 0; flex-shrink: 0; }
-  .info-col {
-    flex: 1; padding-left: 2mm;
-    display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
-  }
-  .box-code {
-    font-size: 7.5pt; font-weight: bold; letter-spacing: 0.3px;
-    border-bottom: 0.5pt solid #000; padding-bottom: 1mm; margin-bottom: 1mm;
-    word-break: break-all; line-height: 1.2;
-  }
-  .field { margin-bottom: 0.8mm; line-height: 1.2; }
-  .field .lbl { font-size: 6pt; color: #888; display: block; }
-  .field .val { font-size: 7.5pt; font-weight: bold; }
-  .item-name {
-    font-size: 7pt; color: #333; margin-top: 1mm; padding-top: 1mm;
-    border-top: 0.3pt dashed #bbb; word-break: break-word; line-height: 1.2; overflow: hidden;
+  .qr-col img {
+    width: 42mm;
+    height: 42mm;
+    display: block;
+    image-rendering: pixelated;
   }
 
-  /* Разделитель страниц */
-  .page-break { page-break-after: always; }
+  .divider {
+    width: 0.3pt;
+    background: #bbb;
+    align-self: stretch;
+    flex-shrink: 0;
+  }
+
+  .info-col {
+    flex: 1;
+    padding-left: 1.5mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .box-code {
+    font-size: 7pt;
+    font-weight: bold;
+    border-bottom: 0.5pt solid #000;
+    padding-bottom: 1mm;
+    margin-bottom: 1mm;
+    word-break: break-all;
+    line-height: 1.2;
+  }
+
+  .field { margin-bottom: 0.7mm; line-height: 1.2; }
+  .field .lbl { font-size: 5.5pt; color: #777; display: block; }
+  .field .val { font-size: 7pt; font-weight: bold; }
+
+  .item-name {
+    font-size: 6.5pt;
+    color: #222;
+    margin-top: 1mm;
+    padding-top: 1mm;
+    border-top: 0.3pt dashed #aaa;
+    word-break: break-word;
+    line-height: 1.2;
+    overflow: hidden;
+  }
 </style>
 </head>
 <body>
 {% for lbl in labels %}
-<div class="label{{ " page-break" if not loop.last else "" }}">
-  <div class="qr-col"><img src="{{ lbl.qr_image }}" alt="QR" /></div>
+<div class="label">
+  <div class="qr-col">
+    <img src="{{ lbl.qr_image }}" alt="QR" />
+  </div>
   <div class="divider"></div>
   <div class="info-col">
     <div class="box-code">{{ lbl.box_code }}</div>
