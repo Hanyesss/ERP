@@ -167,7 +167,7 @@ def export_by_client(data: list, lang: str = "ru") -> bytes:
 
     _header_row(ws, headers)
 
-    totals = {k: Decimal("0") for k in ["revenue", "paid", "cogs", "direct_expenses", "client_expenses", "net_profit", "debt"]}
+    totals = {k: Decimal("0") for k in ["revenue", "paid", "cogs", "direct_expenses", "client_expenses", "net_profit", "balance"]}
     for i, row in enumerate(data):
         ws.append([
             row.get("client_name"),
@@ -177,7 +177,7 @@ def export_by_client(data: list, lang: str = "ru") -> bytes:
             _fmt(row.get("direct_expenses")),
             _fmt(row.get("client_expenses")),
             _fmt(row.get("net_profit")),
-            _fmt(row.get("debt")),
+            _fmt(row.get("balance")),
         ])
         for k in totals:
             totals[k] += row.get(k, Decimal("0")) or Decimal("0")
@@ -189,7 +189,7 @@ def export_by_client(data: list, lang: str = "ru") -> bytes:
     ws.append(["Итого" if lang == "ru" else "合计",
                _fmt(totals["revenue"]), _fmt(totals["paid"]), _fmt(totals["cogs"]),
                _fmt(totals["direct_expenses"]), _fmt(totals["client_expenses"]),
-               _fmt(totals["net_profit"]), _fmt(totals["debt"])])
+               _fmt(totals["net_profit"]), _fmt(totals["balance"])])
     for col in range(1, 9):
         cell = ws.cell(row=ws.max_row, column=col)
         cell.font = BOLD_FONT

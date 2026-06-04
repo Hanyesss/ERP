@@ -503,11 +503,14 @@ async def ship_boxes(
     if not body.box_codes:
         raise HTTPException(400, "No box codes provided")
 
-    # Проверяем уже отгруженные
+    # Нормализуем коды к верхнему регистру для регистронезависимого сравнения
+    codes_upper = [c.upper() for c in body.box_codes]
+
+    # Проверяем уже отгруженные (регистронезависимо)
     already_shipped = (await db.execute(
         select(WarehouseBox.box_code)
         .where(
-            WarehouseBox.box_code.in_(body.box_codes),
+            func.upper(WarehouseBox.box_code).in_(codes_upper),
             WarehouseBox.status == BoxStatus.shipped,
         )
     )).scalars().all()
@@ -521,7 +524,7 @@ async def ship_boxes(
         select(WarehouseBox, Counterparty)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .where(
-            WarehouseBox.box_code.in_(body.box_codes),
+            func.upper(WarehouseBox.box_code).in_(codes_upper),
             WarehouseBox.status == BoxStatus.on_warehouse,
         )
         .options(selectinload(WarehouseBox.items))
@@ -615,7 +618,7 @@ async def create_box(
     if not wh:
         raise HTTPException(404, "Warehouse not found")
 
-    client_code = cp.code or cp.name[:10].upper().replace(" ", "")
+    client_code = (cp.code or cp.name[:10].replace(" ", "")).upper()  # всегда верхний регистр
     density = _calc_density(body.weight, body.volume)
     count = max(1, min(body.count or 1, 500))  # от 1 до 500 коробок
 

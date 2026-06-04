@@ -292,7 +292,8 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
         client_exp = cd["client_expenses"]
         paid = cd["paid"]
         net_profit = revenue - cogs - direct_exp - client_exp
-        debt = max(revenue - paid, Decimal("0"))
+        # positive = overpayment/credit, negative = debt
+        balance = paid - revenue
         result.append({
             "client_id": cd["client_id"],
             "client_name": cd["client_name"],
@@ -302,7 +303,7 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
             "direct_expenses": direct_exp,
             "client_expenses": client_exp,
             "net_profit": net_profit,
-            "debt": debt,
+            "balance": balance,
         })
 
     result.sort(key=lambda x: x["net_profit"], reverse=True)
@@ -402,6 +403,280 @@ async def get_by_supplier(db: AsyncSession, date_from: date, date_to: date):
 
     result.sort(key=lambda x: x["total_purchased_cny"], reverse=True)
     return result
+
+
+async def get_client_detail(
+    db: AsyncSession,
+    client_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+):
+    order_filter = [
+        Order.client_id == client_id,
+        Order.order_date >= date_from,
+        Order.order_date <= date_to,
+        Order.status != OrderStatus.cancelled,
+    ]
+
+    # Client name
+    client_row = await db.execute(select(Counterparty.name).where(Counterparty.id == client_id))
+    client_name = client_row.scalar_one_or_none() or ""
+
+    # Paid per order
+    paid_sq = (
+        select(
+            PaymentAllocation.order_id,
+            func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("paid_cny"),
+        )
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(Payment.is_active == True)
+        .group_by(PaymentAllocation.order_id)
+        .subquery()
+    )
+
+    order_rows = await db.execute(
+        select(
+            Order.id,
+            Order.order_number,
+            Order.order_date,
+            Order.total_sale_cny,
+            Order.payment_status,
+            func.coalesce(paid_sq.c.paid_cny, Decimal("0")).label("paid_cny"),
+        )
+        .outerjoin(paid_sq, Order.id == paid_sq.c.order_id)
+        .where(*order_filter)
+        .order_by(Order.order_date.desc())
+    )
+    orders_raw = order_rows.all()
+
+    if not orders_raw:
+        return {
+            "client_id": client_id,
+            "client_name": client_name,
+            "orders": [],
+            "client_expenses": Decimal("0"),
+            "total_revenue": Decimal("0"),
+            "total_cogs": Decimal("0"),
+            "total_direct_expenses": Decimal("0"),
+            "total_paid": Decimal("0"),
+            "total_profit": Decimal("0"),
+            "balance": Decimal("0"),
+        }
+
+    order_ids = [r[0] for r in orders_raw]
+    order_map = {
+        r[0]: {
+            "order_id": r[0],
+            "order_number": r[1],
+            "order_date": r[2],
+            "total_sale_cny": r[3] or Decimal("0"),
+            "payment_status": r[4],
+            "paid_cny": r[5] or Decimal("0"),
+            "cogs": Decimal("0"),
+            "direct_expenses": Decimal("0"),
+        }
+        for r in orders_raw
+    }
+
+    # COGS per order
+    cogs_rows = await db.execute(
+        select(
+            OrderItem.order_id,
+            func.coalesce(func.sum(PurchaseItem.cost_amount), Decimal("0")).label("cogs"),
+        )
+        .join(PurchaseItem, PurchaseItem.order_item_id == OrderItem.id)
+        .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+        .where(
+            OrderItem.order_id.in_(order_ids),
+            Purchase.is_deleted == False,
+        )
+        .group_by(OrderItem.order_id)
+    )
+    for row in cogs_rows.all():
+        if row[0] in order_map:
+            order_map[row[0]]["cogs"] = row[1] or Decimal("0")
+
+    # Direct expenses per order
+    exp_filter = [
+        Expense.link_type == "order",
+        Expense.order_id.in_(order_ids),
+        Expense.expense_date >= date_from,
+        Expense.expense_date <= date_to,
+        Expense.is_active == True,
+        not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
+    ]
+    direct_exp_rows = await db.execute(
+        select(
+            Expense.order_id,
+            func.coalesce(func.sum(Expense.amount_cny), Decimal("0")).label("direct_exp"),
+        )
+        .where(*exp_filter)
+        .group_by(Expense.order_id)
+    )
+    for row in direct_exp_rows.all():
+        if row[0] in order_map:
+            order_map[row[0]]["direct_expenses"] = row[1] or Decimal("0")
+
+    # Client expenses (представительские)
+    client_exp_row = await db.execute(
+        select(func.coalesce(func.sum(Expense.amount_cny), Decimal("0")))
+        .where(
+            Expense.link_type == "client",
+            Expense.client_id == client_id,
+            Expense.expense_date >= date_from,
+            Expense.expense_date <= date_to,
+            Expense.is_active == True,
+            not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
+        )
+    )
+    client_expenses = client_exp_row.scalar_one() or Decimal("0")
+
+    # Build order list
+    order_list = []
+    total_revenue = Decimal("0")
+    total_cogs = Decimal("0")
+    total_direct_exp = Decimal("0")
+    total_paid = Decimal("0")
+    for od in order_map.values():
+        revenue = od["total_sale_cny"]
+        cogs = od["cogs"]
+        direct_exp = od["direct_expenses"]
+        paid = od["paid_cny"]
+        profit = revenue - cogs - direct_exp
+        remaining = max(revenue - paid, Decimal("0"))
+        total_revenue += revenue
+        total_cogs += cogs
+        total_direct_exp += direct_exp
+        total_paid += paid
+        order_list.append({
+            "order_id": str(od["order_id"]),
+            "order_number": od["order_number"],
+            "order_date": od["order_date"],
+            "total_sale_cny": revenue,
+            "cogs": cogs,
+            "direct_expenses": direct_exp,
+            "paid_cny": paid,
+            "payment_status": od["payment_status"],
+            "remaining": remaining,
+            "profit": profit,
+        })
+
+    total_profit = (total_revenue - total_cogs - total_direct_exp) - client_expenses
+    balance = total_paid - total_revenue
+
+    return {
+        "client_id": str(client_id),
+        "client_name": client_name,
+        "orders": order_list,
+        "client_expenses": client_expenses,
+        "total_revenue": total_revenue,
+        "total_cogs": total_cogs,
+        "total_direct_expenses": total_direct_exp,
+        "total_paid": total_paid,
+        "total_profit": total_profit,
+        "balance": balance,
+    }
+
+
+async def get_supplier_detail(
+    db: AsyncSession,
+    supplier_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+):
+    purchase_filter = [
+        Purchase.supplier_id == supplier_id,
+        Purchase.purchase_date >= date_from,
+        Purchase.purchase_date <= date_to,
+        Purchase.is_deleted == False,
+    ]
+
+    # Supplier name
+    supp_row = await db.execute(select(Counterparty.name).where(Counterparty.id == supplier_id))
+    supplier_name = supp_row.scalar_one_or_none() or ""
+
+    # Paid per purchase
+    paid_sq = (
+        select(
+            PurchasePaymentLink.purchase_id,
+            func.coalesce(func.sum(PurchasePaymentLink.amount_cny), Decimal("0")).label("paid_cny"),
+        )
+        .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+        .where(Payment.is_active == True)
+        .group_by(PurchasePaymentLink.purchase_id)
+        .subquery()
+    )
+
+    purch_rows = await db.execute(
+        select(
+            Purchase.id,
+            Purchase.purchase_number,
+            Purchase.purchase_date,
+            Purchase.total_amount_cny,
+            Purchase.payment_status,
+            Purchase.order_id,
+            func.coalesce(paid_sq.c.paid_cny, Decimal("0")).label("paid_cny"),
+        )
+        .outerjoin(paid_sq, Purchase.id == paid_sq.c.purchase_id)
+        .where(*purchase_filter)
+        .order_by(Purchase.purchase_date.desc())
+    )
+    purchases_raw = purch_rows.all()
+
+    if not purchases_raw:
+        return {
+            "supplier_id": str(supplier_id),
+            "supplier_name": supplier_name,
+            "purchases": [],
+            "total_purchased_cny": Decimal("0"),
+            "total_paid_cny": Decimal("0"),
+            "balance": Decimal("0"),
+        }
+
+    # Get order numbers for linked orders
+    order_ids = [r[5] for r in purchases_raw if r[5] is not None]
+    order_number_map: dict = {}
+    if order_ids:
+        ord_rows = await db.execute(
+            select(Order.id, Order.order_number, Order.total_sale_cny)
+            .where(Order.id.in_(order_ids))
+        )
+        for row in ord_rows.all():
+            order_number_map[row[0]] = {"order_number": row[1], "total_sale_cny": row[2]}
+
+    purchase_list = []
+    total_purchased = Decimal("0")
+    total_paid = Decimal("0")
+    for r in purchases_raw:
+        purchase_id, purchase_number, purchase_date, total_cny, pay_status, order_id, paid_cny = r
+        total_cny = total_cny or Decimal("0")
+        paid_cny = paid_cny or Decimal("0")
+        remaining = max(total_cny - paid_cny, Decimal("0"))
+        total_purchased += total_cny
+        total_paid += paid_cny
+        ord_info = order_number_map.get(order_id) if order_id else None
+        purchase_list.append({
+            "purchase_id": str(purchase_id),
+            "purchase_number": purchase_number,
+            "purchase_date": purchase_date,
+            "order_number": ord_info["order_number"] if ord_info else None,
+            "order_sale_cny": ord_info["total_sale_cny"] if ord_info else None,
+            "total_amount_cny": total_cny,
+            "paid_cny": paid_cny,
+            "payment_status": pay_status,
+            "remaining": remaining,
+        })
+
+    balance = total_paid - total_purchased
+
+    return {
+        "supplier_id": str(supplier_id),
+        "supplier_name": supplier_name,
+        "purchases": purchase_list,
+        "total_purchased_cny": total_purchased,
+        "total_paid_cny": total_paid,
+        "balance": balance,
+    }
 
 
 async def get_expenses_structure(

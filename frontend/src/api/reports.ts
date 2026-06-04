@@ -39,7 +39,54 @@ export interface ByClientRow {
   direct_expenses: number;
   client_expenses: number;
   net_profit: number;
-  debt: number;
+  balance: number; // positive = overpayment, negative = debt
+}
+
+export interface ClientOrderRow {
+  order_id: string;
+  order_number: string;
+  order_date: string;
+  total_sale_cny: number;
+  cogs: number;
+  direct_expenses: number;
+  paid_cny: number;
+  payment_status: string;
+  remaining: number;
+  profit: number;
+}
+
+export interface ClientDetailData {
+  client_id: string;
+  client_name: string;
+  orders: ClientOrderRow[];
+  client_expenses: number;
+  total_revenue: number;
+  total_cogs: number;
+  total_direct_expenses: number;
+  total_paid: number;
+  total_profit: number;
+  balance: number;
+}
+
+export interface SupplierPurchaseRow {
+  purchase_id: string;
+  purchase_number: string;
+  purchase_date: string;
+  order_number: string | null;
+  order_sale_cny: number | null;
+  total_amount_cny: number;
+  paid_cny: number;
+  payment_status: string;
+  remaining: number;
+}
+
+export interface SupplierDetailData {
+  supplier_id: string;
+  supplier_name: string;
+  purchases: SupplierPurchaseRow[];
+  total_purchased_cny: number;
+  total_paid_cny: number;
+  balance: number;
 }
 
 export interface BySupplierRow {
@@ -82,8 +129,18 @@ export const getPnL = (params: {
 export const getByClient = (params: { date_from: string; date_to: string }) =>
   apiClient.get<ByClientRow[]>(`${BASE}/by-client`, { params });
 
+export const getClientDetail = (
+  clientId: string,
+  params: { date_from: string; date_to: string }
+) => apiClient.get<ClientDetailData>(`${BASE}/by-client/${clientId}`, { params });
+
 export const getBySupplier = (params: { date_from: string; date_to: string }) =>
   apiClient.get<BySupplierRow[]>(`${BASE}/by-supplier`, { params });
+
+export const getSupplierDetail = (
+  supplierId: string,
+  params: { date_from: string; date_to: string }
+) => apiClient.get<SupplierDetailData>(`${BASE}/by-supplier/${supplierId}`, { params });
 
 export const getExpensesReport = (params: {
   date_from: string;
