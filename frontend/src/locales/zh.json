@@ -624,7 +624,16 @@
     "tracking_number": "跟踪号 / 条形码",
     "tracking_placeholder": "将扫描仪对准条形码扫描...",
     "print_all_qr": "批量打印二维码",
-    "item_name_label": "货物总名称"
+    "item_name_label": "货物总名称",
+    "item_name_placeholder": "货物总名称",
+    "item_row_name": "货物名称",
+    "item_row_qty": "数量",
+    "item_row_photo": "照片",
+    "items_required": "请至少添加一个货物明细",
+    "created_boxes_count": "已创建 {{count}} 个货箱",
+    "more_boxes": "+ 还有 {{count}} 个",
+    "add_one_more_box": "再加一箱",
+    "print_all_qr_count": "打印二维码 ({{count}})"
   },
   "report": {
     "title": "报表",

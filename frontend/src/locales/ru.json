@@ -597,7 +597,16 @@
     "tracking_number": "Трек-номер / штрихкод",
     "tracking_placeholder": "Наведите сканер и считайте штрихкод...",
     "print_all_qr": "Печать QR",
-    "item_name_label": "Общее наименование груза"
+    "item_name_label": "Общее наименование груза",
+    "item_name_placeholder": "Общее наименование груза",
+    "item_row_name": "Название товара",
+    "item_row_qty": "Кол-во",
+    "item_row_photo": "Фото",
+    "items_required": "Добавьте хотя бы одну позицию товара",
+    "created_boxes_count": "Создано {{count}} коробок",
+    "more_boxes": "+ ещё {{count}}",
+    "add_one_more_box": "Ещё коробку",
+    "print_all_qr_count": "Печать QR ({{count}})"
   },
   "report": {
     "title": "Отчёты",

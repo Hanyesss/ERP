@@ -130,9 +130,9 @@
       </td>
       <td>
         <strong>{{ box.item_name }}</strong>
-        {% if box.items %}
+        {% if box.box_items %}
         <div style="margin-top:3px;padding-left:10px;border-left:2px solid #c8daf0;">
-          {% for it in box.items %}
+          {% for it in box.box_items %}
           <div style="font-size:7pt;color:#333;padding:1px 0;">
             • {{ it.name }} <span style="color:#1a4e7a;font-weight:bold;">×{{ it.quantity }}</span>
           </div>

@@ -265,7 +265,7 @@ function ReceiptModal({
 
   const handleSubmit = async (values: any) => {
     const validItems = items.filter(i => i.name.trim());
-    if (!validItems.length) { message.error("Добавьте хотя бы одну позицию товара"); return; }
+    if (!validItems.length) { message.error(t("warehouse.items_required")); return; }
 
     setCreating(true);
     try {
@@ -380,15 +380,24 @@ function ReceiptModal({
           </Form.Item>
 
           {/* Задача 5: трек-номер со сканером штрихкода */}
-          <Form.Item name="tracking_number" label={
-            <span>Трек-номер / штрихкод <Text type="secondary" style={{ fontSize: 11 }}>
-              (сфокусируйте поле и сканируйте)
-            </Text></span>
-          }>
+          <Form.Item name="tracking_number" label={t("warehouse.tracking_number")}>
             <Input
-              placeholder="Наведите сканер и считайте штрихкод..."
+              placeholder={t("warehouse.tracking_placeholder")}
               allowClear
               autoComplete="off"
+              id="tracking-input"
+              addonAfter={
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<QrcodeOutlined />}
+                  title={t("warehouse.scan_qr")}
+                  onClick={() => {
+                    // Фокусируем поле — сканер как клавиатура запишет прямо в него
+                    document.getElementById("tracking-input")?.focus();
+                  }}
+                />
+              }
             />
           </Form.Item>
 
@@ -400,14 +409,14 @@ function ReceiptModal({
                 <Row gutter={8} align="middle">
                   <Col flex="auto">
                     <Input
-                      placeholder="Название товара"
+                      placeholder={t("warehouse.item_row_name")}
                       value={item.name}
                       onChange={e => setItemField(idx, "name", e.target.value)}
                     />
                   </Col>
                   <Col style={{ width: 80 }}>
                     <InputNumber
-                      min={1} precision={0} placeholder="Кол-во"
+                      min={1} precision={0} placeholder={t("warehouse.item_row_qty")}
                       value={item.qty}
                       onChange={v => setItemField(idx, "qty", v ?? 1)}
                       style={{ width: "100%" }}
@@ -418,7 +427,7 @@ function ReceiptModal({
                       beforeUpload={f => { handleItemPhoto(idx, f); return false; }}>
                       <Button size="small" icon={<UploadOutlined />}
                         style={{ background: item.preview ? "#f6ffed" : undefined }}>
-                        {item.preview ? "✓" : "Фото"}
+                        {item.preview ? "✓" : t("warehouse.item_row_photo")}
                       </Button>
                     </Upload>
                   </Col>
@@ -468,7 +477,7 @@ function ReceiptModal({
             </>
           ) : (
             <>
-              <Title level={5}>Создано {createdBoxes.length} коробок</Title>
+              <Title level={5}>{t("warehouse.created_boxes_count", { count: createdBoxes.length })}</Title>
               <Text type="secondary">{createdBoxes[0].box_code} … {createdBoxes[createdBoxes.length - 1].box_code}</Text>
             </>
           )}
@@ -479,11 +488,11 @@ function ReceiptModal({
                   {b.box_code}
                 </Button>
               ))}
-              {createdBoxes.length > 3 && <Text type="secondary">+ {createdBoxes.length - 3} ещё</Text>}
+              {createdBoxes.length > 3 && <Text type="secondary">{t("warehouse.more_boxes", { count: createdBoxes.length - 3 })}</Text>}
             </Space>
           </div>
           <Space>
-            <Button onClick={handleAddMore} icon={<PlusOutlined />}>+ Ещё коробку</Button>
+            <Button onClick={handleAddMore} icon={<PlusOutlined />}>{t("warehouse.add_one_more_box")}</Button>
             <Button onClick={handleClose}>{t("common.close")}</Button>
           </Space>
         </div>
@@ -913,7 +922,7 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
           </Button>
           {/* Задача 3: печать всех QR выбранных коробок */}
           <Button size="small" icon={<QrcodeOutlined />} onClick={handlePrintAllQr}>
-            Печать QR ({selectedBoxIds.size})
+            {t("warehouse.print_all_qr_count", { count: selectedBoxIds.size })}
           </Button>
           <Button size="small" onClick={() => setSelectedBoxIds(new Set())}>
             {t("warehouse.clear_selection")}

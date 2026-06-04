@@ -421,7 +421,7 @@ async def generate_packing_list_preview(
 
     boxes_data = []
     for box, cp in rows:
-        box_items = sorted(box.items, key=lambda x: x.sort_order) if box.items else []
+        box_item_list = sorted(box.items, key=lambda x: x.sort_order) if box.items else []
         boxes_data.append({
             "counterparty_id": str(cp.id),
             "counterparty_code": cp.code or cp.name,
@@ -433,7 +433,7 @@ async def generate_packing_list_preview(
             "density": float(box.density),
             "description": box.description or "",
             "photo_path": box.photo_path,
-            "items": [{"name": it.name, "quantity": it.quantity} for it in box_items],
+            "box_items": [{"name": it.name, "quantity": it.quantity} for it in box_item_list],
         })
 
     pdf_bytes = await _generate_packing_list_pdf(boxes_data)
@@ -474,6 +474,7 @@ async def ship_boxes(
             WarehouseBox.box_code.in_(body.box_codes),
             WarehouseBox.status == BoxStatus.on_warehouse,
         )
+        .options(selectinload(WarehouseBox.items))
     )).all()
 
     if not rows:
@@ -492,6 +493,7 @@ async def ship_boxes(
         shipped_ids.append(str(box.id))
         total_weight += box.weight
         total_volume += box.volume
+        ship_items = sorted(box.items, key=lambda x: x.sort_order) if box.items else []
         boxes_data.append({
             "counterparty_id": str(cp.id),
             "counterparty_code": cp.code or cp.name,
@@ -503,6 +505,7 @@ async def ship_boxes(
             "density": float(box.density),
             "description": box.description or "",
             "photo_path": box.photo_path,
+            "box_items": [{"name": it.name, "quantity": it.quantity} for it in ship_items],
         })
 
     # Generate and save the final packing list PDF
