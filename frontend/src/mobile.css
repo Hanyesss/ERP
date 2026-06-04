@@ -9,10 +9,11 @@ input, select, textarea { font-size: 16px !important; }
   overflow-y: hidden;
   height: 12px;
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: 64px;   /* под навбаром (64px) */
+  z-index: 9;  /* выше строк таблицы, ниже навбара (100) */
   background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
 }
 .top-scroll-bar::-webkit-scrollbar { height: 8px; }
 .top-scroll-bar::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 4px; }

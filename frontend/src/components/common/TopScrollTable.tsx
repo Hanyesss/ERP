@@ -1,79 +1,81 @@
 /**
- * TopScrollTable — Table обёртка с синхронизированным скроллбаром СВЕРХУ.
- * Скроллбар sticky: всегда виден, не нужно листать вниз чтобы скроллить горизонтально.
+ * TopScrollTable — Table с двумя горизонтальными скроллбарами:
+ * - СВЕРХУ (sticky, всегда видим под навбаром)
+ * - СНИЗУ (стандартный ant-table)
+ * Оба синхронизированы. Таблица скроллится в окне фиксированной высоты
+ * (scroll.y), поэтому горизонтальный бегунок внизу тоже всегда в зоне видимости.
  */
 import { useRef, useEffect, useCallback } from "react";
 import { Table } from "antd";
 import type { TableProps } from "antd";
 
+// Высота области просмотра для таблицы (vh минус: навбар ~64 + фильтры ~120 + отступы)
+const TABLE_BODY_HEIGHT = "calc(100vh - 260px)";
+
 export default function TopScrollTable<T extends object>(props: TableProps<T>) {
   const topBarRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
+  const innerRef  = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const syncing = useRef(false);
+  const syncing   = useRef(false);
 
-  // Находим ant-table-content (содержит скроллируемую таблицу)
-  const getTableContent = useCallback(() =>
-    wrapperRef.current?.querySelector<HTMLElement>(".ant-table-content, .ant-table-body"),
+  // .ant-table-body появляется когда задан scroll.y; иначе .ant-table-content
+  const getScrollEl = useCallback(() =>
+    wrapperRef.current?.querySelector<HTMLElement>(".ant-table-body") ??
+    wrapperRef.current?.querySelector<HTMLElement>(".ant-table-content"),
   []);
 
-  // Синхронизация: top-bar → table
   const onTopBarScroll = useCallback(() => {
     if (syncing.current) return;
-    const tc = getTableContent();
-    if (!tc || !topBarRef.current) return;
+    const el = getScrollEl();
+    if (!el || !topBarRef.current) return;
     syncing.current = true;
-    tc.scrollLeft = topBarRef.current.scrollLeft;
+    el.scrollLeft = topBarRef.current.scrollLeft;
     syncing.current = false;
-  }, [getTableContent]);
+  }, [getScrollEl]);
 
-  // Синхронизация: table → top-bar
   const onTableScroll = useCallback(() => {
     if (syncing.current) return;
-    const tc = getTableContent();
-    if (!tc || !topBarRef.current) return;
+    const el = getScrollEl();
+    if (!el || !topBarRef.current) return;
     syncing.current = true;
-    topBarRef.current.scrollLeft = tc.scrollLeft;
+    topBarRef.current.scrollLeft = el.scrollLeft;
     syncing.current = false;
-  }, [getTableContent]);
+  }, [getScrollEl]);
 
-  // Обновляем ширину inner-div чтобы top-bar знал реальную ширину контента
   const updateWidth = useCallback(() => {
-    const tc = getTableContent();
-    if (!tc || !innerRef.current) return;
-    const table = tc.querySelector<HTMLElement>("table");
-    innerRef.current.style.width = (table?.offsetWidth ?? tc.scrollWidth) + "px";
-  }, [getTableContent]);
+    const el = getScrollEl();
+    if (!el || !innerRef.current) return;
+    const table = el.querySelector<HTMLElement>("table");
+    innerRef.current.style.width = (table?.offsetWidth ?? el.scrollWidth) + "px";
+  }, [getScrollEl]);
 
   useEffect(() => {
-    // Ждём рендер таблицы
+    let cleanup: (() => void) | undefined;
     const t = setTimeout(() => {
-      const tc = getTableContent();
-      if (!tc) return;
+      const el = getScrollEl();
+      if (!el) return;
       updateWidth();
-      tc.addEventListener("scroll", onTableScroll, { passive: true });
-      // ResizeObserver для обновления ширины при изменении данных
+      el.addEventListener("scroll", onTableScroll, { passive: true });
       const ro = new ResizeObserver(updateWidth);
-      ro.observe(tc);
-      return () => {
-        tc.removeEventListener("scroll", onTableScroll);
-        ro.disconnect();
-      };
-    }, 100);
-    return () => clearTimeout(t);
-  }, [props.dataSource, getTableContent, onTableScroll, updateWidth]);
+      ro.observe(el);
+      cleanup = () => { el.removeEventListener("scroll", onTableScroll); ro.disconnect(); };
+    }, 150);
+    return () => { clearTimeout(t); cleanup?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.dataSource]);
+
+  // Подставляем scroll.y если не задан явно — фиксируем высоту тела таблицы
+  const scroll = props.scroll?.y
+    ? props.scroll
+    : { ...props.scroll, y: TABLE_BODY_HEIGHT };
 
   return (
     <div ref={wrapperRef}>
-      {/* Синхронизированный скроллбар сверху */}
-      <div
-        ref={topBarRef}
-        className="top-scroll-bar"
-        onScroll={onTopBarScroll}
-      >
+      {/* Скроллбар сверху — sticky под навбаром */}
+      <div ref={topBarRef} className="top-scroll-bar" onScroll={onTopBarScroll}>
         <div ref={innerRef} className="top-scroll-bar-inner" />
       </div>
-      <Table {...props} />
+      <Table {...props} scroll={scroll} />
     </div>
   );
 }
