@@ -83,8 +83,7 @@ function QrScanModal({
 
     // Добавляем код сразу — бэкенд проверит при отгрузке
     setScanned((prev) => {
-      if (prev.includes(c)) { message.info(t("warehouse.scan_already_added")); return prev; }
-      message.success(c);
+      if (prev.includes(c)) return prev; // молча пропускаем дубль
       return [...prev, c];
     });
   }, [t]);
@@ -217,7 +216,7 @@ function QrScanModal({
 
 // ── Receipt Modal ─────────────────────────────────────────────────────────────
 
-interface ItemRow { name: string; qty: number; file: File | null; preview: string | null; }
+interface ItemRow { name: string; qty: number; tracking: string; file: File | null; preview: string | null; }
 
 // Сжатие изображения на фронте перед загрузкой
 async function compressImage(file: File, maxPx = 800, quality = 0.72): Promise<Blob> {
@@ -258,7 +257,7 @@ function ReceiptModal({
   const trackingScannerRef = useRef<any>(null);
   const trackingDivId = "tracking-qr-scanner";
   // Динамический список позиций товаров
-  const [items, setItems] = useState<ItemRow[]>([{ name: "", qty: 1, file: null, preview: null }]);
+  const [items, setItems] = useState<ItemRow[]>([{ name: "", qty: 1, tracking: "", file: null, preview: null }]);
 
   const { data: counterparties = [] } = useQuery({
     queryKey: ["counterparties-select"],
@@ -283,7 +282,7 @@ function ReceiptModal({
     setItemField(idx, "file", file);
   };
 
-  const addItem = () => setItems(prev => [...prev, { name: "", qty: 1, file: null, preview: null }]);
+  const addItem = () => setItems(prev => [...prev, { name: "", qty: 1, tracking: "", file: null, preview: null }]);
   const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async (values: any) => {
@@ -302,7 +301,11 @@ function ReceiptModal({
         description: values.description,
         tracking_number: values.tracking_number || undefined,
         count: values.box_count || 1,
-        items: validItems.map((it, idx) => ({ name: it.name, quantity: it.qty, sort_order: idx })),
+        items: validItems.map((it, idx) => ({
+          name: it.name, quantity: it.qty,
+          tracking_code: it.tracking || undefined,
+          sort_order: idx,
+        })),
       };
 
       const res = await createBox(payload);
@@ -343,7 +346,7 @@ function ReceiptModal({
 
   const handleClose = () => {
     form.resetFields();
-    setItems([{ name: "", qty: 1, file: null, preview: null }]);
+    setItems([{ name: "", qty: 1, tracking: "", file: null, preview: null }]);
     setCreatedBoxes([]);
     setMainPhotoFile(null); setMainPhotoPreview(null);
     onClose();
@@ -351,7 +354,7 @@ function ReceiptModal({
 
   const handleAddMore = () => {
     form.setFieldValue("box_count", 1);
-    setItems([{ name: "", qty: 1, file: null, preview: null }]);
+    setItems([{ name: "", qty: 1, tracking: "", file: null, preview: null }]);
     setMainPhotoFile(null); setMainPhotoPreview(null);
     setCreatedBoxes([]);
     // Оставляем клиента и склад
@@ -416,65 +419,9 @@ function ReceiptModal({
             <Input.TextArea rows={1} />
           </Form.Item>
 
-          {/* Задача 3: трек-номер со сканером штрихкода (камера + физический сканер) */}
-          {trackingScanOpen && (
-            <div style={{ marginBottom: 8 }}>
-              <div id={trackingDivId} style={{ width: "100%", borderRadius: 8, overflow: "hidden", background: "#000", minHeight: 200 }} />
-              <Button size="small" danger style={{ marginTop: 4 }} onClick={async () => {
-                if (trackingScannerRef.current) {
-                  await trackingScannerRef.current.stop().catch(() => {});
-                  trackingScannerRef.current = null;
-                }
-                setTrackingScanOpen(false);
-              }}>{t("common.close")}</Button>
-            </div>
-          )}
+          {/* Трек-номер коробки (общий) — простое поле без камеры */}
           <Form.Item name="tracking_number" label={t("warehouse.tracking_number")}>
-            <Input
-              placeholder={t("warehouse.tracking_placeholder")}
-              allowClear autoComplete="off" id="tracking-input"
-              addonAfter={
-                <Button size="small" type="text" icon={<QrcodeOutlined />}
-                  title={t("warehouse.scan_qr")}
-                  onClick={async () => {
-                    if (trackingScanOpen) return;
-                    setTrackingScanOpen(true);
-                    setTimeout(async () => {
-                      try {
-                        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
-                        const scanner = new Html5Qrcode(trackingDivId, {
-                          formatsToSupport: [
-                            Html5QrcodeSupportedFormats.QR_CODE,
-                            Html5QrcodeSupportedFormats.CODE_128,
-                            Html5QrcodeSupportedFormats.CODE_39,
-                            Html5QrcodeSupportedFormats.EAN_13,
-                            Html5QrcodeSupportedFormats.EAN_8,
-                            Html5QrcodeSupportedFormats.DATA_MATRIX,
-                          ],
-                          verbose: false,
-                        } as any);
-                        trackingScannerRef.current = scanner;
-                        await scanner.start(
-                          { facingMode: "environment" },
-                          { fps: 15, qrbox: { width: 300, height: 100 } },
-                          (text: string) => {
-                            form.setFieldValue("tracking_number", text.trim());
-                            scanner.stop().catch(() => {});
-                            trackingScannerRef.current = null;
-                            setTrackingScanOpen(false);
-                            message.success("✓ " + text.trim());
-                          },
-                          () => {}
-                        );
-                      } catch {
-                        setTrackingScanOpen(false);
-                        message.error("Камера недоступна");
-                      }
-                    }, 100);
-                  }}
-                />
-              }
-            />
+            <Input placeholder={t("warehouse.tracking_placeholder")} allowClear autoComplete="off" />
           </Form.Item>
 
           {/* Задача 2: главное фото коробки */}
@@ -506,48 +453,115 @@ function ReceiptModal({
           {/* Позиции товаров — с отступом вправо */}
           <Divider style={{ margin: "8px 0" }}>{t("warehouse.box_items_section")}</Divider>
           <div style={{ paddingLeft: 16, borderLeft: "3px solid #f0f0f0" }}>
-            {items.map((item, idx) => (
-              <div key={idx} style={{ marginBottom: 8, background: "#fafafa", borderRadius: 6, padding: "8px 10px" }}>
-                <Row gutter={8} align="middle">
-                  <Col flex="auto">
-                    <Input
-                      placeholder={t("warehouse.item_row_name")}
-                      value={item.name}
-                      onChange={e => setItemField(idx, "name", e.target.value)}
-                    />
-                  </Col>
-                  <Col style={{ width: 80 }}>
-                    <InputNumber
-                      min={1} precision={0} placeholder={t("warehouse.item_row_qty")}
-                      value={item.qty}
-                      onChange={v => setItemField(idx, "qty", v ?? 1)}
-                      style={{ width: "100%" }}
-                    />
-                  </Col>
-                  <Col>
-                    <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
-                      beforeUpload={f => { handleItemPhoto(idx, f); return false; }}>
-                      <Button size="small" icon={<UploadOutlined />}
-                        style={{ background: item.preview ? "#f6ffed" : undefined }}>
-                        {item.preview ? "✓" : t("warehouse.item_row_photo")}
-                      </Button>
-                    </Upload>
-                  </Col>
-                  {item.preview && (
-                    <Col>
-                      <Image src={item.preview} width={36} height={36}
-                        style={{ objectFit: "cover", borderRadius: 4 }} />
+            {items.map((item, idx) => {
+              const scanDivId = `item-scan-${idx}`;
+              return (
+                <div key={idx} style={{ marginBottom: 8, background: "#fafafa", borderRadius: 6, padding: "8px 10px" }}>
+                  {/* Строка 1: название + количество */}
+                  <Row gutter={8} align="middle" style={{ marginBottom: 4 }}>
+                    <Col flex="auto">
+                      <Input
+                        placeholder={t("warehouse.item_row_name")}
+                        value={item.name}
+                        onChange={e => setItemField(idx, "name", e.target.value)}
+                      />
                     </Col>
-                  )}
-                  {items.length > 1 && (
-                    <Col>
-                      <Button size="small" danger icon={<DeleteOutlined />}
-                        onClick={() => removeItem(idx)} />
+                    <Col style={{ width: 72 }}>
+                      <InputNumber
+                        min={1} precision={0} placeholder={t("warehouse.item_row_qty")}
+                        value={item.qty}
+                        onChange={v => setItemField(idx, "qty", v ?? 1)}
+                        style={{ width: "100%" }}
+                      />
                     </Col>
+                    {items.length > 1 && (
+                      <Col>
+                        <Button size="small" danger icon={<DeleteOutlined />}
+                          onClick={() => removeItem(idx)} />
+                      </Col>
+                    )}
+                  </Row>
+                  {/* Строка 2: код отслеживания со сканером + фото */}
+                  <Row gutter={8} align="middle">
+                    <Col flex="auto">
+                      <Input
+                        size="small"
+                        placeholder={t("warehouse.tracking_code_placeholder")}
+                        value={item.tracking}
+                        onChange={e => setItemField(idx, "tracking", e.target.value)}
+                        addonAfter={
+                          <Button size="small" type="text" icon={<QrcodeOutlined />}
+                            title={t("warehouse.item_scan_tracking")}
+                            onClick={async () => {
+                              setTrackingScanOpen(true);
+                              setTimeout(async () => {
+                                try {
+                                  const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+                                  if (trackingScannerRef.current) {
+                                    await trackingScannerRef.current.stop().catch(() => {});
+                                  }
+                                  const scanner = new Html5Qrcode(trackingDivId, {
+                                    formatsToSupport: [
+                                      Html5QrcodeSupportedFormats.QR_CODE,
+                                      Html5QrcodeSupportedFormats.CODE_128,
+                                      Html5QrcodeSupportedFormats.CODE_39,
+                                      Html5QrcodeSupportedFormats.EAN_13,
+                                      Html5QrcodeSupportedFormats.EAN_8,
+                                      Html5QrcodeSupportedFormats.DATA_MATRIX,
+                                    ],
+                                    verbose: false,
+                                  } as any);
+                                  trackingScannerRef.current = scanner;
+                                  await scanner.start(
+                                    { facingMode: "environment" },
+                                    { fps: 15, qrbox: { width: 300, height: 100 } },
+                                    (text: string) => {
+                                      setItemField(idx, "tracking", text.trim());
+                                      scanner.stop().catch(() => {});
+                                      trackingScannerRef.current = null;
+                                      setTrackingScanOpen(false);
+                                    },
+                                    () => {}
+                                  );
+                                } catch { setTrackingScanOpen(false); }
+                              }, 100);
+                            }}
+                          />
+                        }
+                      />
+                    </Col>
+                    <Col>
+                      <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
+                        beforeUpload={f => { handleItemPhoto(idx, f); return false; }}>
+                        <Button size="small" icon={<UploadOutlined />}
+                          style={{ background: item.preview ? "#f6ffed" : undefined }}>
+                          {item.preview ? "✓" : t("warehouse.item_row_photo")}
+                        </Button>
+                      </Upload>
+                    </Col>
+                    {item.preview && (
+                      <Col>
+                        <Image src={item.preview} width={32} height={32}
+                          style={{ objectFit: "cover", borderRadius: 3 }} />
+                      </Col>
+                    )}
+                  </Row>
+                  {/* Камера для скана (общая для всех позиций) */}
+                  {trackingScanOpen && (
+                    <div style={{ marginTop: 6 }}>
+                      <div id={trackingDivId} style={{ width: "100%", borderRadius: 8, overflow: "hidden", background: "#000", minHeight: 160 }} />
+                      <Button size="small" danger style={{ marginTop: 4 }} onClick={async () => {
+                        if (trackingScannerRef.current) {
+                          await trackingScannerRef.current.stop().catch(() => {});
+                          trackingScannerRef.current = null;
+                        }
+                        setTrackingScanOpen(false);
+                      }}>{t("common.close")}</Button>
+                    </div>
                   )}
-                </Row>
-              </div>
-            ))}
+                </div>
+              );
+            })}
             <Button type="dashed" icon={<PlusOutlined />} size="small" onClick={addItem}
               style={{ marginTop: 4 }}>
               {t("warehouse.add_item")}
@@ -790,7 +804,8 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
       setSelectedBoxIds(new Set());
       qc.invalidateQueries({ queryKey: ["warehouse-balance"] });
     } catch (e: any) {
-      message.error(e.response?.data?.detail || "Ошибка отгрузки");
+      const detail = e.response?.data?.detail;
+      message.error({ content: typeof detail === "string" ? detail : t("warehouse.ship_success", { count: 0 }) || "Ошибка отгрузки", duration: 6 });
       throw e;
     }
   };
@@ -869,6 +884,9 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
                         <Tag style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
                           ×{it.quantity}
                         </Tag>
+                        {it.tracking_code && (
+                          <Text type="secondary" style={{ fontSize: 10 }}>🔖{it.tracking_code}</Text>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -881,10 +899,17 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
       },
     },
     {
-      title: t("warehouse.shipping_warehouse"),
+      title: t("warehouse.tracking_code"),
+      dataIndex: "tracking_number",
+      key: "tracking_number",
+      width: 130,
+      render: (v: string | null) => v ? <Text style={{ fontSize: 11, fontFamily: "monospace" }}>{v}</Text> : "—",
+    },
+    {
+      title: t("warehouse.warehouse_col"),
       dataIndex: "warehouse_name",
       key: "warehouse",
-      width: 110,
+      width: 100,
       render: (v: string | null) => v ? <Tag color="blue" style={{ fontSize: 11 }}>{v}</Tag> : "—",
     },
     {
@@ -1106,13 +1131,13 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
                     const td = tv > 0 ? tw / tv : 0;
                     return (
                       <Table.Summary.Row style={{ background: "#fafafa", fontWeight: 600 }}>
-                        <Table.Summary.Cell index={0} colSpan={5}>
+                        <Table.Summary.Cell index={0} colSpan={6}>
                           {t("warehouse.subtotal_label")} ({rows.length} {t("warehouse.places_unit")})
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={5} align="right">{fmtNum(tw)}</Table.Summary.Cell>
-                        <Table.Summary.Cell index={6} align="right">{fmtNum(tv, 4)}</Table.Summary.Cell>
-                        <Table.Summary.Cell index={7} align="right">{fmtNum(td)}</Table.Summary.Cell>
-                        <Table.Summary.Cell index={8} />
+                        <Table.Summary.Cell index={6} align="right">{fmtNum(tw)}</Table.Summary.Cell>
+                        <Table.Summary.Cell index={7} align="right">{fmtNum(tv, 4)}</Table.Summary.Cell>
+                        <Table.Summary.Cell index={8} align="right">{fmtNum(td)}</Table.Summary.Cell>
+                        <Table.Summary.Cell index={9} />
                       </Table.Summary.Row>
                     );
                   }}

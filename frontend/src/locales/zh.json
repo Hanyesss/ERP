@@ -635,7 +635,11 @@
     "add_one_more_box": "再加一箱",
     "print_all_qr_count": "打印二维码 ({{count}})",
     "received_by": "收货人",
-    "shipped_by": "发货人"
+    "shipped_by": "发货人",
+    "tracking_code": "追踪码",
+    "tracking_code_placeholder": "扫描或输入追踪码...",
+    "warehouse_col": "仓库",
+    "item_scan_tracking": "扫描追踪码"
   },
   "report": {
     "title": "报表",

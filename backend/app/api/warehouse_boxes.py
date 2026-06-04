@@ -36,6 +36,7 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 class BoxItemIn(BaseModel):
     name: str
     quantity: int = 1
+    tracking_code: Optional[str] = None
     sort_order: int = 0
 
 
@@ -257,6 +258,7 @@ def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None, wh: Optio
                 "id": str(it.id),
                 "name": it.name,
                 "quantity": it.quantity,
+                "tracking_code": it.tracking_code,
                 "photo_url": _photo_url(it.photo_path),
                 "photo_path": it.photo_path,
                 "sort_order": it.sort_order,
@@ -478,7 +480,8 @@ async def generate_packing_list_preview(
             "description": box.description or "",
             "photo_path": box.photo_path,
             "box_items": [
-                {"name": it.name, "quantity": it.quantity, "photo_path": it.photo_path}
+                {"name": it.name, "quantity": it.quantity,
+                 "tracking_code": it.tracking_code, "photo_path": it.photo_path}
                 for it in box_item_list
             ],
         })
@@ -554,7 +557,8 @@ async def ship_boxes(
             "description": box.description or "",
             "photo_path": box.photo_path,
             "box_items": [
-                {"name": it.name, "quantity": it.quantity, "photo_path": it.photo_path}
+                {"name": it.name, "quantity": it.quantity,
+                 "tracking_code": it.tracking_code, "photo_path": it.photo_path}
                 for it in ship_items
             ],
         })
@@ -643,6 +647,7 @@ async def create_box(
                 box_id=box.id,
                 name=item_in.name,
                 quantity=item_in.quantity,
+                tracking_code=item_in.tracking_code,
                 sort_order=item_in.sort_order if item_in.sort_order else idx,
             ))
         created_boxes.append(box)

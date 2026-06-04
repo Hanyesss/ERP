@@ -157,6 +157,9 @@
       {% endif %}
       <span class="item-name">{{ it.name }}</span>
       <span class="item-qty">×{{ it.quantity }}</span>
+      {% if it.tracking_code %}
+      <span style="font-size:7pt;color:#555;margin-left:6px;">🔖 {{ it.tracking_code }}</span>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

@@ -4,6 +4,7 @@ export interface BoxItemData {
   id: string;
   name: string;
   quantity: number;
+  tracking_code: string | null;
   photo_url: string | null;
   photo_path: string | null;
   sort_order: number;
@@ -45,6 +46,7 @@ export interface ClientGroup {
 export interface BoxItemIn {
   name: string;
   quantity: number;
+  tracking_code?: string;
   sort_order?: number;
 }
 

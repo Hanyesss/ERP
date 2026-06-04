@@ -608,7 +608,11 @@
     "add_one_more_box": "Ещё коробку",
     "print_all_qr_count": "Печать QR ({{count}})",
     "received_by": "Принял",
-    "shipped_by": "Отгрузил"
+    "shipped_by": "Отгрузил",
+    "tracking_code": "Код отслеживания",
+    "tracking_code_placeholder": "Сканируйте или введите код...",
+    "warehouse_col": "Склад",
+    "item_scan_tracking": "Сканировать код"
   },
   "report": {
     "title": "Отчёты",
