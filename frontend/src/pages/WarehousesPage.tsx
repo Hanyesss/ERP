@@ -18,7 +18,7 @@ import {
 import {
   getBalance, createBox, updateBox, deleteBox, uploadBoxPhoto, uploadBoxItemPhoto,
   getQrLabelUrl, generatePackingListPreview, generateQrBulkPdf, shipBoxes,
-  getShipped, getPackingLists, checkBoxCode,
+  getShipped, getPackingLists,
   type ClientGroup, type WarehouseBox, type BoxCreate, type BoxItemIn,
   type BoxItemData, type PackingListRecord,
 } from "../api/warehouseBoxes";
@@ -70,34 +70,18 @@ function QrScanModal({
   const scannerRef = useRef<any>(null);
   const scannerDivId = "qr-scanner-stream";
 
-  const addCode = useCallback(async (code: string) => {
+  const addCode = useCallback((code: string) => {
     const c = code.trim().toUpperCase();
     if (!c) return;
 
-    // Останавливаем камеру сразу чтобы не повторно сканировать
+    // Останавливаем камеру после успешного скана
     if (scannerRef.current) {
       scannerRef.current.stop().catch(() => {});
       scannerRef.current = null;
     }
     setStreaming(false);
 
-    // Проверяем статус коробки
-    try {
-      const res = await checkBoxCode(c);
-      const { found, status } = res.data;
-      if (!found) {
-        // Показываем что именно отсканировалось чтобы найти расхождение
-        message.error({ content: `${t("warehouse.scan_not_found_warehouse")}: «${c}»`, duration: 6 });
-        return;
-      }
-      if (status === "shipped") {
-        message.error({ content: `${c}: ${t("warehouse.scan_already_shipped")}`, duration: 4 });
-        return;
-      }
-    } catch {
-      // Если проверка недоступна — добавляем без проверки
-    }
-
+    // Добавляем код сразу — бэкенд проверит при отгрузке
     setScanned((prev) => {
       if (prev.includes(c)) { message.info(t("warehouse.scan_already_added")); return prev; }
       message.success(c);
