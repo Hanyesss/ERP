@@ -614,7 +614,17 @@
     "no_packing_lists": "暂无装箱单",
     "no_shipped_yet": "暂无出库记录",
     "scan_already_shipped": "已出库",
-    "scan_not_found_warehouse": "仓库中未找到"
+    "scan_not_found_warehouse": "仓库中未找到",
+    "box_items_section": "货物明细",
+    "add_item": "添加明细",
+    "item_qty": "数量",
+    "item_photo": "照片",
+    "box_count": "箱数",
+    "box_items_collapse": "货物明细",
+    "tracking_number": "跟踪号 / 条形码",
+    "tracking_placeholder": "将扫描仪对准条形码扫描...",
+    "print_all_qr": "批量打印二维码",
+    "item_name_label": "货物总名称"
   },
   "report": {
     "title": "报表",

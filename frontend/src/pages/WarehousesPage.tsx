@@ -269,7 +269,7 @@ function ReceiptModal({
 
     setCreating(true);
     try {
-      const mainName = validItems[0].name;
+      const mainName = values.item_name_label || validItems[0].name;
       const payload: BoxCreate = {
         counterparty_id: values.counterparty_id,
         warehouse_id: values.warehouse_id,
@@ -277,6 +277,7 @@ function ReceiptModal({
         volume: values.volume,
         item_name: mainName,
         description: values.description,
+        tracking_number: values.tracking_number || undefined,
         count: values.box_count || 1,
         items: validItems.map((it, idx) => ({ name: it.name, quantity: it.qty, sort_order: idx })),
       };
@@ -363,18 +364,36 @@ function ReceiptModal({
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="box_count" label="Кол-во коробок" initialValue={1}>
+              <Form.Item name="box_count" label={t("warehouse.box_count")} initialValue={1}>
                 <InputNumber min={1} max={500} precision={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
 
+          {/* Наименование коробки (общее) */}
+          <Form.Item name="item_name_label" label={t("warehouse.item_name")} rules={[{ required: true }]}>
+            <Input placeholder={t("warehouse.item_name_label")} />
+          </Form.Item>
+
           <Form.Item name="description" label={t("warehouse.description")}>
             <Input.TextArea rows={1} />
           </Form.Item>
 
+          {/* Задача 5: трек-номер со сканером штрихкода */}
+          <Form.Item name="tracking_number" label={
+            <span>Трек-номер / штрихкод <Text type="secondary" style={{ fontSize: 11 }}>
+              (сфокусируйте поле и сканируйте)
+            </Text></span>
+          }>
+            <Input
+              placeholder="Наведите сканер и считайте штрихкод..."
+              allowClear
+              autoComplete="off"
+            />
+          </Form.Item>
+
           {/* Позиции товаров — с отступом вправо */}
-          <Divider style={{ margin: "8px 0" }}>Позиции товара в коробке</Divider>
+          <Divider style={{ margin: "8px 0" }}>{t("warehouse.box_items_section")}</Divider>
           <div style={{ paddingLeft: 16, borderLeft: "3px solid #f0f0f0" }}>
             {items.map((item, idx) => (
               <div key={idx} style={{ marginBottom: 8, background: "#fafafa", borderRadius: 6, padding: "8px 10px" }}>
@@ -420,7 +439,7 @@ function ReceiptModal({
             ))}
             <Button type="dashed" icon={<PlusOutlined />} size="small" onClick={addItem}
               style={{ marginTop: 4 }}>
-              Добавить позицию
+              {t("warehouse.add_item")}
             </Button>
           </div>
 
@@ -621,6 +640,36 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
     }
   };
 
+  // Задача 3: печать всех QR кодов выбранных коробок разом
+  const handlePrintAllQr = async () => {
+    if (!selectedBoxIds.size) { message.warning(t("warehouse.no_boxes_selected")); return; }
+    const boxes = balance.flatMap(g => g.boxes).filter(b => selectedBoxIds.has(b.id));
+    const win = window.open("", "_blank");
+    if (!win) { message.error("Не удалось открыть окно печати"); return; }
+    win.document.write(`<html><head><title>QR коды</title>
+      <style>
+        body{margin:0;padding:8px;background:#fff}
+        .grid{display:flex;flex-wrap:wrap;gap:8px}
+        .card{border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;width:150px;break-inside:avoid}
+        .code{font-size:11px;font-weight:700;margin-top:4px}
+        .name{font-size:9px;color:#666;margin-top:2px}
+        img{width:130px;height:130px}
+        @media print{body{padding:0}}
+      </style></head><body><div class="grid">`);
+    for (const box of boxes) {
+      try {
+        const res = await apiClient.get(`/api/warehouse-boxes/${box.id}/qr-png`, { responseType: "blob" });
+        const url = URL.createObjectURL(res.data as Blob);
+        win.document.write(
+          `<div class="card"><img src="${url}"/><div class="code">${box.box_code}</div>` +
+          `<div class="name">${box.item_name}</div></div>`
+        );
+      } catch { /* пропускаем если ошибка */ }
+    }
+    win.document.write(`</div><script>window.onload=()=>window.print()</script></body></html>`);
+    win.document.close();
+  };
+
   const handleShip = async (codes: string[]) => {
     try {
       const res = await shipBoxes(codes);
@@ -682,32 +731,47 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
       title: t("warehouse.item_name"),
       dataIndex: "item_name",
       key: "item_name",
-      render: (v, b) => (
-        <div>
-          <div style={{ fontWeight: 500 }}>{v}</div>
-          {b.description && (
-            <div style={{ fontSize: 11, color: "#888" }}>{b.description}</div>
-          )}
-          {/* Позиции товаров с отступом вправо */}
-          {b.items && b.items.length > 0 && (
-            <div style={{ paddingLeft: 12, borderLeft: "2px solid #e8e8e8", marginTop: 4 }}>
-              {b.items.map((it: BoxItemData) => (
-                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                  {it.photo_url && (
-                    <Image src={it.photo_url} width={22} height={22}
-                      style={{ objectFit: "cover", borderRadius: 3, flexShrink: 0 }} preview={false} />
-                  )}
-                  <Text style={{ fontSize: 12 }}>{it.name}</Text>
-                  <Tag style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
-                    ×{it.quantity}
-                  </Tag>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{b.box_code}</div>
-        </div>
-      ),
+      render: (v, b) => {
+        const hasItems = b.items && b.items.length > 0;
+        return (
+          <div>
+            <div style={{ fontWeight: 500 }}>{v}</div>
+            {b.description && (
+              <div style={{ fontSize: 11, color: "#888" }}>{b.description}</div>
+            )}
+            {/* Баг 3: позиции раскрываются/закрываются */}
+            {hasItems && (
+              <Collapse ghost size="small" style={{ marginTop: 2 }}>
+                <Panel
+                  key="items"
+                  header={
+                    <Text style={{ fontSize: 11, color: "#1677ff" }}>
+                      {t("warehouse.box_items_collapse")} ({b.items.length})
+                    </Text>
+                  }
+                  style={{ padding: 0 }}
+                >
+                  <div style={{ paddingLeft: 8, borderLeft: "2px solid #e8e8e8" }}>
+                    {b.items.map((it: BoxItemData) => (
+                      <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                        {it.photo_url && (
+                          <Image src={it.photo_url} width={24} height={24}
+                            style={{ objectFit: "cover", borderRadius: 3, flexShrink: 0 }} />
+                        )}
+                        <Text style={{ fontSize: 12 }}>{it.name}</Text>
+                        <Tag style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
+                          ×{it.quantity}
+                        </Tag>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </Collapse>
+            )}
+            <div style={{ fontSize: 11, color: "#aaa" }}>{b.box_code}</div>
+          </div>
+        );
+      },
     },
     {
       title: t("warehouse.weight"),
@@ -846,6 +910,10 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
             onClick={handlePackingList}
           >
             {t("warehouse.create_packing_list")}
+          </Button>
+          {/* Задача 3: печать всех QR выбранных коробок */}
+          <Button size="small" icon={<QrcodeOutlined />} onClick={handlePrintAllQr}>
+            Печать QR ({selectedBoxIds.size})
           </Button>
           <Button size="small" onClick={() => setSelectedBoxIds(new Set())}>
             {t("warehouse.clear_selection")}

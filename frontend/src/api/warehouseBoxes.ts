@@ -52,8 +52,9 @@ export interface BoxCreate {
   volume: number;
   item_name: string;
   description?: string;
-  items?: BoxItemIn[];   // детальные позиции
-  count?: number;        // сколько одинаковых коробок создать
+  tracking_number?: string;  // задача 5: трек-номер / штрихкод
+  items?: BoxItemIn[];
+  count?: number;
 }
 
 export interface BoxUpdate {

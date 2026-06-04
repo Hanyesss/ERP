@@ -128,7 +128,18 @@
         <span class="no-photo"></span>
         {% endif %}
       </td>
-      <td>{{ box.item_name }}</td>
+      <td>
+        <strong>{{ box.item_name }}</strong>
+        {% if box.items %}
+        <div style="margin-top:3px;padding-left:10px;border-left:2px solid #c8daf0;">
+          {% for it in box.items %}
+          <div style="font-size:7pt;color:#333;padding:1px 0;">
+            • {{ it.name }} <span style="color:#1a4e7a;font-weight:bold;">×{{ it.quantity }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </td>
       <td class="num-col">{{ box.weight | fmt_decimal }}</td>
       <td class="num-col">{{ box.volume | fmt_decimal }}</td>
       <td class="num-col">{{ box.density | fmt_decimal }}</td>

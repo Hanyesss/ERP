@@ -24,8 +24,9 @@ class WarehouseBox(Base):
     weight: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     volume: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     density: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False, server_default="0")
-    item_name: Mapped[str] = mapped_column(String(255), nullable=False)  # Основное наименование (совместимость)
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(String(200), nullable=True)
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[BoxStatus] = mapped_column(
         Enum(BoxStatus, name="boxstatus"), nullable=False, server_default="on_warehouse", index=True

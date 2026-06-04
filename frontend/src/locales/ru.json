@@ -587,7 +587,17 @@
     "no_packing_lists": "Пакинг-листы ещё не создавались",
     "no_shipped_yet": "Отгруженных мест пока нет",
     "scan_already_shipped": "уже отгружено ранее",
-    "scan_not_found_warehouse": "не найдено на складе"
+    "scan_not_found_warehouse": "не найдено на складе",
+    "box_items_section": "Позиции товара в коробке",
+    "add_item": "Добавить позицию",
+    "item_qty": "Кол-во",
+    "item_photo": "Фото",
+    "box_count": "Кол-во коробок",
+    "box_items_collapse": "Состав",
+    "tracking_number": "Трек-номер / штрихкод",
+    "tracking_placeholder": "Наведите сканер и считайте штрихкод...",
+    "print_all_qr": "Печать QR",
+    "item_name_label": "Общее наименование груза"
   },
   "report": {
     "title": "Отчёты",

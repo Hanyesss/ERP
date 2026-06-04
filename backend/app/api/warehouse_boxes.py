@@ -44,10 +44,11 @@ class BoxCreate(BaseModel):
     warehouse_id: uuid.UUID
     weight: Decimal
     volume: Decimal
-    item_name: str                        # главное наименование (для совместимости)
+    item_name: str
     description: Optional[str] = None
-    items: list[BoxItemIn] = []           # детальные позиции (новое)
-    count: int = 1                        # сколько одинаковых коробок создать (задача 2)
+    tracking_number: Optional[str] = None  # задача 5: трек-номер / штрихкод
+    items: list[BoxItemIn] = []
+    count: int = 1
 
 
 class BoxUpdate(BaseModel):
@@ -80,6 +81,27 @@ def _box_dir(box_id: uuid.UUID) -> Path:
     return d
 
 
+def _compress_image(data: bytes, max_px: int = 800, quality: int = 72) -> bytes:
+    """Сжимает изображение до max_px по большей стороне, JPEG качество quality."""
+    try:
+        from PIL import Image as PILImage
+        import io
+        img = PILImage.open(io.BytesIO(data))
+        # Конвертируем RGBA→RGB если нужно
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        # Уменьшаем если больше max_px
+        w, h = img.size
+        if max(w, h) > max_px:
+            ratio = max_px / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), PILImage.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return data  # возвращаем оригинал если что-то пошло не так
+
+
 def _packing_list_dir() -> Path:
     d = UPLOADS_DIR / "packing_lists"
     d.mkdir(parents=True, exist_ok=True)
@@ -92,18 +114,17 @@ def _photo_url(photo_path: Optional[str]) -> Optional[str]:
     return f"/files/{photo_path}"
 
 
-def _photo_to_base64(photo_path: Optional[str]) -> Optional[str]:
+def _photo_to_base64(photo_path: Optional[str], max_px: int = 400) -> Optional[str]:
+    """Читает фото, сжимает для вставки в PDF (400px, q=65) и кодирует в base64."""
     if not photo_path:
         return None
     full = UPLOADS_DIR / photo_path
     if not full.exists():
         return None
     data = full.read_bytes()
-    b64 = base64.b64encode(data).decode()
-    ext = full.suffix.lower()
-    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-    mime = mime_map.get(ext, "image/jpeg")
-    return f"data:{mime};base64,{b64}"
+    compressed = _compress_image(data, max_px=max_px, quality=65)
+    b64 = base64.b64encode(compressed).decode()
+    return f"data:image/jpeg;base64,{b64}"
 
 
 def _generate_qr_base64(data: str) -> str:
@@ -111,14 +132,14 @@ def _generate_qr_base64(data: str) -> str:
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=10,
-        border=4,
+        box_size=6,   # уменьшили с 10→6, QR получается ~180px вместо ~300px
+        border=3,
     )
     qr.add_data(data)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG", optimize=True)
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f"data:image/png;base64,{b64}"
 
@@ -247,6 +268,7 @@ def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None) -> dict:
         "density": float(box.density),
         "item_name": box.item_name,
         "description": box.description,
+        "tracking_number": box.tracking_number,
         "items": items_data,
         "photo_url": _photo_url(box.photo_path),
         "photo_path": box.photo_path,
@@ -391,6 +413,7 @@ async def generate_packing_list_preview(
         select(WarehouseBox, Counterparty)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .where(WarehouseBox.id.in_(body.box_ids))
+        .options(selectinload(WarehouseBox.items))
     )).all()
 
     if not rows:
@@ -398,6 +421,7 @@ async def generate_packing_list_preview(
 
     boxes_data = []
     for box, cp in rows:
+        box_items = sorted(box.items, key=lambda x: x.sort_order) if box.items else []
         boxes_data.append({
             "counterparty_id": str(cp.id),
             "counterparty_code": cp.code or cp.name,
@@ -409,6 +433,7 @@ async def generate_packing_list_preview(
             "density": float(box.density),
             "description": box.description or "",
             "photo_path": box.photo_path,
+            "items": [{"name": it.name, "quantity": it.quantity} for it in box_items],
         })
 
     pdf_bytes = await _generate_packing_list_pdf(boxes_data)
@@ -549,6 +574,7 @@ async def create_box(
             density=density,
             item_name=body.item_name,
             description=body.description,
+            tracking_number=body.tracking_number,
             status=BoxStatus.on_warehouse,
         )
         db.add(box)
@@ -610,10 +636,10 @@ async def upload_box_item_photo(
     if mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(422, f"File type not allowed: {mime}")
 
-    ext = Path(file.filename or "photo").suffix.lower() or ".jpg"
-    stored_name = f"item_{item_id}_{uuid.uuid4()}{ext}"
+    compressed = _compress_image(content, max_px=800, quality=72)
+    stored_name = f"item_{item_id}_{uuid.uuid4()}.jpg"
     dest = _box_dir(box_id) / stored_name
-    dest.write_bytes(content)
+    dest.write_bytes(compressed)
 
     relative = f"boxes/{box_id}/{stored_name}"
     item.photo_path = relative
@@ -642,10 +668,11 @@ async def upload_box_photo(
     if mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(422, f"File type not allowed: {mime}")
 
-    ext = Path(file.filename or "photo").suffix.lower() or ".jpg"
-    stored_name = f"{uuid.uuid4()}{ext}"
+    # Сжимаем перед сохранением — экономит место и ускоряет пакинг-лист
+    compressed = _compress_image(content, max_px=800, quality=72)
+    stored_name = f"{uuid.uuid4()}.jpg"
     dest = _box_dir(box_id) / stored_name
-    dest.write_bytes(content)
+    dest.write_bytes(compressed)
 
     relative = f"boxes/{box_id}/{stored_name}"
     box.photo_path = relative
@@ -653,6 +680,30 @@ async def upload_box_photo(
     await db.commit()
 
     return {"photo_url": _photo_url(relative), "photo_path": relative}
+
+
+@router.get("/{box_id}/qr-png")
+async def get_qr_png(
+    box_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    """Возвращает QR код как PNG (для быстрой групповой печати)."""
+    box = (await db.execute(
+        select(WarehouseBox).where(WarehouseBox.id == box_id)
+    )).scalar_one_or_none()
+    if not box:
+        raise HTTPException(404, "Box not found")
+    import qrcode
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M,
+                       box_size=6, border=3)
+    qr.add_data(box.box_code)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "max-age=3600"})
 
 
 @router.get("/{box_id}/qr")
