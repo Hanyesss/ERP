@@ -670,7 +670,13 @@
     "logistics": "物流",
     "services": "服务",
     "all_types": "全部类型",
-    "all_warehouses": "全部仓库"
+    "all_warehouses": "全部仓库",
+    "payment_status": "付款状态",
+    "remaining": "待付款项",
+    "overpayment": "预付款（多付）",
+    "debt_to_supplier": "欠供应商款",
+    "order_sale": "订单金额",
+    "purchase_amount": "采购金额"
   },
   "validation": {
     "required": "必填项",

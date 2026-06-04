@@ -643,7 +643,13 @@
     "logistics": "Логистика",
     "services": "Услуги",
     "all_types": "Все типы",
-    "all_warehouses": "Все склады"
+    "all_warehouses": "Все склады",
+    "payment_status": "Статус оплаты",
+    "remaining": "Остаток к оплате",
+    "overpayment": "Переплата (аванс)",
+    "debt_to_supplier": "Долг поставщику",
+    "order_sale": "Сумма заказа",
+    "purchase_amount": "Сумма закупа"
   },
   "common": {
     "save": "Сохранить",

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import { getByClient, exportByClient, type ByClientRow } from "../../api/reports";
 import type { ColumnsType } from "antd/es/table";
+import ClientDetailDrawer from "./ClientDetailDrawer";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -21,6 +22,7 @@ export default function ByClientReport() {
     now.startOf("month"),
     now.endOf("month"),
   ]);
+  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
 
   const params = {
     date_from: dateRange[0].format("YYYY-MM-DD"),
@@ -42,9 +44,9 @@ export default function ByClientReport() {
         direct_expenses: acc.direct_expenses + Number(row.direct_expenses),
         client_expenses: acc.client_expenses + Number(row.client_expenses),
         net_profit: acc.net_profit + Number(row.net_profit),
-        debt: acc.debt + Number(row.debt),
+        balance: acc.balance + Number(row.balance),
       }),
-      { revenue: 0, paid: 0, cogs: 0, direct_expenses: 0, client_expenses: 0, net_profit: 0, debt: 0 }
+      { revenue: 0, paid: 0, cogs: 0, direct_expenses: 0, client_expenses: 0, net_profit: 0, balance: 0 }
     );
   }, [data]);
 
@@ -62,22 +64,54 @@ export default function ByClientReport() {
   }, [data, totals, t]);
 
   const columns: ColumnsType<ByClientRow> = [
-    { title: t("order.client"), dataIndex: "client_name", key: "client_name",
-      render: (v, r: any) => r.client_id === "__total__" ? <Text strong>{v}</Text> : v },
-    { title: t("report.revenue"), dataIndex: "revenue", key: "revenue", align: "right",
-      render: (v, r: any) => r.client_id === "__total__" ? <Text strong>{fmtCny(v)}</Text> : fmtCny(v) },
+    {
+      title: t("order.client"),
+      dataIndex: "client_name",
+      key: "client_name",
+      render: (v, r: any) =>
+        r.client_id === "__total__" ? (
+          <Text strong>{v}</Text>
+        ) : (
+          <Text style={{ color: "#1677ff", cursor: "pointer" }}>{v}</Text>
+        ),
+    },
+    {
+      title: t("report.revenue"),
+      dataIndex: "revenue",
+      key: "revenue",
+      align: "right",
+      render: (v, r: any) => r.client_id === "__total__" ? <Text strong>{fmtCny(v)}</Text> : fmtCny(v),
+    },
     { title: t("payment.paid"), dataIndex: "paid", key: "paid", align: "right", render: (v) => fmtCny(v) },
     { title: t("report.cogs"), dataIndex: "cogs", key: "cogs", align: "right", render: (v) => fmtCny(v) },
     { title: t("report.direct_expenses"), dataIndex: "direct_expenses", key: "direct_expenses", align: "right", render: (v) => fmtCny(v) },
     { title: t("report.client_expenses"), dataIndex: "client_expenses", key: "client_expenses", align: "right", render: (v) => fmtCny(v) },
-    { title: t("report.net_profit"), dataIndex: "net_profit", key: "net_profit", align: "right",
+    {
+      title: t("report.net_profit"),
+      dataIndex: "net_profit",
+      key: "net_profit",
+      align: "right",
       render: (v, r: any) => (
         <Text strong={r.client_id === "__total__"} style={{ color: Number(v) >= 0 ? "#389e0d" : "#cf1322" }}>
           {fmtCny(v)}
         </Text>
-      ) },
-    { title: t("report.debt"), dataIndex: "debt", key: "debt", align: "right",
-      render: (v) => <Text style={{ color: Number(v) > 0 ? "#cf1322" : undefined }}>{fmtCny(v)}</Text> },
+      ),
+    },
+    {
+      title: t("report.debt"),
+      dataIndex: "balance",
+      key: "balance",
+      align: "right",
+      render: (v) => {
+        const val = Number(v);
+        if (val >= 0) {
+          // overpayment: client paid more
+          return <Text style={{ color: "#389e0d" }}>+{fmtCny(val)}</Text>;
+        }
+        // debt: client owes us
+        return <Text style={{ color: "#cf1322" }}>{fmtCny(Math.abs(val))}</Text>;
+      },
+    },
   ];
 
   return (
@@ -104,8 +138,24 @@ export default function ByClientReport() {
           pagination={false}
           size="middle"
           rowClassName={(r: any) => r.client_id === "__total__" ? "ant-table-summary" : ""}
+          onRow={(r: any) => ({
+            onClick: () => {
+              if (r.client_id !== "__total__") {
+                setSelectedClient({ id: r.client_id, name: r.client_name });
+              }
+            },
+            style: r.client_id !== "__total__" ? { cursor: "pointer" } : undefined,
+          })}
         />
       )}
+
+      <ClientDetailDrawer
+        clientId={selectedClient?.id ?? null}
+        clientName={selectedClient?.name ?? ""}
+        dateFrom={params.date_from}
+        dateTo={params.date_to}
+        onClose={() => setSelectedClient(null)}
+      />
     </div>
   );
 }
