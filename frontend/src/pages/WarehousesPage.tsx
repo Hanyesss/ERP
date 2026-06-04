@@ -81,19 +81,29 @@ function QrScanModal({
     }
     setStreaming(false);
 
+    // Показываем что отсканировали (для отладки)
+    message.info({ content: `Отсканировано: "${c}"`, duration: 2, key: "scanned-debug" });
+
     // Проверяем статус коробки
     try {
       const res = await checkBoxCode(c);
       const { found, status } = res.data;
       if (!found) {
-        message.error({ content: `${c}: ${t("warehouse.scan_not_found_warehouse")}`, duration: 4 });
+        // Пробуем без приведения к верхнему регистру (на случай lowercase)
+        const res2 = await checkBoxCode(code.trim());
+        if (!res2.data.found) {
+          message.error({ content: `"${c}": ${t("warehouse.scan_not_found_warehouse")}`, duration: 5 });
+          return;
+        }
+        if (res2.data.status === "shipped") {
+          message.error({ content: `"${c}": ${t("warehouse.scan_already_shipped")}`, duration: 4 });
+          return;
+        }
+      } else if (status === "shipped") {
+        message.error({ content: `"${c}": ${t("warehouse.scan_already_shipped")}`, duration: 4 });
         return;
       }
-      if (status === "shipped") {
-        message.error({ content: `${c}: ${t("warehouse.scan_already_shipped")}`, duration: 4 });
-        return;
-      }
-    } catch {
+    } catch (e) {
       // Если проверка недоступна — добавляем без проверки
     }
 
@@ -115,12 +125,24 @@ function QrScanModal({
   const startStream = async () => {
     setStreaming(true);
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(scannerDivId);
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+      // Поддерживаем и QR коды, и штрихкоды (1D)
+      const scanner = new Html5Qrcode(scannerDivId, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+          Html5QrcodeSupportedFormats.PDF_417,
+        ],
+        verbose: false,
+      } as any);
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: "environment" },
-        { fps: 15, qrbox: { width: 250, height: 250 } },
+        { fps: 15, qrbox: { width: 280, height: 120 } }, // вытянутый для штрихкодов
         (text: string) => addCode(text),
         () => {}
       );
@@ -444,12 +466,22 @@ function ReceiptModal({
                     setTrackingScanOpen(true);
                     setTimeout(async () => {
                       try {
-                        const { Html5Qrcode } = await import("html5-qrcode");
-                        const scanner = new Html5Qrcode(trackingDivId);
+                        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+                        const scanner = new Html5Qrcode(trackingDivId, {
+                          formatsToSupport: [
+                            Html5QrcodeSupportedFormats.QR_CODE,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.DATA_MATRIX,
+                          ],
+                          verbose: false,
+                        } as any);
                         trackingScannerRef.current = scanner;
                         await scanner.start(
                           { facingMode: "environment" },
-                          { fps: 15, qrbox: { width: 250, height: 80 } },
+                          { fps: 15, qrbox: { width: 300, height: 100 } },
                           (text: string) => {
                             form.setFieldValue("tracking_number", text.trim());
                             scanner.stop().catch(() => {});
@@ -1101,13 +1133,13 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
                     const td = tv > 0 ? tw / tv : 0;
                     return (
                       <Table.Summary.Row style={{ background: "#fafafa", fontWeight: 600 }}>
-                        <Table.Summary.Cell index={0} colSpan={3}>
+                        <Table.Summary.Cell index={0} colSpan={5}>
                           {t("warehouse.subtotal_label")} ({rows.length} {t("warehouse.places_unit")})
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right">{fmtNum(tw)}</Table.Summary.Cell>
-                        <Table.Summary.Cell index={4} align="right">{fmtNum(tv, 4)}</Table.Summary.Cell>
-                        <Table.Summary.Cell index={5} align="right">{fmtNum(td)}</Table.Summary.Cell>
-                        <Table.Summary.Cell index={6} />
+                        <Table.Summary.Cell index={5} align="right">{fmtNum(tw)}</Table.Summary.Cell>
+                        <Table.Summary.Cell index={6} align="right">{fmtNum(tv, 4)}</Table.Summary.Cell>
+                        <Table.Summary.Cell index={7} align="right">{fmtNum(td)}</Table.Summary.Cell>
+                        <Table.Summary.Cell index={8} />
                       </Table.Summary.Row>
                     );
                   }}

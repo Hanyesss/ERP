@@ -310,13 +310,11 @@ async def get_balance(
     _: User = Depends(require_roles(*_BOX_ROLES)),
 ):
     from app.models.user import User as UserModel
-    ReceivedUser = aliased(UserModel)
 
     stmt = (
-        select(WarehouseBox, Counterparty, Warehouse, ReceivedUser)
+        select(WarehouseBox, Counterparty, Warehouse)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .join(Warehouse, WarehouseBox.warehouse_id == Warehouse.id)
-        .outerjoin(ReceivedUser, WarehouseBox.received_by == ReceivedUser.id)
         .where(WarehouseBox.status == BoxStatus.on_warehouse)
         .options(selectinload(WarehouseBox.items))
     )
@@ -328,9 +326,18 @@ async def get_balance(
 
     rows = (await db.execute(stmt)).all()
 
+    # Загружаем имена пользователей одним запросом
+    user_ids = {box.received_by for box, _, _ in rows if box.received_by}
+    users: dict = {}
+    if user_ids:
+        user_rows = (await db.execute(
+            select(UserModel.id, UserModel.full_name).where(UserModel.id.in_(user_ids))
+        )).all()
+        users = {str(uid): name for uid, name in user_rows}
+
     from collections import OrderedDict
     groups: dict[str, dict] = OrderedDict()
-    for box, cp, wh, ru in rows:
+    for box, cp, wh in rows:
         cid = str(cp.id)
         if cid not in groups:
             groups[cid] = {
@@ -339,7 +346,10 @@ async def get_balance(
                 "counterparty_name": cp.name,
                 "boxes": [],
             }
-        groups[cid]["boxes"].append(_box_to_dict(box, cp, wh, received_by_name=ru.full_name if ru else None))
+        groups[cid]["boxes"].append(_box_to_dict(
+            box, cp, wh,
+            received_by_name=users.get(str(box.received_by)) if box.received_by else None,
+        ))
 
     result = []
     for cid, g in groups.items():
@@ -364,26 +374,36 @@ async def get_shipped(
     _: User = Depends(require_roles(*_BOX_ROLES)),
 ):
     from app.models.user import User as UserModel
-    ReceivedUser = aliased(UserModel)
-    ShippedUser = aliased(UserModel)
 
     stmt = (
-        select(WarehouseBox, Counterparty, Warehouse, ReceivedUser, ShippedUser)
+        select(WarehouseBox, Counterparty, Warehouse)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .join(Warehouse, WarehouseBox.warehouse_id == Warehouse.id)
-        .outerjoin(ReceivedUser, WarehouseBox.received_by == ReceivedUser.id)
-        .outerjoin(ShippedUser, WarehouseBox.shipped_by == ShippedUser.id)
         .where(WarehouseBox.status == BoxStatus.shipped)
+        .options(selectinload(WarehouseBox.items))
     )
     if warehouse_id:
         stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
     stmt = stmt.order_by(WarehouseBox.shipped_at.desc())
     rows = (await db.execute(stmt)).all()
+
+    # Собираем все user_ids и загружаем их одним запросом
+    user_ids = set()
+    for box, _, _ in rows:
+        if box.received_by: user_ids.add(box.received_by)
+        if box.shipped_by: user_ids.add(box.shipped_by)
+    users: dict = {}
+    if user_ids:
+        user_rows = (await db.execute(
+            select(UserModel.id, UserModel.full_name).where(UserModel.id.in_(user_ids))
+        )).all()
+        users = {str(uid): name for uid, name in user_rows}
+
     return [
         _box_to_dict(box, cp, wh,
-                     received_by_name=ru.full_name if ru else None,
-                     shipped_by_name=su.full_name if su else None)
-        for box, cp, wh, ru, su in rows
+                     received_by_name=users.get(str(box.received_by)) if box.received_by else None,
+                     shipped_by_name=users.get(str(box.shipped_by)) if box.shipped_by else None)
+        for box, cp, wh in rows
     ]
 
 
