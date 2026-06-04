@@ -74,18 +74,18 @@ function QrScanModal({
     const c = code.trim().toUpperCase();
     if (!c) return;
 
+    // Останавливаем камеру в любом случае
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(() => {});
+      scannerRef.current = null;
+    }
+    setStreaming(false);
+
     setScanned((prev) => {
       if (prev.includes(c)) {
-        // Дубль — показываем сообщение, но камеру не останавливаем
         message.warning({ content: `${c}: ${t("warehouse.scan_already_added")}`, duration: 3 });
         return prev;
       }
-      // Новый код — останавливаем камеру и добавляем
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-        scannerRef.current = null;
-      }
-      setStreaming(false);
       return [...prev, c];
     });
   }, [t]);
