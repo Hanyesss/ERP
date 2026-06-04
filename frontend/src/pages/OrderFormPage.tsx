@@ -208,6 +208,7 @@ export default function OrderFormPage({ user }: Props) {
         tracking_number: existingOrder.tracking_number,
         warehouse_id: existingOrder.warehouse_id || undefined,
         items: existingOrder.items.map((i: any) => ({
+          id: i.id,          // ← передаём id для корректного upsert на бэке
           name: i.name, name_cn: i.name_cn,
           model: i.model,
           specification: i.specification,
