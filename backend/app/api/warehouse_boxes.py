@@ -694,6 +694,56 @@ async def upload_box_photo(
     return {"photo_url": _photo_url(relative), "photo_path": relative}
 
 
+@router.post("/qr-bulk")
+async def get_qr_bulk(
+    body: PackingListRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    """Генерирует PDF 80×60мм с N страницами — по одной этикетке на каждую коробку."""
+    if not body.box_ids:
+        raise HTTPException(400, "No boxes selected")
+
+    rows = (await db.execute(
+        select(WarehouseBox, Counterparty)
+        .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .where(WarehouseBox.id.in_(body.box_ids))
+        .order_by(WarehouseBox.box_code)
+    )).all()
+
+    if not rows:
+        raise HTTPException(404, "Boxes not found")
+
+    labels = []
+    for box, cp in rows:
+        labels.append({
+            "qr_image": _generate_qr_base64(box.box_code),
+            "box_code": box.box_code,
+            "client_code": cp.code or cp.name,
+            "client_name": cp.name,
+            "item_name": box.item_name,
+            "weight": float(box.weight),
+            "volume": float(box.volume),
+            "density": float(box.density),
+            "received_at": box.received_at.strftime("%d.%m.%Y") if box.received_at else "",
+        })
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    html = env.get_template("box_label_bulk.html").render(labels=labels)
+
+    try:
+        import weasyprint
+        pdf_bytes = weasyprint.HTML(string=html).write_pdf()
+    except Exception as e:
+        raise HTTPException(500, f"PDF generation failed: {e}")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="labels.pdf"'},
+    )
+
+
 @router.get("/{box_id}/qr-png")
 async def get_qr_png(
     box_id: uuid.UUID,

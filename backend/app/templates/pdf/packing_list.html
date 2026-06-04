@@ -5,143 +5,183 @@
 <style>
   @page { size: A4; margin: 15mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
-  body { font-size: 9pt; color: #222; }
+  body { font-size: 9pt; color: #222; background: #fff; }
 
-  .doc-title { text-align: center; margin-bottom: 12px; }
-  .doc-title h1 { font-size: 13pt; font-weight: bold; letter-spacing: 1px; }
-  .doc-title h1 span { font-size: 10pt; color: #555; font-weight: normal; }
-  .doc-title .meta { font-size: 8pt; color: #777; margin-top: 3px; }
+  /* ── Заголовок документа ── */
+  .doc-title { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #1a4e7a; padding-bottom: 8px; }
+  .doc-title h1 { font-size: 14pt; font-weight: bold; color: #1a4e7a; letter-spacing: 1px; }
+  .doc-title h1 span { font-size: 11pt; color: #666; font-weight: normal; }
+  .doc-title .meta { font-size: 8pt; color: #888; margin-top: 4px; }
 
+  /* ── Раздел клиента ── */
   .section-header {
     background: #1a4e7a; color: #fff;
-    padding: 4px 8px; font-size: 9pt; font-weight: bold;
-    margin-top: 12px; margin-bottom: 0;
-    border-radius: 3px 3px 0 0; line-height: 1.4;
+    padding: 5px 10px; font-size: 9.5pt; font-weight: bold;
+    margin-top: 16px; border-radius: 4px 4px 0 0; line-height: 1.4;
   }
 
-  table { width: 100%; border-collapse: collapse; }
-  thead th {
-    background: #2c6fad; color: #fff;
-    padding: 4px 5px; font-size: 7.5pt;
-    text-align: left; white-space: nowrap; line-height: 1.3;
+  /* ── Карточка коробки ── */
+  .box-card {
+    border: 1px solid #c8d8e8;
+    border-top: none;
+    margin-bottom: 8px;
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+    page-break-inside: avoid;
   }
-  thead th .cn { font-size: 6pt; opacity: 0.85; display: block; }
-  tbody td { padding: 3px 5px; font-size: 8pt; vertical-align: middle; border-bottom: 1px solid #e0e8f0; }
+  .box-card + .box-card { border-top: 1px solid #c8d8e8; border-radius: 4px; }
 
-  /* Главная строка коробки */
-  tr.box-main td { background: #fff; }
-  tr.box-main:nth-child(4n+1) td,
-  tr.box-main:nth-child(4n+2) td { background: #f4f8fc; }
-
-  /* Строка позиции товара — отступ вправо */
-  tr.item-row td { background: transparent !important; border-bottom: 1px solid #eef2f7; padding: 2px 5px 2px 0; }
-  .item-indent { padding-left: 40px !important; }
-
-  .photo-cell { width: 38px; text-align: center; padding: 2px; }
-  .photo-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 3px; border: 1px solid #ccd; }
-  .photo-thumb-sm { width: 22px; height: 22px; object-fit: cover; border-radius: 2px; border: 1px solid #dde; }
-  .no-photo { width: 34px; height: 34px; background: #eee; border-radius: 3px; display: inline-block; }
-
-  .num-col { text-align: right; white-space: nowrap; }
-
-  .subtotal-row td {
-    background: #dce8f5 !important;
-    font-weight: bold; font-size: 8pt;
-    border-top: 1.5px solid #2c6fad;
-    border-bottom: 1.5px solid #2c6fad;
+  /* Строка с основными данными коробки */
+  .box-main-row {
+    display: flex; align-items: stretch;
+    background: #f0f5fb;
+    border-bottom: 1px solid #c8d8e8;
   }
+  .box-num {
+    flex: 0 0 32px; background: #1a4e7a; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10pt; font-weight: bold; padding: 6px 0;
+  }
+  .box-photo-cell {
+    flex: 0 0 68px; padding: 5px; display: flex; align-items: center; justify-content: center;
+  }
+  .box-photo { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #bcd; }
+  .box-no-photo { width: 60px; height: 60px; background: #e8eef4; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 18pt; }
+  .box-info { flex: 1; padding: 6px 8px; }
+  .box-code-label { font-size: 8pt; color: #555; }
+  .box-code-value { font-size: 11pt; font-weight: bold; color: #1a4e7a; line-height: 1.2; }
+  .box-name { font-size: 9pt; font-weight: bold; color: #222; margin-top: 2px; }
+  .box-desc { font-size: 7.5pt; color: #666; margin-top: 1px; }
+  .box-metrics { display: flex; gap: 12px; margin-top: 4px; }
+  .box-metric span:first-child { font-size: 6.5pt; color: #888; display: block; }
+  .box-metric span:last-child { font-size: 8.5pt; font-weight: bold; }
 
-  .grand-total { margin-top: 16px; border: 1.5px solid #1a4e7a; border-radius: 4px; overflow: hidden; }
-  .grand-total .gt-header { background: #1a4e7a; color: #fff; padding: 4px 10px; font-size: 9pt; font-weight: bold; }
-  .grand-total table td { padding: 4px 10px; font-size: 9pt; border-bottom: none; }
-  .grand-total table td:last-child { font-weight: bold; text-align: right; }
+  /* Позиции внутри коробки */
+  .items-section { padding: 4px 0 4px 40px; background: #fff; }
+  .item-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 8px 3px 0;
+    border-bottom: 1px dashed #e0e8f0;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-indent { color: #888; font-size: 10pt; flex-shrink: 0; }
+  .item-photo { width: 48px; height: 48px; object-fit: cover; border-radius: 3px; border: 1px solid #dde; flex-shrink: 0; }
+  .item-no-photo { width: 48px; height: 48px; background: #f4f6f9; border-radius: 3px; flex-shrink: 0; }
+  .item-name { flex: 1; font-size: 8.5pt; color: #333; }
+  .item-qty { font-size: 9pt; font-weight: bold; color: #1a4e7a; flex-shrink: 0; white-space: nowrap; }
 
-  .footer { margin-top: 14px; font-size: 7pt; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 4px; }
+  /* Итог по клиенту */
+  .client-subtotal {
+    background: #dce8f5; border: 1px solid #a8c4e0; border-radius: 4px;
+    padding: 4px 10px; margin-top: 4px; margin-bottom: 12px;
+    display: flex; gap: 24px; font-size: 8pt;
+  }
+  .client-subtotal strong { color: #1a4e7a; }
+
+  /* Общий итог */
+  .grand-total {
+    margin-top: 18px; border: 2px solid #1a4e7a; border-radius: 6px; overflow: hidden;
+  }
+  .grand-total .gt-header {
+    background: #1a4e7a; color: #fff; padding: 6px 12px;
+    font-size: 10pt; font-weight: bold;
+  }
+  .grand-total .gt-body { display: flex; flex-wrap: wrap; gap: 0; }
+  .grand-total .gt-item {
+    flex: 1 0 25%; padding: 6px 12px; border-right: 1px solid #c8d8e8;
+    border-bottom: 1px solid #c8d8e8;
+  }
+  .grand-total .gt-item:nth-child(4n) { border-right: none; }
+  .grand-total .gt-label { font-size: 7pt; color: #777; display: block; }
+  .grand-total .gt-value { font-size: 11pt; font-weight: bold; color: #1a4e7a; }
+
+  .footer { margin-top: 12px; font-size: 7pt; color: #bbb; text-align: center; }
 </style>
 </head>
 <body>
 
 <div class="doc-title">
-  <h1>ПАКИНГ-ЛИСТ <span>/ 装箱单</span></h1>
+  <h1>УПАКОВОЧНЫЙ ЛИСТ <span>/ 装箱单</span></h1>
   <div class="meta">Сформирован / 生成日期: {{ generated_at }}</div>
 </div>
 
+{% set box_num = namespace(value=0) %}
 {% for grp in client_groups %}
 <div class="section-header">
-  Клиент / 客户: {{ grp.counterparty_code }}{% if grp.counterparty_name %} — {{ grp.counterparty_name }}{% endif %}
+  Клиент / 客户: <strong>{{ grp.counterparty_code }}</strong>{% if grp.counterparty_name %} — {{ grp.counterparty_name }}{% endif %}
 </div>
-<table>
-  <thead>
-    <tr>
-      <th class="photo-cell" style="width:38px">Фото<span class="cn">照片</span></th>
-      <th style="width:28%">Наименование<span class="cn">品名</span></th>
-      <th style="width:9%;text-align:right">Вес, кг<span class="cn">重量</span></th>
-      <th style="width:9%;text-align:right">Объём, м³<span class="cn">体积</span></th>
-      <th style="width:8%;text-align:right">Плотн.<span class="cn">密度</span></th>
-      <th style="width:14%">Описание<span class="cn">描述</span></th>
-      <th>Код короба<span class="cn">箱号</span></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for box in grp.boxes %}
-    {# ── Главная строка коробки ── #}
-    <tr class="box-main">
-      <td class="photo-cell">
-        {% if box.photo_b64 %}
-        <img class="photo-thumb" src="{{ box.photo_b64 }}" alt="" />
-        {% else %}
-        <span class="no-photo"></span>
-        {% endif %}
-      </td>
-      <td><strong>{{ box.item_name }}</strong></td>
-      <td class="num-col">{{ box.weight | fmt_decimal }}</td>
-      <td class="num-col">{{ box.volume | fmt_decimal }}</td>
-      <td class="num-col">{{ box.density | fmt_decimal }}</td>
-      <td style="font-size:7pt;color:#555;">{{ box.description or "—" }}</td>
-      <td style="font-size:7.5pt;font-weight:600;">{{ box.box_code }}</td>
-    </tr>
-    {# ── Строки позиций товара (с отступом вправо) ── #}
+
+{% for box in grp.boxes %}
+{% set box_num.value = box_num.value + 1 %}
+<div class="box-card">
+  <div class="box-main-row">
+    <div class="box-num">{{ box_num.value }}</div>
+    <div class="box-photo-cell">
+      {% if box.photo_b64 %}
+        <img class="box-photo" src="{{ box.photo_b64 }}" alt="" />
+      {% else %}
+        <div class="box-no-photo">📦</div>
+      {% endif %}
+    </div>
+    <div class="box-info">
+      <div class="box-code-label">Код короба / 箱号</div>
+      <div class="box-code-value">{{ box.box_code }}</div>
+      <div class="box-name">{{ box.item_name }}</div>
+      {% if box.description %}
+      <div class="box-desc">{{ box.description }}</div>
+      {% endif %}
+      <div class="box-metrics">
+        <div class="box-metric">
+          <span>Вес / 重量</span><span>{{ box.weight | fmt_decimal }} кг</span>
+        </div>
+        <div class="box-metric">
+          <span>Объём / 体积</span><span>{{ box.volume | fmt_decimal }} м³</span>
+        </div>
+        <div class="box-metric">
+          <span>Плотн. / 密度</span><span>{{ box.density | fmt_decimal }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if box.box_items %}
+  <div class="items-section">
     {% for it in box.box_items %}
-    <tr class="item-row">
-      <td class="photo-cell" style="padding:2px;">
-        {% if it.photo_b64 %}
-        <img class="photo-thumb-sm" src="{{ it.photo_b64 }}" alt="" />
-        {% else %}
-        <span style="display:inline-block;width:22px;height:22px;"></span>
-        {% endif %}
-      </td>
-      <td class="item-indent" colspan="5">
-        <span style="color:#555;font-size:10pt;margin-right:4px;">↳</span>
-        <span style="font-size:8pt;">{{ it.name }}</span>
-        <span style="font-size:8pt;font-weight:700;color:#1a4e7a;margin-left:8px;">×{{ it.quantity }}</span>
-      </td>
-      <td></td>
-    </tr>
+    <div class="item-row">
+      <span class="item-indent">↳</span>
+      {% if it.photo_b64 %}
+        <img class="item-photo" src="{{ it.photo_b64 }}" alt="" />
+      {% else %}
+        <div class="item-no-photo"></div>
+      {% endif %}
+      <span class="item-name">{{ it.name }}</span>
+      <span class="item-qty">×{{ it.quantity }}</span>
+    </div>
     {% endfor %}
-    {% endfor %}
-    <tr class="subtotal-row">
-      <td></td>
-      <td>ИТОГО / 合计 — {{ grp.boxes | length }} шт.</td>
-      <td class="num-col">{{ grp.sum_weight | fmt_decimal }} кг</td>
-      <td class="num-col">{{ grp.sum_volume | fmt_decimal }} м³</td>
-      <td class="num-col">{{ grp.density | fmt_decimal }}</td>
-      <td colspan="2"></td>
-    </tr>
-  </tbody>
-</table>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<div class="client-subtotal">
+  <div>Коробок / 箱数: <strong>{{ grp.boxes | length }}</strong></div>
+  <div>Вес / 重量: <strong>{{ grp.sum_weight | fmt_decimal }} кг</strong></div>
+  <div>Объём / 体积: <strong>{{ grp.sum_volume | fmt_decimal }} м³</strong></div>
+  <div>Плотн.: <strong>{{ grp.density | fmt_decimal }}</strong></div>
+</div>
 {% endfor %}
 
 <div class="grand-total">
   <div class="gt-header">ОБЩИЙ ИТОГ / 总计</div>
-  <table>
-    <tr><td>Всего мест / 总件数</td><td>{{ grand_count }}</td></tr>
-    <tr><td>Общий вес / 总重量</td><td>{{ grand_weight | fmt_decimal }} кг</td></tr>
-    <tr><td>Общий объём / 总体积</td><td>{{ grand_volume | fmt_decimal }} м³</td></tr>
-    <tr><td>Общая плотность / 总密度</td><td>{{ grand_density | fmt_decimal }}</td></tr>
-  </table>
+  <div class="gt-body">
+    <div class="gt-item"><span class="gt-label">Коробок / 件数</span><span class="gt-value">{{ grand_count }}</span></div>
+    <div class="gt-item"><span class="gt-label">Вес / 重量</span><span class="gt-value">{{ grand_weight | fmt_decimal }} кг</span></div>
+    <div class="gt-item"><span class="gt-label">Объём / 体积</span><span class="gt-value">{{ grand_volume | fmt_decimal }} м³</span></div>
+    <div class="gt-item"><span class="gt-label">Плотность / 密度</span><span class="gt-value">{{ grand_density | fmt_decimal }}</span></div>
+  </div>
 </div>
 
-<div class="footer">IRS ERP · Пакинг-лист / 装箱单 · {{ generated_at }}</div>
-
+<div class="footer">IRS ERP · Упаковочный лист / 装箱单 · {{ generated_at }}</div>
 </body>
 </html>

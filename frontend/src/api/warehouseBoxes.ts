@@ -110,6 +110,13 @@ export const generatePackingListPreview = (boxIds: string[]) =>
     { responseType: "blob" }
   );
 
+export const generateQrBulkPdf = (boxIds: string[]) =>
+  apiClient.post(
+    "/api/warehouse-boxes/qr-bulk",
+    { box_ids: boxIds },
+    { responseType: "blob" }
+  );
+
 export const shipBoxes = (boxCodes: string[]) =>
   apiClient.post(
     "/api/warehouse-boxes/ship",

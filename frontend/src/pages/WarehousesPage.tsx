@@ -17,7 +17,7 @@ import {
 } from "../api/warehouses";
 import {
   getBalance, createBox, updateBox, deleteBox, uploadBoxPhoto, uploadBoxItemPhoto,
-  getQrLabelUrl, generatePackingListPreview, shipBoxes,
+  getQrLabelUrl, generatePackingListPreview, generateQrBulkPdf, shipBoxes,
   getShipped, getPackingLists, checkBoxCode,
   type ClientGroup, type WarehouseBox, type BoxCreate, type BoxItemIn,
   type BoxItemData, type PackingListRecord,
@@ -222,6 +222,25 @@ function QrScanModal({
 
 interface ItemRow { name: string; qty: number; file: File | null; preview: string | null; }
 
+// Сжатие изображения на фронте перед загрузкой
+async function compressImage(file: File, maxPx = 800, quality = 0.72): Promise<Blob> {
+  return new Promise(resolve => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(b => resolve(b || file), "image/jpeg", quality);
+    };
+    img.onerror = () => resolve(file);
+    img.src = url;
+  });
+}
+
 function ReceiptModal({
   open, warehouses, onSuccess, onClose, defaultClientId,
 }: {
@@ -234,6 +253,13 @@ function ReceiptModal({
   const [form] = Form.useForm();
   const [creating, setCreating] = useState(false);
   const [createdBoxes, setCreatedBoxes] = useState<WarehouseBox[]>([]);
+  // Главное фото коробки
+  const [mainPhotoFile, setMainPhotoFile] = useState<File | null>(null);
+  const [mainPhotoPreview, setMainPhotoPreview] = useState<string | null>(null);
+  // Камера для сканирования трек-номера
+  const [trackingScanOpen, setTrackingScanOpen] = useState(false);
+  const trackingScannerRef = useRef<any>(null);
+  const trackingDivId = "tracking-qr-scanner";
   // Динамический список позиций товаров
   const [items, setItems] = useState<ItemRow[]>([{ name: "", qty: 1, file: null, preview: null }]);
 
@@ -285,14 +311,26 @@ function ReceiptModal({
       const res = await createBox(payload);
       const rawBoxes = Array.isArray(res.data) ? res.data : [res.data];
 
-      // Загружаем фото позиций для первой коробки (остальные одинаковые)
       const firstBox = rawBoxes[0];
+      // Загружаем главное фото коробки (сжимаем перед загрузкой)
+      if (firstBox && mainPhotoFile) {
+        try {
+          const compressed = await compressImage(mainPhotoFile, 800, 0.72);
+          const f = new File([compressed], "box_photo.jpg", { type: "image/jpeg" });
+          await uploadBoxPhoto(firstBox.id, f);
+        } catch {}
+      }
+      // Загружаем фото позиций для первой коробки
       if (firstBox && firstBox.items) {
         for (let idx = 0; idx < validItems.length; idx++) {
           const f = validItems[idx].file;
           const savedItem = firstBox.items[idx];
           if (f && savedItem) {
-            try { await uploadBoxItemPhoto(firstBox.id, savedItem.id, f); } catch {}
+            try {
+              const compressed = await compressImage(f, 800, 0.72);
+              const cf = new File([compressed], "item_photo.jpg", { type: "image/jpeg" });
+              await uploadBoxItemPhoto(firstBox.id, savedItem.id, cf);
+            } catch {}
           }
         }
       }
@@ -310,12 +348,14 @@ function ReceiptModal({
     form.resetFields();
     setItems([{ name: "", qty: 1, file: null, preview: null }]);
     setCreatedBoxes([]);
+    setMainPhotoFile(null); setMainPhotoPreview(null);
     onClose();
   };
 
   const handleAddMore = () => {
     form.setFieldValue("box_count", 1);
     setItems([{ name: "", qty: 1, file: null, preview: null }]);
+    setMainPhotoFile(null); setMainPhotoPreview(null);
     setCreatedBoxes([]);
     // Оставляем клиента и склад
   };
@@ -379,26 +419,81 @@ function ReceiptModal({
             <Input.TextArea rows={1} />
           </Form.Item>
 
-          {/* Задача 5: трек-номер со сканером штрихкода */}
+          {/* Задача 3: трек-номер со сканером штрихкода (камера + физический сканер) */}
+          {trackingScanOpen && (
+            <div style={{ marginBottom: 8 }}>
+              <div id={trackingDivId} style={{ width: "100%", borderRadius: 8, overflow: "hidden", background: "#000", minHeight: 200 }} />
+              <Button size="small" danger style={{ marginTop: 4 }} onClick={async () => {
+                if (trackingScannerRef.current) {
+                  await trackingScannerRef.current.stop().catch(() => {});
+                  trackingScannerRef.current = null;
+                }
+                setTrackingScanOpen(false);
+              }}>{t("common.close")}</Button>
+            </div>
+          )}
           <Form.Item name="tracking_number" label={t("warehouse.tracking_number")}>
             <Input
               placeholder={t("warehouse.tracking_placeholder")}
-              allowClear
-              autoComplete="off"
-              id="tracking-input"
+              allowClear autoComplete="off" id="tracking-input"
               addonAfter={
-                <Button
-                  size="small"
-                  type="text"
-                  icon={<QrcodeOutlined />}
+                <Button size="small" type="text" icon={<QrcodeOutlined />}
                   title={t("warehouse.scan_qr")}
-                  onClick={() => {
-                    // Фокусируем поле — сканер как клавиатура запишет прямо в него
-                    document.getElementById("tracking-input")?.focus();
+                  onClick={async () => {
+                    if (trackingScanOpen) return;
+                    setTrackingScanOpen(true);
+                    setTimeout(async () => {
+                      try {
+                        const { Html5Qrcode } = await import("html5-qrcode");
+                        const scanner = new Html5Qrcode(trackingDivId);
+                        trackingScannerRef.current = scanner;
+                        await scanner.start(
+                          { facingMode: "environment" },
+                          { fps: 15, qrbox: { width: 250, height: 80 } },
+                          (text: string) => {
+                            form.setFieldValue("tracking_number", text.trim());
+                            scanner.stop().catch(() => {});
+                            trackingScannerRef.current = null;
+                            setTrackingScanOpen(false);
+                            message.success("✓ " + text.trim());
+                          },
+                          () => {}
+                        );
+                      } catch {
+                        setTrackingScanOpen(false);
+                        message.error("Камера недоступна");
+                      }
+                    }, 100);
                   }}
                 />
               }
             />
+          </Form.Item>
+
+          {/* Задача 2: главное фото коробки */}
+          <Form.Item label={t("warehouse.photo_optional")}>
+            <Space align="start">
+              <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
+                beforeUpload={f => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => setMainPhotoPreview(reader.result as string);
+                  reader.readAsDataURL(f);
+                  setMainPhotoFile(f);
+                  return false;
+                }}>
+                <Button icon={<UploadOutlined />} style={{ background: mainPhotoPreview ? "#f6ffed" : undefined }}>
+                  {mainPhotoPreview ? "✓ " + t("warehouse.photo") : t("warehouse.upload_photo")}
+                </Button>
+              </Upload>
+              {mainPhotoPreview && (
+                <Image src={mainPhotoPreview} width={48} height={48}
+                  style={{ objectFit: "cover", borderRadius: 4, cursor: "pointer" }} />
+              )}
+              {mainPhotoPreview && (
+                <Button size="small" type="text" danger
+                  onClick={() => { setMainPhotoFile(null); setMainPhotoPreview(null); }}>✕</Button>
+              )}
+            </Space>
           </Form.Item>
 
           {/* Позиции товаров — с отступом вправо */}
@@ -649,60 +744,18 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
     }
   };
 
-  // Задача 3: печать всех QR кодов — каждый на отдельном листке (4 на A4)
+  // Задача 1: печать QR на термопринтер этикеток 80×60 — PDF с N страницами
   const handlePrintAllQr = async () => {
     if (!selectedBoxIds.size) { message.warning(t("warehouse.no_boxes_selected")); return; }
-    const boxes = balance.flatMap(g => g.boxes).filter(b => selectedBoxIds.has(b.id));
-    const key = `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] || ""}`;
-    const win = window.open("", "_blank");
-    if (!win) { message.error(t("warehouse.print_label") + " error"); return; }
-
-    // 4 карточки на A4 (2×2), с линиями разреза
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QR</title>
-    <style>
-      @page{size:A4;margin:8mm}
-      *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}
-      body{background:#fff}
-      .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%;height:100vh}
-      .card{
-        border:1px dashed #aaa;
-        display:flex;flex-direction:column;
-        align-items:center;justify-content:center;
-        padding:12px;text-align:center;
-        page-break-inside:avoid;
-      }
-      .card img{width:160px;height:160px;display:block}
-      .code{font-size:13px;font-weight:700;margin-top:8px;letter-spacing:1px}
-      .name{font-size:10px;color:#555;margin-top:4px;max-width:170px;word-break:break-word}
-      .client{font-size:9px;color:#888;margin-top:2px}
-      @media print{
-        .grid{height:auto}
-        .card{height:148mm} /* A6 */
-      }
-    </style></head><body><div class="grid">`);
-
-    for (const box of boxes) {
-      try {
-        const res = await apiClient.get(`/api/warehouse-boxes/${box.id}/qr-png`, { responseType: "blob" });
-        const reader = new FileReader();
-        await new Promise<void>(resolve => {
-          reader.onloadend = () => {
-            win.document.write(
-              `<div class="card">` +
-              `<img src="${reader.result}" alt="QR"/>` +
-              `<div class="code">${box.box_code}</div>` +
-              `<div class="name">${box.item_name}</div>` +
-              `<div class="client">${box.counterparty_code || box.counterparty_name || ""}</div>` +
-              `</div>`
-            );
-            resolve();
-          };
-          reader.readAsDataURL(res.data as Blob);
-        });
-      } catch { /* пропускаем */ }
+    try {
+      const res = await generateQrBulkPdf([...selectedBoxIds]);
+      // Открываем PDF в новой вкладке — браузер или Acrobat напечатает через диалог
+      const url = URL.createObjectURL(res.data as Blob);
+      const win = window.open(url, "_blank");
+      if (!win) downloadBlob(res.data as Blob, "labels.pdf");
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "Ошибка генерации PDF этикеток");
     }
-    win.document.write(`</div><script>setTimeout(()=>window.print(),300)</script></body></html>`);
-    win.document.close();
   };
 
   const handleShip = async (codes: string[]) => {

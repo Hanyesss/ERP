@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: 80mm 60mm; margin: 1.5mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "DejaVu Sans", Arial, sans-serif; }
+  body { font-size: 7.5pt; color: #000; background: #fff; }
+
+  .label {
+    display: flex; flex-direction: row; align-items: stretch;
+    width: 77mm; height: 57mm; overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .qr-col {
+    flex: 0 0 44mm; display: flex;
+    align-items: center; justify-content: center; padding-right: 2mm;
+  }
+  .qr-col img { width: 44mm; height: 44mm; display: block; }
+  .divider { width: 0.3pt; background: #ccc; margin: 1mm 0; flex-shrink: 0; }
+  .info-col {
+    flex: 1; padding-left: 2mm;
+    display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+  }
+  .box-code {
+    font-size: 7.5pt; font-weight: bold; letter-spacing: 0.3px;
+    border-bottom: 0.5pt solid #000; padding-bottom: 1mm; margin-bottom: 1mm;
+    word-break: break-all; line-height: 1.2;
+  }
+  .field { margin-bottom: 0.8mm; line-height: 1.2; }
+  .field .lbl { font-size: 6pt; color: #888; display: block; }
+  .field .val { font-size: 7.5pt; font-weight: bold; }
+  .item-name {
+    font-size: 7pt; color: #333; margin-top: 1mm; padding-top: 1mm;
+    border-top: 0.3pt dashed #bbb; word-break: break-word; line-height: 1.2; overflow: hidden;
+  }
+
+  /* Разделитель страниц */
+  .page-break { page-break-after: always; }
+</style>
+</head>
+<body>
+{% for lbl in labels %}
+<div class="label{{ " page-break" if not loop.last else "" }}">
+  <div class="qr-col"><img src="{{ lbl.qr_image }}" alt="QR" /></div>
+  <div class="divider"></div>
+  <div class="info-col">
+    <div class="box-code">{{ lbl.box_code }}</div>
+    <div class="field">
+      <span class="lbl">Клиент / 客户</span>
+      <span class="val">{{ lbl.client_code }}</span>
+    </div>
+    <div class="field">
+      <span class="lbl">Вес / 重量</span>
+      <span class="val">{{ lbl.weight }} кг</span>
+    </div>
+    <div class="field">
+      <span class="lbl">Объём / 体积</span>
+      <span class="val">{{ lbl.volume }} м³</span>
+    </div>
+    <div class="field">
+      <span class="lbl">Плотн. / 密度</span>
+      <span class="val">{{ lbl.density }}</span>
+    </div>
+    <div class="item-name">{{ lbl.item_name }}</div>
+  </div>
+</div>
+{% endfor %}
+</body>
+</html>
