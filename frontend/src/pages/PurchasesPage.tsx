@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Table, Button, Input, Select, Tag, Row, Col, Typography, Space } from "antd";
+import TopScrollTable from "../components/common/TopScrollTable";
 import { PlusOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -61,11 +62,15 @@ export default function PurchasesPage() {
       title: t("purchase.supplier"),
       dataIndex: "supplier_name",
       key: "supplier",
+      width: 180,
+      ellipsis: { showTitle: true },
     },
     {
       title: t("order.title"),
       dataIndex: "order_number",
       key: "order_number",
+      width: 160,
+      ellipsis: { showTitle: true },
       render: (num: string | undefined, row) => num
         ? <Button type="link" size="small" onClick={() => navigate(`/orders/${row.order_id}`)}>{num}</Button>
         : "—",
@@ -162,8 +167,7 @@ export default function PurchasesPage() {
         </Col>
       </Row>
 
-      <Table scroll={{ x: "max-content" }}
-        className="sticky-scroll-top"
+      <TopScrollTable scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={data?.items ?? []}
         rowKey="id"

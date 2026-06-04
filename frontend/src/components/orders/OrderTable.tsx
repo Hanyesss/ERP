@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Table, Button, Space, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip, Modal } from "antd";
+import { Button, Space, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip, Modal } from "antd";
+import TopScrollTable from "../common/TopScrollTable";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { EyeOutlined, EditOutlined, DeleteOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -78,8 +79,8 @@ export default function OrderTable() {
         </Button>
       ),
     },
-    { title: t("order.date"), dataIndex: "order_date", key: "order_date", width: 110 },
-    { title: t("order.client"), dataIndex: "client_name", key: "client_name" },
+    { title: t("order.date"), dataIndex: "order_date", key: "order_date", width: 100 },
+    { title: t("order.client"), dataIndex: "client_name", key: "client_name", width: 160, ellipsis: { showTitle: true } },
     {
       title: t("order.business_type"),
       key: "bt",
@@ -259,10 +260,9 @@ export default function OrderTable() {
         </Col>
       </Row>
 
-      <Table
+      <TopScrollTable
         columns={columns} dataSource={data?.items ?? []} rowKey="id" loading={isLoading} size="small"
         scroll={{ x: "max-content" }}
-        className="sticky-scroll-top"
         pagination={{ current: page, total: data?.total ?? 0, pageSize: 20, onChange: setPage, showTotal: t => `${t}`, size: isMobile ? "small" : "default" }}
         footer={() => (
           <Row justify="end" gutter={24}>

@@ -33,7 +33,7 @@ export default function ClientDetailDrawer({ clientId, clientName, dateFrom, dat
   };
 
   const payStatusLabel = (s: string) => {
-    const map: Record<string, string> = { paid: t("payment.status_paid"), partial: t("payment.status_partial"), unpaid: t("payment.status_unpaid") };
+    const map: Record<string, string> = { paid: t("order.payment_status_paid"), partial: t("order.payment_status_partial"), unpaid: t("order.payment_status_unpaid") };
     return map[s] ?? s;
   };
 

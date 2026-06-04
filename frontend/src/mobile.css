@@ -3,21 +3,22 @@
 /* Prevent text zoom on iOS after input focus */
 input, select, textarea { font-size: 16px !important; }
 
-/* ── Scrollbar at top for wide tables (CSS flip trick) ───────────────────── */
-/* Переворачиваем контейнер — скроллбар переходит наверх, затем контент
-   возвращаем в нормальное положение. Работает во всех современных браузерах. */
-.sticky-scroll-top .ant-table-content {
-  transform: rotateX(180deg);
-  overflow-x: auto !important;
+/* ── Top scrollbar sync (used by TopScrollTable component) ─────────────── */
+.top-scroll-bar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
 }
-.sticky-scroll-top .ant-table-content table {
-  transform: rotateX(180deg);
-}
-/* Чуть толще и заметнее */
-.sticky-scroll-top .ant-table-content::-webkit-scrollbar { height: 8px; }
-.sticky-scroll-top .ant-table-content::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 4px; }
-.sticky-scroll-top .ant-table-content::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
-.sticky-scroll-top .ant-table-content::-webkit-scrollbar-thumb:hover { background: #888; }
+.top-scroll-bar::-webkit-scrollbar { height: 8px; }
+.top-scroll-bar::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 4px; }
+.top-scroll-bar::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
+.top-scroll-bar::-webkit-scrollbar-thumb:hover { background: #888; }
+.top-scroll-bar-inner { height: 1px; }
 
 /* Tighter content on mobile */
 @media (max-width: 767px) {
