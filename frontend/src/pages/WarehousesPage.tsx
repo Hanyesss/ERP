@@ -649,33 +649,59 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
     }
   };
 
-  // Задача 3: печать всех QR кодов выбранных коробок разом
+  // Задача 3: печать всех QR кодов — каждый на отдельном листке (4 на A4)
   const handlePrintAllQr = async () => {
     if (!selectedBoxIds.size) { message.warning(t("warehouse.no_boxes_selected")); return; }
     const boxes = balance.flatMap(g => g.boxes).filter(b => selectedBoxIds.has(b.id));
+    const key = `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] || ""}`;
     const win = window.open("", "_blank");
-    if (!win) { message.error("Не удалось открыть окно печати"); return; }
-    win.document.write(`<html><head><title>QR коды</title>
-      <style>
-        body{margin:0;padding:8px;background:#fff}
-        .grid{display:flex;flex-wrap:wrap;gap:8px}
-        .card{border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;width:150px;break-inside:avoid}
-        .code{font-size:11px;font-weight:700;margin-top:4px}
-        .name{font-size:9px;color:#666;margin-top:2px}
-        img{width:130px;height:130px}
-        @media print{body{padding:0}}
-      </style></head><body><div class="grid">`);
+    if (!win) { message.error(t("warehouse.print_label") + " error"); return; }
+
+    // 4 карточки на A4 (2×2), с линиями разреза
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QR</title>
+    <style>
+      @page{size:A4;margin:8mm}
+      *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}
+      body{background:#fff}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%;height:100vh}
+      .card{
+        border:1px dashed #aaa;
+        display:flex;flex-direction:column;
+        align-items:center;justify-content:center;
+        padding:12px;text-align:center;
+        page-break-inside:avoid;
+      }
+      .card img{width:160px;height:160px;display:block}
+      .code{font-size:13px;font-weight:700;margin-top:8px;letter-spacing:1px}
+      .name{font-size:10px;color:#555;margin-top:4px;max-width:170px;word-break:break-word}
+      .client{font-size:9px;color:#888;margin-top:2px}
+      @media print{
+        .grid{height:auto}
+        .card{height:148mm} /* A6 */
+      }
+    </style></head><body><div class="grid">`);
+
     for (const box of boxes) {
       try {
         const res = await apiClient.get(`/api/warehouse-boxes/${box.id}/qr-png`, { responseType: "blob" });
-        const url = URL.createObjectURL(res.data as Blob);
-        win.document.write(
-          `<div class="card"><img src="${url}"/><div class="code">${box.box_code}</div>` +
-          `<div class="name">${box.item_name}</div></div>`
-        );
-      } catch { /* пропускаем если ошибка */ }
+        const reader = new FileReader();
+        await new Promise<void>(resolve => {
+          reader.onloadend = () => {
+            win.document.write(
+              `<div class="card">` +
+              `<img src="${reader.result}" alt="QR"/>` +
+              `<div class="code">${box.box_code}</div>` +
+              `<div class="name">${box.item_name}</div>` +
+              `<div class="client">${box.counterparty_code || box.counterparty_name || ""}</div>` +
+              `</div>`
+            );
+            resolve();
+          };
+          reader.readAsDataURL(res.data as Blob);
+        });
+      } catch { /* пропускаем */ }
     }
-    win.document.write(`</div><script>window.onload=()=>window.print()</script></body></html>`);
+    win.document.write(`</div><script>setTimeout(()=>window.print(),300)</script></body></html>`);
     win.document.close();
   };
 

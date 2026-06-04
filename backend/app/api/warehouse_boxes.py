@@ -190,7 +190,10 @@ async def _generate_packing_list_pdf(boxes_data: list[dict]) -> bytes:
         sum_v = sum(Decimal(str(b["volume"])) for b in g["boxes"])
         density = _calc_density(sum_w, sum_v)
         for b in g["boxes"]:
-            b["photo_b64"] = _photo_to_base64(b.get("photo_path"))
+            b["photo_b64"] = _photo_to_base64(b.get("photo_path"), max_px=300)
+            # Конвертируем фото каждой позиции
+            for it in b.get("box_items", []):
+                it["photo_b64"] = _photo_to_base64(it.get("photo_path"), max_px=150)
         client_groups.append({
             "counterparty_code": g["counterparty_code"],
             "counterparty_name": g["counterparty_name"],
@@ -433,7 +436,10 @@ async def generate_packing_list_preview(
             "density": float(box.density),
             "description": box.description or "",
             "photo_path": box.photo_path,
-            "box_items": [{"name": it.name, "quantity": it.quantity} for it in box_item_list],
+            "box_items": [
+                {"name": it.name, "quantity": it.quantity, "photo_path": it.photo_path}
+                for it in box_item_list
+            ],
         })
 
     pdf_bytes = await _generate_packing_list_pdf(boxes_data)
@@ -505,7 +511,10 @@ async def ship_boxes(
             "density": float(box.density),
             "description": box.description or "",
             "photo_path": box.photo_path,
-            "box_items": [{"name": it.name, "quantity": it.quantity} for it in ship_items],
+            "box_items": [
+                {"name": it.name, "quantity": it.quantity, "photo_path": it.photo_path}
+                for it in ship_items
+            ],
         })
 
     # Generate and save the final packing list PDF
