@@ -74,16 +74,18 @@ function QrScanModal({
     const c = code.trim().toUpperCase();
     if (!c) return;
 
-    // Останавливаем камеру после успешного скана
-    if (scannerRef.current) {
-      scannerRef.current.stop().catch(() => {});
-      scannerRef.current = null;
-    }
-    setStreaming(false);
-
-    // Добавляем код сразу — бэкенд проверит при отгрузке
     setScanned((prev) => {
-      if (prev.includes(c)) return prev; // молча пропускаем дубль
+      if (prev.includes(c)) {
+        // Дубль — показываем сообщение, но камеру не останавливаем
+        message.warning({ content: `${c}: ${t("warehouse.scan_already_added")}`, duration: 3 });
+        return prev;
+      }
+      // Новый код — останавливаем камеру и добавляем
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
+      setStreaming(false);
       return [...prev, c];
     });
   }, [t]);
@@ -791,7 +793,9 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
   const handleShip = async (codes: string[]) => {
     try {
       const res = await shipBoxes(codes);
-      const shippedCount = res.headers?.["x-shipped-count"] || codes.length;
+      // X-Shipped-Count из header (если доступен через CORS), иначе количество кодов
+      const headerCount = res.headers?.["x-shipped-count"];
+      const shippedCount = headerCount != null ? Number(headerCount) : codes.length;
       downloadBlob(res.data as Blob, `packing_list_${new Date().toISOString().slice(0, 10)}.pdf`);
       message.success(
         t("warehouse.ship_success", { count: shippedCount })
