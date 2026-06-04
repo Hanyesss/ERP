@@ -419,10 +419,6 @@ function ReceiptModal({
             <Input.TextArea rows={1} />
           </Form.Item>
 
-          {/* Трек-номер коробки (общий) — простое поле без камеры */}
-          <Form.Item name="tracking_number" label={t("warehouse.tracking_number")}>
-            <Input placeholder={t("warehouse.tracking_placeholder")} allowClear autoComplete="off" />
-          </Form.Item>
 
           {/* Задача 2: главное фото коробки */}
           <Form.Item label={t("warehouse.photo_optional")}>
