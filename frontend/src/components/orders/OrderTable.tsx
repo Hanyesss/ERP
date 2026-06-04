@@ -143,9 +143,9 @@ export default function OrderTable() {
       render: (_, row) => <PaymentStatusTag status={row.payment_status} />,
     },
     {
-      title: t("order.sync.title"),
+      title: "",
       key: "sync_status",
-      width: 80,
+      width: 28,
       render: (_, row) => {
         if (row.business_type_code !== "logistics") return null;
         if (!row.sync_status) return <Tooltip title={t("order.sync.not_synced")}><MinusCircleOutlined style={{ color: "#d9d9d9" }} /></Tooltip>;
