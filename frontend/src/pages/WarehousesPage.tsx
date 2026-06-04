@@ -802,8 +802,19 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
       setSelectedBoxIds(new Set());
       qc.invalidateQueries({ queryKey: ["warehouse-balance"] });
     } catch (e: any) {
-      const detail = e.response?.data?.detail;
-      message.error({ content: typeof detail === "string" ? detail : t("warehouse.ship_success", { count: 0 }) || "Ошибка отгрузки", duration: 6 });
+      // responseType:"blob" — тело ошибки тоже Blob, читаем как текст
+      let errText = "Ошибка отгрузки";
+      try {
+        const blob: Blob = e.response?.data;
+        if (blob instanceof Blob) {
+          const text = await blob.text();
+          const json = JSON.parse(text);
+          errText = json.detail || errText;
+        } else if (typeof e.response?.data?.detail === "string") {
+          errText = e.response.data.detail;
+        }
+      } catch {}
+      message.error({ content: errText, duration: 6 });
       throw e;
     }
   };
