@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Table, Button, Input, Select, Tag, Row, Col, Typography, Space } from "antd";
+import { Table, Button, Input, Select, Tag, Row, Col, Typography, Space, Tooltip } from "antd";
 import TopScrollTable from "../components/common/TopScrollTable";
 import { PlusOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
@@ -47,10 +47,15 @@ export default function PurchasesPage() {
       key: "number",
       fixed: "left" as const,
       width: 160,
+      ellipsis: true,
       render: (num, row) => (
-        <Button type="link" size="small" onClick={() => navigate(`/purchases/${row.id}`)}>
-          {num}
-        </Button>
+        <Tooltip title={num} placement="topLeft">
+          <Button type="link" size="small"
+            style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}
+            onClick={() => navigate(`/purchases/${row.id}`)}>
+            {num}
+          </Button>
+        </Tooltip>
       ),
     },
     {

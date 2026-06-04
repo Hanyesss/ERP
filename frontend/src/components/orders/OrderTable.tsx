@@ -73,10 +73,14 @@ export default function OrderTable() {
       key: "order_number",
       width: 160,
       fixed: "left" as const,
+      ellipsis: true,
       render: (num, row) => (
-        <Button type="link" style={{ padding: 0 }} onClick={() => navigate(`/orders/${row.id}`)}>
-          {num}
-        </Button>
+        <Tooltip title={num} placement="topLeft">
+          <Button type="link" style={{ padding: 0, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}
+            onClick={() => navigate(`/orders/${row.id}`)}>
+            {num}
+          </Button>
+        </Tooltip>
       ),
     },
     { title: t("order.date"), dataIndex: "order_date", key: "order_date", width: 100 },
