@@ -826,9 +826,7 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
       render: (_, b) =>
         b.photo_url ? (
           <Image
-            src={
-              (import.meta.env.VITE_API_URL ?? "http://localhost:8000") + b.photo_url
-            }
+            src={b.photo_url}
             width={36}
             height={36}
             style={{ objectFit: "cover", borderRadius: 4 }}
