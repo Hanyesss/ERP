@@ -606,7 +606,9 @@
     "created_boxes_count": "Создано {{count}} коробок",
     "more_boxes": "+ ещё {{count}}",
     "add_one_more_box": "Ещё коробку",
-    "print_all_qr_count": "Печать QR ({{count}})"
+    "print_all_qr_count": "Печать QR ({{count}})",
+    "received_by": "Принял",
+    "shipped_by": "Отгрузил"
   },
   "report": {
     "title": "Отчёты",

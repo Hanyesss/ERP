@@ -17,7 +17,7 @@ from app.database import get_db
 from app.core.deps import get_current_user, require_roles
 from app.models.user import User
 from app.models.warehouse_box import WarehouseBox, BoxItem, PackingList, BoxStatus
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased
 from app.models.counterparty import Counterparty
 from app.models.warehouse import Warehouse
 
@@ -246,7 +246,8 @@ async def _next_box_code(db: AsyncSession, client_code: str) -> str:
     return f"{prefix}{num:05d}"
 
 
-def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None) -> dict:
+def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None, wh: Optional[Warehouse] = None,
+                 received_by_name: Optional[str] = None, shipped_by_name: Optional[str] = None) -> dict:
     # Позиции коробки (если загружены через selectinload)
     items_data = []
     if hasattr(box, "items") and box.items is not None:
@@ -266,6 +267,9 @@ def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None) -> dict:
         "counterparty_code": cp.code if cp else None,
         "counterparty_name": cp.name if cp else None,
         "warehouse_id": str(box.warehouse_id),
+        "warehouse_name": wh.name if wh else None,
+        "received_by_name": received_by_name,
+        "shipped_by_name": shipped_by_name,
         "weight": float(box.weight),
         "volume": float(box.volume),
         "density": float(box.density),
@@ -305,9 +309,14 @@ async def get_balance(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_BOX_ROLES)),
 ):
+    from app.models.user import User as UserModel
+    ReceivedUser = aliased(UserModel)
+
     stmt = (
-        select(WarehouseBox, Counterparty)
+        select(WarehouseBox, Counterparty, Warehouse, ReceivedUser)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .join(Warehouse, WarehouseBox.warehouse_id == Warehouse.id)
+        .outerjoin(ReceivedUser, WarehouseBox.received_by == ReceivedUser.id)
         .where(WarehouseBox.status == BoxStatus.on_warehouse)
         .options(selectinload(WarehouseBox.items))
     )
@@ -319,10 +328,9 @@ async def get_balance(
 
     rows = (await db.execute(stmt)).all()
 
-    # Group by counterparty preserving order
     from collections import OrderedDict
     groups: dict[str, dict] = OrderedDict()
-    for box, cp in rows:
+    for box, cp, wh, ru in rows:
         cid = str(cp.id)
         if cid not in groups:
             groups[cid] = {
@@ -331,7 +339,7 @@ async def get_balance(
                 "counterparty_name": cp.name,
                 "boxes": [],
             }
-        groups[cid]["boxes"].append(_box_to_dict(box, cp))
+        groups[cid]["boxes"].append(_box_to_dict(box, cp, wh, received_by_name=ru.full_name if ru else None))
 
     result = []
     for cid, g in groups.items():
@@ -355,16 +363,28 @@ async def get_shipped(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_BOX_ROLES)),
 ):
+    from app.models.user import User as UserModel
+    ReceivedUser = aliased(UserModel)
+    ShippedUser = aliased(UserModel)
+
     stmt = (
-        select(WarehouseBox, Counterparty)
+        select(WarehouseBox, Counterparty, Warehouse, ReceivedUser, ShippedUser)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
+        .join(Warehouse, WarehouseBox.warehouse_id == Warehouse.id)
+        .outerjoin(ReceivedUser, WarehouseBox.received_by == ReceivedUser.id)
+        .outerjoin(ShippedUser, WarehouseBox.shipped_by == ShippedUser.id)
         .where(WarehouseBox.status == BoxStatus.shipped)
     )
     if warehouse_id:
         stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
     stmt = stmt.order_by(WarehouseBox.shipped_at.desc())
     rows = (await db.execute(stmt)).all()
-    return [_box_to_dict(box, cp) for box, cp in rows]
+    return [
+        _box_to_dict(box, cp, wh,
+                     received_by_name=ru.full_name if ru else None,
+                     shipped_by_name=su.full_name if su else None)
+        for box, cp, wh, ru, su in rows
+    ]
 
 
 @router.get("/packing-lists")
@@ -496,6 +516,7 @@ async def ship_boxes(
         box.status = BoxStatus.shipped
         box.shipped_at = now
         box.updated_at = now
+        box.shipped_by = current_user.id
         shipped_ids.append(str(box.id))
         total_weight += box.weight
         total_volume += box.volume
@@ -555,7 +576,7 @@ async def ship_boxes(
 async def create_box(
     body: BoxCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_roles(*_BOX_ROLES)),
+    current_user: User = Depends(require_roles(*_BOX_ROLES)),
 ):
     cp = (await db.execute(
         select(Counterparty).where(Counterparty.id == body.counterparty_id)
@@ -588,6 +609,7 @@ async def create_box(
             description=body.description,
             tracking_number=body.tracking_number,
             status=BoxStatus.on_warehouse,
+            received_by=current_user.id,
         )
         db.add(box)
         await db.flush()

@@ -633,7 +633,9 @@
     "created_boxes_count": "已创建 {{count}} 个货箱",
     "more_boxes": "+ 还有 {{count}} 个",
     "add_one_more_box": "再加一箱",
-    "print_all_qr_count": "打印二维码 ({{count}})"
+    "print_all_qr_count": "打印二维码 ({{count}})",
+    "received_by": "收货人",
+    "shipped_by": "发货人"
   },
   "report": {
     "title": "报表",

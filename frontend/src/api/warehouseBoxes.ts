@@ -16,6 +16,7 @@ export interface WarehouseBox {
   counterparty_code: string | null;
   counterparty_name: string | null;
   warehouse_id: string;
+  warehouse_name: string | null;
   weight: number;
   volume: number;
   density: number;

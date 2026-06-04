@@ -731,6 +731,20 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
   const selVolume = selectedBoxes.reduce((s, b) => s + b.volume, 0);
   const selDensity = selVolume > 0 ? selWeight / selVolume : 0;
 
+  // Генерирует имя файла: PL{дата}{код_клиента}-{порядковый}
+  const packingListFileName = () => {
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const codes = [...new Set(
+      balance.flatMap(g => g.boxes)
+        .filter(b => selectedBoxIds.has(b.id))
+        .map(b => b.counterparty_code || "")
+        .filter(Boolean)
+    )].join("_");
+    // Порядковый номер — количество существующих листов + 1 (упрощённо)
+    const seq = String(Date.now()).slice(-4);
+    return `PL${date}${codes ? "_" + codes : ""}-${seq}.pdf`;
+  };
+
   const handlePackingList = async () => {
     if (!selectedBoxIds.size) {
       message.warning(t("warehouse.no_boxes_selected"));
@@ -738,7 +752,7 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
     }
     try {
       const res = await generatePackingListPreview([...selectedBoxIds]);
-      downloadBlob(res.data as Blob, "packing_list_preview.pdf");
+      downloadBlob(res.data as Blob, packingListFileName());
     } catch (e: any) {
       message.error("Ошибка генерации PDF");
     }
@@ -860,6 +874,20 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
           </div>
         );
       },
+    },
+    {
+      title: t("warehouse.shipping_warehouse"),
+      dataIndex: "warehouse_name",
+      key: "warehouse",
+      width: 110,
+      render: (v: string | null) => v ? <Tag color="blue" style={{ fontSize: 11 }}>{v}</Tag> : "—",
+    },
+    {
+      title: t("warehouse.received_by"),
+      dataIndex: "received_by_name",
+      key: "received_by",
+      width: 100,
+      render: (v: string | null) => v ? <Text style={{ fontSize: 11 }}>{v}</Text> : "—",
     },
     {
       title: t("warehouse.weight"),
@@ -1309,12 +1337,20 @@ function HistoryTab() {
       ),
     },
     { title: t("warehouse.item_name"), dataIndex: "item_name", key: "item_name" },
+    { title: t("warehouse.shipping_warehouse"), dataIndex: "warehouse_name", key: "warehouse", width: 110,
+      render: (v: string | null) => v ? <Tag color="blue" style={{ fontSize: 11 }}>{v}</Tag> : "—" },
     { title: t("warehouse.weight"), dataIndex: "weight", key: "weight", align: "right", width: 90,
       render: (v) => `${fmtNum(v)} кг` },
     { title: t("warehouse.volume"), dataIndex: "volume", key: "volume", align: "right", width: 90,
       render: (v) => `${fmtNum(v, 4)} м³` },
-    { title: t("warehouse.shipped_at"), dataIndex: "shipped_at", key: "shipped_at", width: 160,
-      render: (v) => v ? new Date(v).toLocaleString("ru-RU") : "—" },
+    { title: t("warehouse.received_at"), dataIndex: "received_at", key: "received_at", width: 130,
+      render: (v: string | null) => v ? new Date(v).toLocaleDateString("ru-RU") : "—" },
+    { title: t("warehouse.shipped_at"), dataIndex: "shipped_at", key: "shipped_at", width: 130,
+      render: (v: string | null) => v ? new Date(v).toLocaleDateString("ru-RU") : "—" },
+    { title: t("warehouse.received_by"), dataIndex: "received_by_name", key: "received_by", width: 110,
+      render: (v: string | null) => v ? <Text style={{ fontSize: 11 }}>{v}</Text> : "—" },
+    { title: t("warehouse.shipped_by"), dataIndex: "shipped_by_name", key: "shipped_by", width: 110,
+      render: (v: string | null) => v ? <Text style={{ fontSize: 11 }}>{v}</Text> : "—" },
   ];
 
   const plColumns: ColumnsType<PackingListRecord> = [
