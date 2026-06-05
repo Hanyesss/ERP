@@ -6,4 +6,15 @@ const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+apiClient.interceptors.response.use(
+  r => r,
+  error => {
+    const url: string = error.config?.url ?? "";
+    if (error.response?.status === 401 && !url.includes("/api/auth/")) {
+      window.location.replace("/login");
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default apiClient;

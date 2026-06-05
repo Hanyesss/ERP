@@ -129,7 +129,7 @@ export default function CounterpartyTable({ forcedType }: Props) {
       key: "actions",
       width: 130,
       render: (_: unknown, row: Counterparty) => {
-        const isClient = row.type === "client" || row.type === "both";
+        const canSync = row.code && (row.type === "client" || row.type === "both" || row.type === "partner");
         return (
           <Space>
             <Button
@@ -137,7 +137,7 @@ export default function CounterpartyTable({ forcedType }: Props) {
               size="small"
               onClick={() => openEdit(row)}
             />
-            {isClient && row.code && (
+            {canSync && (
               <Tooltip title={t("counterparty.link_site_account")}>
                 <Popconfirm
                   title={t("counterparty.link_site_confirm")}
