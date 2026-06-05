@@ -251,7 +251,7 @@ export default function AssetsPage() {
         summary={() => (
           <Table.Summary.Row>
             <Table.Summary.Cell index={0} colSpan={4}>
-              <Text strong>ИТОГО</Text>
+              <Text strong>{t("common.total")}</Text>
             </Table.Summary.Cell>
             <Table.Summary.Cell index={1} align="right">
               <Text strong style={{ color: "#1677ff" }}>{fmt(grandTotal)}</Text>
