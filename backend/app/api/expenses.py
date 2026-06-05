@@ -481,12 +481,35 @@ async def update_expense(
     if expense.reimburse_status == ReimburseStatusEnum.paid and not current_user.has_role("admin"):
         raise HTTPException(422, "Cannot edit a paid reimbursement")
 
+    old_cash_register_id = expense.cash_register_id
+    old_cash_amount = expense.cash_amount_in_register
+
     data = body.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(expense, field, value)
 
     if "amount" in data or "rate_to_cny" in data:
         expense.amount_cny = (expense.amount * expense.rate_to_cny).quantize(Decimal("0.01"))
+
+    # Если добавили кассу впервые (не возмещение, не было кассы раньше) — создаём транзакцию
+    new_cash_register_id = expense.cash_register_id
+    if (
+        new_cash_register_id
+        and not expense.is_reimbursement
+        and not old_cash_register_id
+        and not old_cash_amount
+    ):
+        reg = (await db.execute(
+            select(CashRegister).where(CashRegister.id == new_cash_register_id)
+        )).scalar_one_or_none()
+        reg_currency = reg.currency if reg else "CNY"
+        cash_amount = expense.amount if reg_currency == expense.currency else expense.amount_cny
+        expense.cash_amount_in_register = cash_amount
+        await _record_cash_outflow(
+            db, new_cash_register_id, cash_amount,
+            (expense.description or "")[:80],
+            current_user.id,
+        )
 
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"updated": list(data.keys())})
@@ -529,11 +552,15 @@ async def delete_expense(
                       {"reason": body.reason, "amount_cny": str(expense.amount_cny),
                        "currency": expense.currency, "description": expense.description})
 
-    # Возврат в кассу если был списан прямой расход (не возмещение)
-    if expense.cash_register_id and not expense.is_reimbursement:
+    # Возврат в кассу если было списание (прямой расход ИЛИ оплаченное возмещение)
+    needs_refund = expense.cash_register_id and (
+        (not expense.is_reimbursement and expense.cash_amount_in_register) or
+        (expense.is_reimbursement and expense.reimburse_status == ReimburseStatusEnum.paid
+         and expense.cash_amount_in_register)
+    )
+    if needs_refund:
         from app.api.cash_registers import _get_balance
-        # Возвращаем ровно столько, сколько было списано с кассы (в валюте кассы)
-        refund_amount = expense.cash_amount_in_register or expense.amount_cny
+        refund_amount = expense.cash_amount_in_register
         cur_bal = await _get_balance(db, expense.cash_register_id)
         comp_tx = CashTransaction(
             id=uuid.uuid4(),
@@ -542,7 +569,7 @@ async def delete_expense(
             amount=refund_amount,
             balance_after=cur_bal + refund_amount,
             operation_type="expense_cancel",
-            notes=expense.description[:80] if expense.description else "",  # пользовательский текст
+            notes=expense.description[:80] if expense.description else "",
             created_by=current_user.id,
         )
         db.add(comp_tx)
@@ -550,7 +577,7 @@ async def delete_expense(
         await write_audit(db, current_user.id, "cash_transaction", comp_tx.id, AuditActionEnum.create, {
             "register_id": str(expense.cash_register_id),
             "direction": "in",
-            "amount": str(expense.amount_cny),
+            "amount": str(refund_amount),
             "reason": "expense_deleted",
             "expense_id": str(expense_id),
         })
@@ -644,9 +671,20 @@ async def mark_reimbursement_paid(
     expense.reimburse_paid_date = body.paid_date
     if body.cash_register_id:
         expense.cash_register_id = body.cash_register_id
+        # Списываем в валюте кассы: если валюта расхода == валюта кассы — берём amount,
+        # иначе берём amount_cny (касса CNY) или требуем конвертацию.
+        reg = (await db.execute(
+            select(CashRegister).where(CashRegister.id == body.cash_register_id)
+        )).scalar_one_or_none()
+        reg_currency = reg.currency if reg else "CNY"
+        if reg_currency == expense.currency:
+            outflow_amount = expense.amount
+        else:
+            outflow_amount = expense.amount_cny  # CNY-касса или fallback
+        expense.cash_amount_in_register = outflow_amount
         await _record_cash_outflow(
-            db, body.cash_register_id, expense.amount_cny,
-            expense.description[:80],   # пользовательский текст
+            db, body.cash_register_id, outflow_amount,
+            expense.description[:80],
             current_user.id,
             reason="reimbursement",
         )
