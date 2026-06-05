@@ -8,9 +8,7 @@ from sqlalchemy.orm import aliased
 
 from app.database import get_db
 from app.core.deps import get_current_user
-from app.core.security import hash_password
-from app.models.user import User, UserRole
-from app.models.user_role import UserRoleEntry
+from app.models.user import User
 from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.audit_log import AuditActionEnum
 from app.schemas.counterparty import (
@@ -119,30 +117,6 @@ async def create_counterparty(
     )
     db.add(cp)
     await db.flush()
-
-    # For partner-type counterparties, optionally create a linked partner user
-    if body.type == CounterpartyType.partner and body.create_user:
-        if not body.login or not body.password:
-            raise HTTPException(422, "login and password are required to create a partner user")
-        if len(body.password) < 6:
-            raise HTTPException(422, "Password must be at least 6 characters")
-        existing = await db.execute(select(User).where(User.login == body.login))
-        if existing.scalar_one_or_none():
-            raise HTTPException(400, "Login already taken")
-        new_user = User(
-            id=uuid.uuid4(),
-            login=body.login,
-            password_hash=hash_password(body.password),
-            full_name=body.name,
-            is_active=True,
-            partner_counterparty_id=cp.id,
-        )
-        db.add(new_user)
-        db.add(UserRoleEntry(id=uuid.uuid4(), user_id=new_user.id, role=UserRole.partner))
-        await db.flush()
-        await write_audit(db, current_user.id, "user", new_user.id, AuditActionEnum.create,
-                          {"login": body.login, "roles": ["partner"],
-                           "partner_counterparty_id": str(cp.id)})
 
     await write_audit(db, current_user.id, "counterparty", cp.id, AuditActionEnum.create,
                       {"new": _to_dict(cp)})

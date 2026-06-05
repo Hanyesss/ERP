@@ -40,8 +40,4 @@ export interface CounterpartyFormData {
   address?: string;
   notes?: string;
   partner_id?: string;
-  // For partner-type counterparties: create a linked partner user
-  create_user?: boolean;
-  login?: string;
-  password?: string;
 }

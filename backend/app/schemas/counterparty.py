@@ -19,10 +19,6 @@ class CounterpartyCreate(BaseModel):
     contact_info: Optional[ContactInfo] = None
     notes: Optional[str] = None
     partner_id: Optional[uuid.UUID] = None
-    # When creating a partner-type counterparty, optionally create a linked partner user
-    create_user: bool = False
-    login: Optional[str] = None
-    password: Optional[str] = None
 
 
 class CounterpartyUpdate(BaseModel):
