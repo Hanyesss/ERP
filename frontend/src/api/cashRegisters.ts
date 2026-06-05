@@ -18,6 +18,7 @@ export interface CashTransaction {
   balance_after: number;
   operation_type?: string;  // системный ключ — переводится через t("cash.op.{key}")
   notes?: string;           // пользовательский текст — показывается как есть
+  reason?: string;          // номер заказа / закупки
   is_active: boolean;
   created_by_name: string;
   created_at: string;

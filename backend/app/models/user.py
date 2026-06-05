@@ -10,6 +10,7 @@ from app.models.base import TimestampMixin
 
 class UserRole(str, PyEnum):
     employee = "employee"
+    seller = "seller"
     manager = "manager"
     purchaser = "purchaser"
     accountant = "accountant"

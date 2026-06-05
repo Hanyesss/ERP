@@ -13,7 +13,8 @@
     "notifications": "Уведомления",
     "integrations": "Интеграции",
     "cash_registers": "Кассы",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "assets": "Активы"
   },
   "cash": {
     "add_new": "Новая касса",
@@ -317,10 +318,27 @@
   },
   "role": {
     "employee": "Сотрудник",
+    "seller": "Продавец",
     "manager": "Менеджер",
     "purchaser": "Закупщик",
     "accountant": "Бухгалтер",
     "admin": "Администратор"
+  },
+  "asset": {
+    "title": "Активы",
+    "name": "Наименование",
+    "image": "Изображение",
+    "quantity": "Количество",
+    "price": "Цена",
+    "total": "Сумма",
+    "account": "Счёт списания",
+    "purchase_date": "Дата закупки",
+    "add_new": "Добавить актив",
+    "edit": "Редактировать актив",
+    "delete_confirm": "Удалить этот актив?",
+    "upload_image": "Загрузить изображение",
+    "change_image": "Изменить изображение",
+    "no_image": "Нет фото"
   },
   "user": {
     "title": "Сотрудники",

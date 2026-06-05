@@ -40,7 +40,8 @@
     "notifications": "通知",
     "integrations": "系统集成",
     "cash_registers": "收银台",
-    "logout": "退出"
+    "logout": "退出",
+    "assets": "资产"
   },
   "cash": {
     "add_new": "新建收银台",
@@ -344,10 +345,27 @@
   },
   "role": {
     "employee": "员工",
+    "seller": "销售员",
     "manager": "经理",
     "purchaser": "采购员",
     "accountant": "会计",
     "admin": "管理员"
+  },
+  "asset": {
+    "title": "资产",
+    "name": "名称",
+    "image": "图片",
+    "quantity": "数量",
+    "price": "单价",
+    "total": "金额",
+    "account": "扣款账户",
+    "purchase_date": "采购日期",
+    "add_new": "添加资产",
+    "edit": "编辑资产",
+    "delete_confirm": "确认删除此资产？",
+    "upload_image": "上传图片",
+    "change_image": "更换图片",
+    "no_image": "无图片"
   },
   "user": {
     "title": "员工管理",

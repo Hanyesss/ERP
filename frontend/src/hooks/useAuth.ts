@@ -7,9 +7,15 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
     getMe()
       .then((r) => setUser(r.data))
-      .catch(() => setUser(null))
+      .catch(() =>
+        delay(1500)
+          .then(() => getMe())
+          .then((r) => setUser(r.data))
+          .catch(() => setUser(null))
+      )
       .finally(() => setLoading(false));
   }, []);
 

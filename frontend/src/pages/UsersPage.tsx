@@ -15,14 +15,15 @@ import {
 
 const { Text } = Typography;
 
-const ALL_ROLES: UserRole[] = ["employee", "manager", "purchaser", "accountant", "admin"];
+const ALL_ROLES: UserRole[] = ["employee", "seller", "manager", "purchaser", "accountant", "admin"];
 const ALL_LANGS: UserLang[] = ["ru", "zh"];
 
 function RoleTag({ role }: { role: UserRole }) {
   const { t } = useTranslation();
   const colors: Record<UserRole, string> = {
     admin: "red",
-    manager: "blue",
+    seller: "blue",
+    manager: "cyan",
     purchaser: "green",
     accountant: "purple",
     employee: "default",

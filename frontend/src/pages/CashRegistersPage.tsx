@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Form, Input, Select, Space, Tag, Typography,
   Drawer, Popconfirm, message, Row, Col, Tabs, InputNumber, DatePicker, Tooltip,
+  theme,
 } from "antd";
 import { PlusOutlined, HistoryOutlined, EditOutlined, SwapOutlined, LockOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -157,6 +158,16 @@ export default function CashRegistersPage() {
       )},
     { title: t("payment.notes"), key: "n",
       render: (_: any, row: CashTransaction) => row.notes || "—" },
+    { title: "Причина", key: "reason", width: 140,
+      render: (_: any, row: CashTransaction) => {
+        const r = row.reason;
+        if (!r) return "—";
+        const truncated = r.length > 18 ? r.slice(0, 17) + "…" : r;
+        return r.length > 18
+          ? <Tooltip title={r}><span style={{ cursor: "default" }}>{truncated}</span></Tooltip>
+          : <span>{r}</span>;
+      }},
+    { title: t("common.created_by"), dataIndex: "created_by_name", key: "who", width: 130 },
   ];
 
   const trColumns = [

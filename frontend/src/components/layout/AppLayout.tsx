@@ -4,7 +4,7 @@ import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
   BarChartOutlined, DatabaseOutlined, SettingOutlined, BankOutlined,
-  MenuOutlined, CloseOutlined,
+  MenuOutlined, CloseOutlined, SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -48,25 +48,25 @@ export default function AppLayout({ user, onLogout }: Props) {
   const menuItems = [
     { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
 
-    hasRole(user, "employee", "manager", "purchaser", "accountant", "admin") && {
+    hasRole(user, "employee", "seller", "purchaser", "accountant", "admin") && {
       key: "/counterparties",
       icon: <TeamOutlined />,
       label: t("nav.counterparties"),
     },
 
-    hasRole(user, "employee", "manager", "purchaser", "accountant", "admin") && {
+    hasRole(user, "employee", "seller", "manager", "purchaser", "accountant", "admin") && {
       key: "/orders",
       icon: <ShoppingOutlined />,
       label: t("nav.orders"),
     },
 
-    hasRole(user, "purchaser", "accountant", "admin") && {
+    hasRole(user, "purchaser", "manager", "accountant", "admin") && {
       key: "/purchases",
       icon: <ShoppingCartOutlined />,
       label: t("nav.purchases"),
     },
 
-    hasRole(user, "employee", "manager", "accountant", "admin") && {
+    hasRole(user, "employee", "seller", "accountant", "admin") && {
       key: "/payments",
       icon: <WalletOutlined />,
       label: t("nav.payments"),
@@ -90,16 +90,22 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.exchange_rates"),
     },
 
-    hasRole(user, "employee", "manager", "accountant", "admin") && {
+    hasRole(user, "employee", "seller", "accountant", "admin") && {
       key: "/warehouses",
       icon: <DatabaseOutlined />,
       label: t("nav.warehouses"),
     },
 
-    hasRole(user, "manager", "accountant", "admin") && {
+    hasRole(user, "seller", "accountant", "admin") && {
       key: "/reports",
       icon: <BarChartOutlined />,
       label: t("nav.reports"),
+    },
+
+    hasRole(user, "admin", "manager") && {
+      key: "/assets",
+      icon: <SafetyCertificateOutlined />,
+      label: t("nav.assets"),
     },
 
     hasRole(user, "admin") && {
@@ -131,6 +137,8 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/warehouses"
     : location.pathname.startsWith("/reports")
     ? "/reports"
+    : location.pathname.startsWith("/assets")
+    ? "/assets"
     : location.pathname.startsWith("/users")
     ? "/users"
     : location.pathname.startsWith("/settings/integrations")

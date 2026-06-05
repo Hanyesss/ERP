@@ -53,6 +53,7 @@ class CashTransactionResponse(BaseModel):
     balance_after: Decimal
     operation_type: Optional[str] = None   # системный ключ (переводится по языку)
     notes: Optional[str] = None            # пользовательский текст (не переводится)
+    reason: Optional[str] = None           # номер заказа / закупки (из платежа)
     is_active: bool
     created_by_name: str
     created_at: str
@@ -198,6 +199,11 @@ async def get_transactions(
         raise HTTPException(404, "Cash register not found")
 
     from app.models.user import User as UserModel
+    from app.models.payment_allocation import PaymentAllocation
+    from app.models.purchase_payment_link import PurchasePaymentLink
+    from app.models.order import Order
+    from app.models.purchase import Purchase
+
     txs_result = await db.execute(
         select(CashTransaction)
         .where(CashTransaction.cash_register_id == register_id)
@@ -213,6 +219,31 @@ async def get_transactions(
         users_res = await db.execute(select(UserModel).where(UserModel.id.in_(user_ids)))
         users_map = {u.id: u.full_name for u in users_res.scalars().all()}
 
+    # Подтягиваем номера заказов/закупок через payment_id
+    payment_ids = [t.payment_id for t in txs if t.payment_id is not None]
+    reason_map: dict[uuid.UUID, str] = {}
+    if payment_ids:
+        # Заказы
+        order_rows = (await db.execute(
+            select(PaymentAllocation.payment_id, Order.order_number)
+            .join(Order, PaymentAllocation.order_id == Order.id)
+            .where(PaymentAllocation.payment_id.in_(payment_ids))
+        )).all()
+        for pid, num in order_rows:
+            reason_map.setdefault(pid, []).append(num)  # type: ignore[arg-type]
+
+        # Закупки
+        purchase_rows = (await db.execute(
+            select(PurchasePaymentLink.payment_id, Purchase.purchase_number)
+            .join(Purchase, PurchasePaymentLink.purchase_id == Purchase.id)
+            .where(PurchasePaymentLink.payment_id.in_(payment_ids))
+        )).all()
+        for pid, num in purchase_rows:
+            reason_map.setdefault(pid, []).append(num)  # type: ignore[arg-type]
+
+        # Превращаем списки в строки
+        reason_map = {pid: ", ".join(nums) for pid, nums in reason_map.items()}  # type: ignore[assignment]
+
     return [
         CashTransactionResponse(
             id=t.id,
@@ -222,6 +253,7 @@ async def get_transactions(
             balance_after=t.balance_after,
             operation_type=t.operation_type,
             notes=t.notes,
+            reason=reason_map.get(t.payment_id) if t.payment_id else None,
             is_active=t.is_active,
             created_by_name=users_map.get(t.created_by, ""),
             created_at=t.created_at.isoformat(),
