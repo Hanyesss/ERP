@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Table, Button, Tag, Row, Col, Input, Select, DatePicker,
+  Button, Tag, Row, Col, Input, Select, DatePicker,
   Typography, Space, Statistic, message, Modal,
 } from "antd";
+import TopScrollTable from "../components/common/TopScrollTable";
 import { PlusOutlined, EyeOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -242,7 +243,8 @@ export default function PaymentsPage() {
         </Col>
       </Row>
 
-      <Table scroll={{ x: "max-content" }}
+      <TopScrollTable
+        scroll={{ x: "max-content" }}
         columns={columns}
         dataSource={data?.items ?? []}
         rowKey="id"

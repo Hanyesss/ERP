@@ -245,7 +245,7 @@
     "expenses_stub": "费用功能将在下一模块中添加。",
     "files_stub": "文件上传功能即将推出。",
     "files_after_save": "保存订单后可上传文件。",
-    "paid_amount": "已付CNY",
+    "paid_amount": "客户已付(CNY)",
     "remaining_amount": "待付CNY",
     "page_totals": "本页合计",
     "recipient": "收货人",

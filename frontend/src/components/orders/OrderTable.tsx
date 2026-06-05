@@ -128,7 +128,7 @@ export default function OrderTable() {
       key: "paid",
       width: 120,
       align: "right",
-      render: (_, row) => <Text type="secondary">{fmtCny(row.paid_amount_cny)}</Text>,
+      render: (_, row) => <Text>{fmtCny(row.paid_amount_cny)}</Text>,
     },
     {
       title: t("order.remaining_amount"),
