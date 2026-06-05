@@ -363,6 +363,21 @@
     "approve": "Утвердить",
     "reject": "Отклонить",
     "mark_paid": "Выплачено",
+    "tonnage": "Тоннаж",
+    "weight_t": "Вес (т)",
+    "expenses_cny": "Расход (CNY)",
+    "chart": {
+      "monthly_share": "Доля и тоннаж по месяцам",
+      "share_by_client": "Доля по клиентам"
+    },
+    "filter": {
+      "week": "Неделя",
+      "month": "Месяц",
+      "quarter": "Квартал",
+      "year": "Год",
+      "client": "Клиент",
+      "type": "Тип сделки"
+    },
     "payout_status": {
       "pending": "На рассмотрении",
       "approved": "Утверждено",
@@ -423,7 +438,9 @@
     "updated": "Данные обновлены",
     "deleted": "Сотрудник удалён",
     "delete": "Удалить сотрудника",
-    "delete_confirm": "Удалить сотрудника? Это действие нельзя отменить."
+    "delete_confirm": "Удалить сотрудника? Это действие нельзя отменить.",
+    "partner_counterparty": "Контрагент-партнёр",
+    "partner_counterparty_placeholder": "Выберите контрагента типа Партнёр"
   },
   "business_type": {
     "trade": "Торговля",
@@ -742,7 +759,8 @@
     "upload_file": "Прикрепить файл",
     "choose_file": "Выбрать файл",
     "file_uploaded": "Файл успешно загружен",
-    "files": "Документы и файлы"
+    "files": "Документы и файлы",
+    "type": "Тип"
   },
   "validation": {
     "required": "Обязательное поле",

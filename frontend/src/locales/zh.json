@@ -26,7 +26,8 @@
     "upload_file": "上传附件",
     "choose_file": "选择文件",
     "file_uploaded": "文件上传成功",
-    "files": "文件与单据"
+    "files": "文件与单据",
+    "type": "类型"
   },
   "nav": {
     "dashboard": "主页",
@@ -392,6 +393,21 @@
     "approve": "批准",
     "reject": "拒绝",
     "mark_paid": "已支付",
+    "tonnage": "吨位",
+    "weight_t": "重量 (吨)",
+    "expenses_cny": "支出 (CNY)",
+    "chart": {
+      "monthly_share": "每月分成与吨位",
+      "share_by_client": "按客户分成"
+    },
+    "filter": {
+      "week": "本周",
+      "month": "本月",
+      "quarter": "本季度",
+      "year": "本年",
+      "client": "客户",
+      "type": "交易类型"
+    },
     "payout_status": {
       "pending": "待审核",
       "approved": "已批准",
@@ -452,7 +468,9 @@
     "updated": "信息已更新",
     "deleted": "员工已删除",
     "delete": "删除员工",
-    "delete_confirm": "确认删除该员工？此操作不可撤销。"
+    "delete_confirm": "确认删除该员工？此操作不可撤销。",
+    "partner_counterparty": "合作伙伴往来单位",
+    "partner_counterparty_placeholder": "选择合作伙伴类型的往来单位"
   },
   "business_type": {
     "trade": "贸易",

@@ -189,7 +189,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
           </>
         )}
 
-        {!editing && isClient && (
+        {!editing && (isClient || isPartner) && (
           <>
             <Divider style={{ margin: "12px 0" }} />
             <Checkbox

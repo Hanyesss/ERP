@@ -30,6 +30,7 @@ class UserListItem(BaseModel):
     roles: List[str]
     lang: str
     is_active: bool
+    partner_counterparty_id: Optional[uuid.UUID] = None
 
     class Config:
         from_attributes = True
@@ -43,6 +44,7 @@ class UserListItem(BaseModel):
             roles=u.roles,
             lang=u.lang,
             is_active=u.is_active,
+            partner_counterparty_id=u.partner_counterparty_id,
         )
 
 
@@ -57,6 +59,7 @@ class UserCreate(BaseModel):
     lang: UserLang = UserLang.ru
     roles: List[UserRole]
     is_active: bool = True
+    partner_counterparty_id: Optional[uuid.UUID] = None
 
     @field_validator("password")
     @classmethod
@@ -80,6 +83,7 @@ class UserUpdate(BaseModel):
     lang: Optional[UserLang] = None
     roles: Optional[List[UserRole]] = None
     is_active: Optional[bool] = None
+    partner_counterparty_id: Optional[uuid.UUID] = None
 
     @field_validator("roles")
     @classmethod
@@ -204,6 +208,7 @@ async def create_user(
         full_name=body.full_name,
         lang=body.lang,
         is_active=body.is_active,
+        partner_counterparty_id=body.partner_counterparty_id,
     )
     db.add(new_user)
 
@@ -263,6 +268,10 @@ async def update_user(
                 )
         changes["is_active"] = body.is_active
         user.is_active = body.is_active
+
+    if body.partner_counterparty_id is not None:
+        user.partner_counterparty_id = body.partner_counterparty_id
+        changes["partner_counterparty_id"] = str(body.partner_counterparty_id)
 
     if body.roles is not None:
         # Guard: if removing admin role and this is the last active admin

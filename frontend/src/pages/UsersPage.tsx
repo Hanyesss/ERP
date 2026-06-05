@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   Table, Button, Space, Tag, Select, Input, Switch, Modal,
-  Form, Checkbox, Typography, message, Popconfirm, Tooltip,
+  Form, Checkbox, Typography, message, Popconfirm, Tooltip, Divider,
 } from "antd";
 import {
   PlusOutlined, LockOutlined, UnlockOutlined, EditOutlined, KeyOutlined, DeleteOutlined,
@@ -12,6 +12,7 @@ import {
   fetchUsers, createUser, updateUser, resetPassword, toggleActive, deleteUser,
   UserListItem, UserRole, UserLang,
 } from "../api/users";
+import { getCounterparties } from "../api/counterparties";
 
 const { Text } = Typography;
 
@@ -51,6 +52,17 @@ export default function UsersPage() {
 
   const [form] = Form.useForm();
   const [pwdForm] = Form.useForm();
+
+  const watchedRoles: UserRole[] = Form.useWatch("roles", form) ?? [];
+  const isPartnerRole = watchedRoles.includes("partner");
+
+  const { data: partnerCounterparties = [] } = useQuery({
+    queryKey: ["counterparties", "partners-list"],
+    queryFn: () => getCounterparties({ type: "partner", page_size: 500 }).then(r => r.data.items ?? []),
+    enabled: modalOpen,
+  });
+
+  const partnerOptions = partnerCounterparties.map((p: any) => ({ value: p.id, label: p.name }));
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users", filter],
@@ -134,6 +146,7 @@ export default function UsersPage() {
       lang: user.lang,
       roles: user.roles,
       is_active: user.is_active,
+      partner_counterparty_id: user.partner_counterparty_id ?? undefined,
     });
     setModalOpen(true);
   }, [form]);
@@ -154,6 +167,7 @@ export default function UsersPage() {
         lang: values.lang,
         roles: values.roles,
         is_active: values.is_active,
+        partner_counterparty_id: values.partner_counterparty_id ?? undefined,
       };
       if (values.password) patch.password = values.password;
       updateMut.mutate({ id: editingUser.id, data: patch });
@@ -165,6 +179,7 @@ export default function UsersPage() {
         lang: values.lang,
         roles: values.roles,
         is_active: values.is_active ?? true,
+        partner_counterparty_id: values.partner_counterparty_id ?? undefined,
       });
     }
   };
@@ -401,6 +416,25 @@ export default function UsersPage() {
               </Space>
             </Checkbox.Group>
           </Form.Item>
+
+          {isPartnerRole && (
+            <>
+              <Divider style={{ margin: "8px 0" }} />
+              <Form.Item
+                name="partner_counterparty_id"
+                label={t("user.partner_counterparty")}
+                rules={[{ required: true, message: t("validation.required") }]}
+              >
+                <Select
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  placeholder={t("user.partner_counterparty_placeholder")}
+                  options={partnerOptions}
+                />
+              </Form.Item>
+            </>
+          )}
 
           <Form.Item name="is_active" label={t("user.status")} valuePropName="checked">
             <Switch

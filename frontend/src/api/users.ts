@@ -10,6 +10,7 @@ export interface UserListItem {
   roles: UserRole[];
   lang: UserLang;
   is_active: boolean;
+  partner_counterparty_id?: string;
 }
 
 export interface UserCreate {
@@ -19,6 +20,7 @@ export interface UserCreate {
   lang: UserLang;
   roles: UserRole[];
   is_active: boolean;
+  partner_counterparty_id?: string;
 }
 
 export interface UserUpdate {
@@ -26,6 +28,7 @@ export interface UserUpdate {
   lang?: UserLang;
   roles?: UserRole[];
   is_active?: boolean;
+  partner_counterparty_id?: string;
 }
 
 export interface ResetPasswordBody {

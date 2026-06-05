@@ -24,6 +24,7 @@ export interface PartnerSummary {
   total_accrued: number;
   total_paid: number;
   balance: number;
+  total_weight_kg: number;
 }
 
 export interface PartnerOrder {
@@ -31,6 +32,7 @@ export interface PartnerOrder {
   order_number: string;
   client_id: string;
   client_name?: string;
+  business_type_name?: string;
   order_date: string;
   status: string;
   payment_status: string;
@@ -38,6 +40,8 @@ export interface PartnerOrder {
   cost_cny: number;
   margin_cny: number;
   share_cny: number;
+  weight_kg?: number;
+  expenses_cny?: number;
 }
 
 export interface PartnerPayout {

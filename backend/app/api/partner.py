@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -16,6 +16,8 @@ from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.expense import Expense, LinkTypeEnum, ReimburseStatusEnum
 from app.models.partner_payout import PartnerPayout
 from app.models.company import Company
+from app.models.business_type import BusinessType
+from app.models.order_item import OrderItem
 from app.models.audit_log import AuditActionEnum
 from app.utils.audit import write_audit
 
@@ -58,7 +60,9 @@ async def _partner_client_ids(db: AsyncSession, partner_cp_id: uuid.UUID) -> Lis
 
 async def _partner_orders_query(client_ids: List[uuid.UUID],
                                 date_from: Optional[date] = None,
-                                date_to: Optional[date] = None):
+                                date_to: Optional[date] = None,
+                                client_id: Optional[uuid.UUID] = None,
+                                business_type_id: Optional[uuid.UUID] = None):
     """Base select for paid, non-cancelled orders of the given clients."""
     q = select(Order).where(
         Order.client_id.in_(client_ids),
@@ -69,15 +73,21 @@ async def _partner_orders_query(client_ids: List[uuid.UUID],
         q = q.where(Order.order_date >= date_from)
     if date_to:
         q = q.where(Order.order_date <= date_to)
+    if client_id:
+        q = q.where(Order.client_id == client_id)
+    if business_type_id:
+        q = q.where(Order.business_type_id == business_type_id)
     return q
 
 
 async def _total_accrued(db: AsyncSession, client_ids: List[uuid.UUID],
                          date_from: Optional[date] = None,
-                         date_to: Optional[date] = None) -> Decimal:
+                         date_to: Optional[date] = None,
+                         client_id: Optional[uuid.UUID] = None,
+                         business_type_id: Optional[uuid.UUID] = None) -> Decimal:
     if not client_ids:
         return Decimal("0")
-    q = await _partner_orders_query(client_ids, date_from, date_to)
+    q = await _partner_orders_query(client_ids, date_from, date_to, client_id, business_type_id)
     orders = (await db.execute(q)).scalars().all()
     return sum((_share(o) for o in orders), Decimal("0"))
 
@@ -110,6 +120,7 @@ class PartnerSummary(BaseModel):
     total_accrued: Decimal
     total_paid: Decimal
     balance: Decimal
+    total_weight_kg: Decimal
 
 
 class PartnerOrderItem(BaseModel):
@@ -117,6 +128,7 @@ class PartnerOrderItem(BaseModel):
     order_number: str
     client_id: uuid.UUID
     client_name: Optional[str] = None
+    business_type_name: Optional[str] = None
     order_date: date
     status: str
     payment_status: str
@@ -124,6 +136,8 @@ class PartnerOrderItem(BaseModel):
     cost_cny: Decimal
     margin_cny: Decimal
     share_cny: Decimal
+    weight_kg: Optional[Decimal] = None
+    expenses_cny: Optional[Decimal] = None
 
 
 class PayoutRequestBody(BaseModel):
@@ -161,6 +175,10 @@ class AdminPartnerItem(BaseModel):
 
 @router.get("/api/partner/summary", response_model=PartnerSummary)
 async def partner_summary(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    client_id: Optional[uuid.UUID] = Query(None),
+    business_type_id: Optional[uuid.UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles("partner")),
 ):
@@ -177,8 +195,19 @@ async def partner_summary(
             for c in rows
         ]
 
-    total_accrued = await _total_accrued(db, client_ids)
+    total_accrued = await _total_accrued(db, client_ids, date_from, date_to, client_id, business_type_id)
     total_paid = await _total_paid(db, partner.id)
+
+    total_weight_kg = Decimal("0")
+    if client_ids:
+        base_q = await _partner_orders_query(client_ids, date_from, date_to, client_id, business_type_id)
+        order_ids = (await db.execute(base_q.with_only_columns(Order.id))).scalars().all()
+        if order_ids:
+            w = (await db.execute(
+                select(func.coalesce(func.sum(OrderItem.weight_kg), 0))
+                .where(OrderItem.order_id.in_(order_ids))
+            )).scalar_one()
+            total_weight_kg = Decimal(str(w))
 
     return PartnerSummary(
         partner_id=partner.id,
@@ -187,6 +216,7 @@ async def partner_summary(
         total_accrued=total_accrued,
         total_paid=total_paid,
         balance=total_accrued - total_paid,
+        total_weight_kg=total_weight_kg,
     )
 
 
@@ -207,6 +237,10 @@ async def partner_clients(
 
 @router.get("/api/partner/orders", response_model=List[PartnerOrderItem])
 async def partner_orders(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    client_id: Optional[uuid.UUID] = Query(None),
+    business_type_id: Optional[uuid.UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles("partner")),
 ):
@@ -216,16 +250,39 @@ async def partner_orders(
         return []
 
     ClientAlias = aliased(Counterparty)
+    base_q = await _partner_orders_query(client_ids, date_from, date_to, client_id, business_type_id)
     rows = (await db.execute(
-        select(Order, ClientAlias.name.label("client_name"))
+        base_q.add_columns(ClientAlias.name.label("client_name"), BusinessType.name.label("business_type_name"))
         .join(ClientAlias, Order.client_id == ClientAlias.id)
-        .where(
-            Order.client_id.in_(client_ids),
-            Order.payment_status.in_(_PAID_STATUSES),
-            Order.status != OrderStatus.cancelled,
-        )
+        .outerjoin(BusinessType, Order.business_type_id == BusinessType.id)
         .order_by(Order.order_date.desc())
     )).all()
+
+    # Bulk-load weight per order
+    order_ids = [r[0].id for r in rows]
+    weights: dict[uuid.UUID, Decimal] = {}
+    if order_ids:
+        wrows = (await db.execute(
+            select(OrderItem.order_id, func.sum(OrderItem.weight_kg).label("total_w"))
+            .where(OrderItem.order_id.in_(order_ids))
+            .group_by(OrderItem.order_id)
+        )).all()
+        weights = {wr.order_id: Decimal(str(wr.total_w)) for wr in wrows if wr.total_w is not None}
+
+    # Bulk-load client-linked expenses per client
+    order_client_ids = list({r[0].client_id for r in rows})
+    client_expenses: dict[uuid.UUID, Decimal] = {}
+    if order_client_ids:
+        exp_rows = (await db.execute(
+            select(Expense.client_id, func.sum(Expense.amount_cny).label("total_exp"))
+            .where(
+                Expense.client_id.in_(order_client_ids),
+                Expense.link_type == LinkTypeEnum.client,
+                Expense.is_active == True,
+            )
+            .group_by(Expense.client_id)
+        )).all()
+        client_expenses = {er.client_id: Decimal(str(er.total_exp)) for er in exp_rows if er.total_exp is not None}
 
     result = []
     for r in rows:
@@ -234,11 +291,14 @@ async def partner_orders(
         result.append(PartnerOrderItem(
             id=o.id, order_number=o.order_number,
             client_id=o.client_id, client_name=r.client_name,
+            business_type_name=r.business_type_name,
             order_date=o.order_date,
             status=o.status.value if hasattr(o.status, "value") else o.status,
             payment_status=o.payment_status.value if hasattr(o.payment_status, "value") else o.payment_status,
             sale_cny=o.total_sale_cny, cost_cny=o.total_cost_cny,
             margin_cny=margin, share_cny=_share(o),
+            weight_kg=weights.get(o.id),
+            expenses_cny=client_expenses.get(o.client_id),
         ))
     return result
 

@@ -3,11 +3,18 @@ import type {
   PartnerSummary, PartnerOrder, PartnerClient, PartnerPayout, AdminPartner,
 } from "../types";
 
-export const getPartnerSummary = () =>
-  apiClient.get<PartnerSummary>("/api/partner/summary");
+export interface PartnerFilters {
+  date_from?: string;
+  date_to?: string;
+  client_id?: string;
+  business_type_id?: string;
+}
 
-export const getPartnerOrders = () =>
-  apiClient.get<PartnerOrder[]>("/api/partner/orders");
+export const getPartnerSummary = (filters?: PartnerFilters) =>
+  apiClient.get<PartnerSummary>("/api/partner/summary", { params: filters });
+
+export const getPartnerOrders = (filters?: PartnerFilters) =>
+  apiClient.get<PartnerOrder[]>("/api/partner/orders", { params: filters });
 
 export const getPartnerClients = () =>
   apiClient.get<PartnerClient[]>("/api/partner/clients");
