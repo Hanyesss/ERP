@@ -15,7 +15,7 @@ import {
 
 const { Text } = Typography;
 
-const ALL_ROLES: UserRole[] = ["employee", "seller", "manager", "purchaser", "accountant", "admin"];
+const ALL_ROLES: UserRole[] = ["employee", "seller", "manager", "purchaser", "accountant", "admin", "partner"];
 const ALL_LANGS: UserLang[] = ["ru", "zh"];
 
 function RoleTag({ role }: { role: UserRole }) {
@@ -26,6 +26,7 @@ function RoleTag({ role }: { role: UserRole }) {
     manager: "cyan",
     purchaser: "green",
     accountant: "purple",
+    partner: "magenta",
     employee: "default",
   };
   return <Tag color={colors[role]}>{t(`role.${role}`)}</Tag>;

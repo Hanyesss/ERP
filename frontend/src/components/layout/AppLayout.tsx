@@ -4,7 +4,7 @@ import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
   BarChartOutlined, DatabaseOutlined, SettingOutlined, BankOutlined,
-  MenuOutlined, CloseOutlined, SafetyCertificateOutlined,
+  MenuOutlined, CloseOutlined, SafetyCertificateOutlined, GiftOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -46,7 +46,13 @@ export default function AppLayout({ user, onLogout }: Props) {
   };
 
   const menuItems = [
-    { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
+    hasRole(user, "partner") && {
+      key: "/partner-dashboard",
+      icon: <GiftOutlined />,
+      label: t("nav.partner_dashboard"),
+    },
+
+    !hasRole(user, "partner") && { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
 
     hasRole(user, "employee", "seller", "purchaser", "accountant", "admin") && {
       key: "/counterparties",
@@ -108,6 +114,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.assets"),
     },
 
+    hasRole(user, "accountant", "admin") && {
+      key: "/admin-partners",
+      icon: <GiftOutlined />,
+      label: t("nav.admin_partners"),
+    },
+
     hasRole(user, "admin") && {
       key: "/users",
       icon: <TeamOutlined />,
@@ -139,6 +151,10 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/reports"
     : location.pathname.startsWith("/assets")
     ? "/assets"
+    : location.pathname.startsWith("/partner-dashboard")
+    ? "/partner-dashboard"
+    : location.pathname.startsWith("/admin-partners")
+    ? "/admin-partners"
     : location.pathname.startsWith("/users")
     ? "/users"
     : location.pathname.startsWith("/settings/integrations")

@@ -1,6 +1,6 @@
 import client from "./client";
 
-export type UserRole = "employee" | "seller" | "manager" | "purchaser" | "accountant" | "admin";
+export type UserRole = "employee" | "seller" | "manager" | "purchaser" | "accountant" | "admin" | "partner";
 export type UserLang = "ru" | "zh";
 
 export interface UserListItem {

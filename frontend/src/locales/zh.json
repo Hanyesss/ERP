@@ -1,6 +1,7 @@
 {
   "common": {
     "save": "保存",
+    "saved": "已保存",
     "cancel": "取消",
     "edit": "编辑",
     "delete": "删除",
@@ -42,7 +43,10 @@
     "integrations": "系统集成",
     "cash_registers": "收银台",
     "logout": "退出",
-    "assets": "资产"
+    "assets": "资产",
+    "partner_dashboard": "合伙人面板",
+    "partner_payouts": "我的结算",
+    "admin_partners": "合伙人"
   },
   "cash": {
     "add_new": "新建收银台",
@@ -164,6 +168,12 @@
     "type_client": "客户",
     "type_supplier": "供应商",
     "type_both": "客户兼供应商",
+    "type_partner": "合伙人",
+    "partner": "合伙人",
+    "partner_select": "选择合伙人",
+    "create_partner_user": "创建合伙人账户",
+    "partner_login": "合伙人登录名",
+    "partner_password": "合伙人密码",
     "default_currency": "货币",
     "phone": "电话",
     "email": "邮箱",
@@ -350,7 +360,44 @@
     "manager": "经理",
     "purchaser": "采购员",
     "accountant": "会计",
-    "admin": "管理员"
+    "admin": "管理员",
+    "partner": "合伙人"
+  },
+  "partner": {
+    "summary": "概览",
+    "accrued": "已计提",
+    "paid": "已支付",
+    "balance": "余额",
+    "clients": "我的客户",
+    "orders": "客户订单",
+    "share": "我的分成 (50%)",
+    "margin": "毛利",
+    "request_payout": "申请结算",
+    "period_from": "起始日期",
+    "period_to": "结束日期",
+    "period": "周期",
+    "all_time": "全部时间",
+    "payouts": "结算",
+    "partner": "合伙人",
+    "partners_tab": "合伙人",
+    "order_number": "订单号",
+    "client": "客户",
+    "sale_cny": "销售额 (CNY)",
+    "cost_cny": "采购额 (CNY)",
+    "amount": "金额",
+    "status": "状态",
+    "payment_status": "付款",
+    "date": "日期",
+    "notes": "备注",
+    "approve": "批准",
+    "reject": "拒绝",
+    "mark_paid": "已支付",
+    "payout_status": {
+      "pending": "待审核",
+      "approved": "已批准",
+      "paid": "已支付",
+      "rejected": "已拒绝"
+    }
   },
   "asset": {
     "title": "资产",

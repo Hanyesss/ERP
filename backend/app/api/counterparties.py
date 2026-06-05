@@ -4,10 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import aliased
 
 from app.database import get_db
 from app.core.deps import get_current_user
-from app.models.user import User
+from app.core.security import hash_password
+from app.models.user import User, UserRole
+from app.models.user_role import UserRoleEntry
 from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.audit_log import AuditActionEnum
 from app.schemas.counterparty import (
@@ -30,6 +33,7 @@ def _to_dict(obj: Counterparty) -> dict:
         "contact_info": obj.contact_info,
         "notes": obj.notes,
         "is_active": obj.is_active,
+        "partner_id": str(obj.partner_id) if obj.partner_id else None,
     }
 
 
@@ -37,6 +41,7 @@ def _to_dict(obj: Counterparty) -> dict:
 async def list_counterparties(
     search: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
+    partner_id: Optional[uuid.UUID] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -50,10 +55,15 @@ async def list_counterparties(
             Counterparty.name_cn.ilike(f"%{search}%"),
         ))
     if type and type != "all":
-        q = q.where(or_(
-            Counterparty.type == type,
-            Counterparty.type == CounterpartyType.both,
-        ))
+        if type == "partner":
+            q = q.where(Counterparty.type == CounterpartyType.partner)
+        else:
+            q = q.where(or_(
+                Counterparty.type == type,
+                Counterparty.type == CounterpartyType.both,
+            ))
+    if partner_id:
+        q = q.where(Counterparty.partner_id == partner_id)
 
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar_one()
@@ -61,8 +71,20 @@ async def list_counterparties(
     q = q.order_by(Counterparty.name).offset((page - 1) * page_size).limit(page_size)
     items = (await db.execute(q)).scalars().all()
 
+    # Resolve partner names
+    partner_ids = [cp.partner_id for cp in items if cp.partner_id]
+    partner_names: dict[uuid.UUID, str] = {}
+    if partner_ids:
+        rows = (await db.execute(
+            select(Counterparty.id, Counterparty.name).where(Counterparty.id.in_(partner_ids))
+        )).all()
+        partner_names = {r[0]: r[1] for r in rows}
+
     return CounterpartyListResponse(
-        items=[CounterpartyResponse.from_obj(cp) for cp in items],
+        items=[
+            CounterpartyResponse.from_obj(cp, partner_names.get(cp.partner_id) if cp.partner_id else None)
+            for cp in items
+        ],
         total=total, page=page, page_size=page_size,
     )
 
@@ -93,9 +115,35 @@ async def create_counterparty(
         contact_info=body.contact_info.model_dump() if body.contact_info else None,
         notes=body.notes,
         is_active=True,
+        partner_id=body.partner_id,
     )
     db.add(cp)
     await db.flush()
+
+    # For partner-type counterparties, optionally create a linked partner user
+    if body.type == CounterpartyType.partner and body.create_user:
+        if not body.login or not body.password:
+            raise HTTPException(422, "login and password are required to create a partner user")
+        if len(body.password) < 6:
+            raise HTTPException(422, "Password must be at least 6 characters")
+        existing = await db.execute(select(User).where(User.login == body.login))
+        if existing.scalar_one_or_none():
+            raise HTTPException(400, "Login already taken")
+        new_user = User(
+            id=uuid.uuid4(),
+            login=body.login,
+            password_hash=hash_password(body.password),
+            full_name=body.name,
+            is_active=True,
+            partner_counterparty_id=cp.id,
+        )
+        db.add(new_user)
+        db.add(UserRoleEntry(id=uuid.uuid4(), user_id=new_user.id, role=UserRole.partner))
+        await db.flush()
+        await write_audit(db, current_user.id, "user", new_user.id, AuditActionEnum.create,
+                          {"login": body.login, "roles": ["partner"],
+                           "partner_counterparty_id": str(cp.id)})
+
     await write_audit(db, current_user.id, "counterparty", cp.id, AuditActionEnum.create,
                       {"new": _to_dict(cp)})
     await db.commit()

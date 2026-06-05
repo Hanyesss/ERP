@@ -1,4 +1,4 @@
-export type CounterpartyType = "client" | "supplier" | "both";
+export type CounterpartyType = "client" | "supplier" | "both" | "partner";
 export type CurrencyEnum = "CNY" | "RUB" | "USDT";
 
 export interface ContactInfo {
@@ -18,6 +18,8 @@ export interface Counterparty {
   phone?: string;
   notes?: string;
   is_active: boolean;
+  partner_id?: string;
+  partner_name?: string;
 }
 
 export interface CounterpartyListResponse {
@@ -37,4 +39,9 @@ export interface CounterpartyFormData {
   email?: string;
   address?: string;
   notes?: string;
+  partner_id?: string;
+  // For partner-type counterparties: create a linked partner user
+  create_user?: boolean;
+  login?: string;
+  password?: string;
 }

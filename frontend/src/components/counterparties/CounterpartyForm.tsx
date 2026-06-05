@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Modal, Form, Input, Select, Checkbox, Divider } from "antd";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { Counterparty, CounterpartyFormData } from "../../types/counterparty";
+import { getCounterparties } from "../../api/counterparties";
 
 export interface CounterpartyFormValues extends CounterpartyFormData {
   create_site_account?: boolean;
@@ -27,14 +29,25 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
   const [form] = Form.useForm<CounterpartyFormValues>();
   const [createAccount, setCreateAccount] = useState(false);
   const [changeCredentials, setChangeCredentials] = useState(false);
+  const [createPartnerUser, setCreatePartnerUser] = useState(false);
 
   const watchedType = Form.useWatch("type", form);
   const isClient = watchedType === "client" || watchedType === "both";
+  const isPartner = watchedType === "partner";
+
+  // Partners list for the client → partner link dropdown
+  const { data: partnersData } = useQuery({
+    queryKey: ["counterparties", "partners-list"],
+    queryFn: () => getCounterparties({ type: "partner", page_size: 500 }).then((r) => r.data),
+    enabled: open,
+  });
+  const partnerOptions = (partnersData?.items ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   useEffect(() => {
     if (open) {
       setCreateAccount(false);
       setChangeCredentials(false);
+      setCreatePartnerUser(false);
       if (editing) {
         form.setFieldsValue({
           name: editing.name,
@@ -46,6 +59,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
           email: editing.contact_info?.email,
           address: editing.contact_info?.address,
           notes: editing.notes,
+          partner_id: editing.partner_id,
         });
       } else {
         form.resetFields();
@@ -56,7 +70,11 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
 
   const handleOk = () => {
     form.validateFields().then((values) => {
-      onSubmit({ ...values, create_site_account: createAccount });
+      onSubmit({
+        ...values,
+        create_site_account: createAccount,
+        create_user: isPartner ? createPartnerUser : undefined,
+      });
     });
   };
 
@@ -64,6 +82,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
     { value: "client", label: t("counterparty.type_client") },
     { value: "supplier", label: t("counterparty.type_supplier") },
     { value: "both", label: t("counterparty.type_both") },
+    { value: "partner", label: t("counterparty.type_partner") },
   ];
 
   const currencyOptions = [
@@ -105,6 +124,18 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
           <Select options={currencyOptions} />
         </Form.Item>
 
+        {isClient && (
+          <Form.Item name="partner_id" label={t("counterparty.partner")}>
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t("counterparty.partner_select")}
+              options={partnerOptions}
+            />
+          </Form.Item>
+        )}
+
         <Form.Item label={t("counterparty.contact_info")} style={{ marginBottom: 0 }}>
           <Form.Item name="phone" label={t("counterparty.phone")} style={{ display: "inline-block", width: "calc(50% - 6px)" }}>
             <Input />
@@ -124,6 +155,39 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         <Form.Item name="notes" label={t("counterparty.notes")}>
           <Input.TextArea rows={3} />
         </Form.Item>
+
+        {!editing && isPartner && (
+          <>
+            <Divider style={{ margin: "12px 0" }} />
+            <Checkbox
+              checked={createPartnerUser}
+              onChange={(e) => setCreatePartnerUser(e.target.checked)}
+            >
+              {t("counterparty.create_partner_user")}
+            </Checkbox>
+            {createPartnerUser && (
+              <div style={{ marginTop: 12 }}>
+                <Form.Item
+                  name="login"
+                  label={t("counterparty.partner_login")}
+                  rules={[{ required: createPartnerUser, message: t("validation.required") }]}
+                >
+                  <Input autoComplete="new-password" />
+                </Form.Item>
+                <Form.Item
+                  name="password"
+                  label={t("counterparty.partner_password")}
+                  rules={[
+                    { required: createPartnerUser, message: t("validation.required") },
+                    { min: 6, message: t("validation.min_length", { min: 6 }) },
+                  ]}
+                >
+                  <Input.Password autoComplete="new-password" />
+                </Form.Item>
+              </div>
+            )}
+          </>
+        )}
 
         {!editing && isClient && (
           <>

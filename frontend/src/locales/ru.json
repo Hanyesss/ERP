@@ -14,7 +14,10 @@
     "integrations": "Интеграции",
     "cash_registers": "Кассы",
     "logout": "Выйти",
-    "assets": "Активы"
+    "assets": "Активы",
+    "partner_dashboard": "Дашборд партнёра",
+    "partner_payouts": "Мои выплаты",
+    "admin_partners": "Партнёры"
   },
   "cash": {
     "add_new": "Новая касса",
@@ -136,6 +139,12 @@
     "type_client": "Клиент",
     "type_supplier": "Поставщик",
     "type_both": "Клиент и поставщик",
+    "type_partner": "Партнёр",
+    "partner": "Партнёр",
+    "partner_select": "Выберите партнёра",
+    "create_partner_user": "Создать учётную запись партнёра",
+    "partner_login": "Логин партнёра",
+    "partner_password": "Пароль партнёра",
     "default_currency": "Валюта",
     "phone": "Телефон",
     "email": "Email",
@@ -322,7 +331,44 @@
     "manager": "Менеджер",
     "purchaser": "Закупщик",
     "accountant": "Бухгалтер",
-    "admin": "Администратор"
+    "admin": "Администратор",
+    "partner": "Партнёр"
+  },
+  "partner": {
+    "summary": "Сводка",
+    "accrued": "Начислено",
+    "paid": "Выплачено",
+    "balance": "Остаток",
+    "clients": "Мои клиенты",
+    "orders": "Заказы клиентов",
+    "share": "Моя доля (50%)",
+    "margin": "Маржа",
+    "request_payout": "Запросить выплату",
+    "period_from": "Период с",
+    "period_to": "Период по",
+    "period": "Период",
+    "all_time": "За всё время",
+    "payouts": "Выплаты",
+    "partner": "Партнёр",
+    "partners_tab": "Партнёры",
+    "order_number": "Номер заказа",
+    "client": "Клиент",
+    "sale_cny": "Продажа (CNY)",
+    "cost_cny": "Закуп (CNY)",
+    "amount": "Сумма",
+    "status": "Статус",
+    "payment_status": "Оплата",
+    "date": "Дата",
+    "notes": "Примечание",
+    "approve": "Утвердить",
+    "reject": "Отклонить",
+    "mark_paid": "Выплачено",
+    "payout_status": {
+      "pending": "На рассмотрении",
+      "approved": "Утверждено",
+      "paid": "Выплачено",
+      "rejected": "Отклонено"
+    }
   },
   "asset": {
     "title": "Активы",
@@ -671,6 +717,7 @@
   },
   "common": {
     "save": "Сохранить",
+    "saved": "Сохранено",
     "cancel": "Отмена",
     "edit": "Редактировать",
     "delete": "Удалить",

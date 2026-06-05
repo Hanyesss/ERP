@@ -12,6 +12,7 @@ const TYPE_COLORS: Record<string, string> = {
   client: "blue",
   supplier: "orange",
   both: "purple",
+  partner: "magenta",
 };
 
 interface Props {
@@ -171,6 +172,7 @@ export default function CounterpartyTable({ forcedType }: Props) {
     { value: "client", label: t("counterparty.type_client") },
     { value: "supplier", label: t("counterparty.type_supplier") },
     { value: "both", label: t("counterparty.type_both") },
+    { value: "partner", label: t("counterparty.type_partner") },
   ];
 
   return (

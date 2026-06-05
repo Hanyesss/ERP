@@ -1,6 +1,6 @@
 import uuid
 from enum import Enum as PyEnum
-from sqlalchemy import String, Boolean, Enum
+from sqlalchemy import String, Boolean, Enum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -15,6 +15,7 @@ class UserRole(str, PyEnum):
     purchaser = "purchaser"
     accountant = "accountant"
     admin = "admin"
+    partner = "partner"
 
 
 # Alias used by user_role.py
@@ -36,6 +37,10 @@ class User(Base, TimestampMixin):
     lang: Mapped[UserLang] = mapped_column(Enum(UserLang, name="userlang"), default=UserLang.ru, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Links a partner user to their partner counterparty
+    partner_counterparty_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("counterparties.id"), nullable=True
+    )
 
     role_entries: Mapped[list["UserRoleEntry"]] = relationship(  # type: ignore[name-defined]
         "UserRoleEntry", foreign_keys="UserRoleEntry.user_id", lazy="selectin"

@@ -18,6 +18,11 @@ class CounterpartyCreate(BaseModel):
     default_currency: CurrencyEnum = CurrencyEnum.CNY
     contact_info: Optional[ContactInfo] = None
     notes: Optional[str] = None
+    partner_id: Optional[uuid.UUID] = None
+    # When creating a partner-type counterparty, optionally create a linked partner user
+    create_user: bool = False
+    login: Optional[str] = None
+    password: Optional[str] = None
 
 
 class CounterpartyUpdate(BaseModel):
@@ -28,6 +33,7 @@ class CounterpartyUpdate(BaseModel):
     default_currency: Optional[CurrencyEnum] = None
     contact_info: Optional[ContactInfo] = None
     notes: Optional[str] = None
+    partner_id: Optional[uuid.UUID] = None
 
 
 class CounterpartyResponse(BaseModel):
@@ -41,12 +47,14 @@ class CounterpartyResponse(BaseModel):
     phone: Optional[str] = None
     notes: Optional[str] = None
     is_active: bool
+    partner_id: Optional[uuid.UUID] = None
+    partner_name: Optional[str] = None
 
     class Config:
         from_attributes = True
 
     @classmethod
-    def from_obj(cls, obj) -> "CounterpartyResponse":
+    def from_obj(cls, obj, partner_name: Optional[str] = None) -> "CounterpartyResponse":
         phone = None
         if obj.contact_info and isinstance(obj.contact_info, dict):
             phone = obj.contact_info.get("phone")
@@ -55,6 +63,7 @@ class CounterpartyResponse(BaseModel):
             type=obj.type, default_currency=obj.default_currency,
             contact_info=obj.contact_info, phone=phone,
             notes=obj.notes, is_active=obj.is_active,
+            partner_id=obj.partner_id, partner_name=partner_name,
         )
 
 

@@ -1,6 +1,6 @@
 import uuid
 from enum import Enum as PyEnum
-from sqlalchemy import String, Boolean, Enum, Text
+from sqlalchemy import String, Boolean, Enum, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
@@ -12,6 +12,7 @@ class CounterpartyType(str, PyEnum):
     client = "client"
     supplier = "supplier"
     both = "both"
+    partner = "partner"
 
 
 class CurrencyEnum(str, PyEnum):
@@ -33,3 +34,7 @@ class Counterparty(Base, TimestampMixin):
     contact_info: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # For client counterparties: which partner introduced/owns this client
+    partner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("counterparties.id"), nullable=True
+    )

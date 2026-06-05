@@ -28,6 +28,8 @@ import NotificationsPage from "./pages/NotificationsPage";
 import IntegrationSettingsPage from "./pages/IntegrationSettingsPage";
 import CashRegistersPage from "./pages/CashRegistersPage";
 import AssetsPage from "./pages/AssetsPage";
+import PartnerDashboardPage from "./pages/PartnerDashboardPage";
+import AdminPartnersPage from "./pages/AdminPartnersPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
@@ -40,6 +42,8 @@ function Inner() {
   const { i18n } = useTranslation();
   const { user, setUser, loading } = useAuth();
   const antLocale = i18n.language === "zh" ? zhCN : ruRU;
+  const isPartner = !!user?.roles?.includes("partner") && user.roles.length === 1;
+  const homePath = isPartner ? "/partner-dashboard" : "/dashboard";
 
   return (
     <ConfigProvider locale={antLocale}>
@@ -49,7 +53,7 @@ function Inner() {
             path="/login"
             element={
               !loading && user
-                ? <Navigate to="/dashboard" replace />
+                ? <Navigate to={homePath} replace />
                 : <LoginPage onLogin={setUser} />
             }
           />
@@ -84,6 +88,8 @@ function Inner() {
             <Route path="/settings/integrations" element={<IntegrationSettingsPage />} />
             <Route path="/cash-registers" element={<CashRegistersPage />} />
             <Route path="/assets" element={<AssetsPage />} />
+            <Route path="/partner-dashboard" element={<PartnerDashboardPage />} />
+            <Route path="/admin-partners" element={<AdminPartnersPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
