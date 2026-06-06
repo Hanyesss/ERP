@@ -62,13 +62,18 @@ async def _partner_orders_query(client_ids: List[uuid.UUID],
                                 date_from: Optional[date] = None,
                                 date_to: Optional[date] = None,
                                 client_id: Optional[uuid.UUID] = None,
-                                business_type_id: Optional[uuid.UUID] = None):
-    """Base select for paid, non-cancelled orders of the given clients."""
+                                business_type_id: Optional[uuid.UUID] = None,
+                                paid_only: bool = True):
+    """Base select for non-cancelled orders of the given clients.
+    paid_only=True (default) restricts to paid/partial — used for commission calculations.
+    paid_only=False returns all statuses — used for the partner orders list view.
+    """
     q = select(Order).where(
         Order.client_id.in_(client_ids),
-        Order.payment_status.in_(_PAID_STATUSES),
         Order.status != OrderStatus.cancelled,
     )
+    if paid_only:
+        q = q.where(Order.payment_status.in_(_PAID_STATUSES))
     if date_from:
         q = q.where(Order.order_date >= date_from)
     if date_to:
@@ -250,7 +255,7 @@ async def partner_orders(
         return []
 
     ClientAlias = aliased(Counterparty)
-    base_q = await _partner_orders_query(client_ids, date_from, date_to, client_id, business_type_id)
+    base_q = await _partner_orders_query(client_ids, date_from, date_to, client_id, business_type_id, paid_only=False)
     rows = (await db.execute(
         base_q.add_columns(ClientAlias.name.label("client_name"), BusinessType.name.label("business_type_name"))
         .join(ClientAlias, Order.client_id == ClientAlias.id)
