@@ -29,6 +29,7 @@ class ShipmentCreatePayload(BaseModel):
     # client_code используется irsway для привязки owner (приоритет); client_phone — запасной вариант
     client_phone: Optional[str] = None
     client_code: Optional[str] = None
+    partner_code: Optional[str] = None  # код партнёра, к которому привязан клиент
     client_name: str
     recipient: Optional[str] = None
     destination: Optional[str] = None

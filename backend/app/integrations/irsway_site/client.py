@@ -55,6 +55,8 @@ class IrswayClient:
             body["client_code"] = payload.client_code
         if payload.client_phone:
             body["client_phone"] = payload.client_phone
+        if payload.partner_code:
+            body["partner_code"] = payload.partner_code
         if total_weight is not None:
             body["weight"] = total_weight
         if total_volume is not None:

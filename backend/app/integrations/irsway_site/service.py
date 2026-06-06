@@ -70,6 +70,14 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
     if client_row and isinstance(client_row.contact_info, dict):
         client_phone = client_row.contact_info.get("phone")
 
+    partner_code: Optional[str] = None
+    if client_row and client_row.partner_id:
+        partner_row = (await db.execute(
+            select(Counterparty).where(Counterparty.id == client_row.partner_id)
+        )).scalar_one_or_none()
+        if partner_row and partner_row.code:
+            partner_code = partner_row.code.strip().upper()
+
     # insurance_percent — передаём как число-процент (безразмерное), не конвертируем
     ins_charge = charges.get("insurance_percent")
     insurance_percent: Optional[float] = None
@@ -95,6 +103,7 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
         erp_order_number=order.order_number,
         client_phone=client_phone,
         client_code=client_row.code.upper() if client_row and client_row.code else None,
+        partner_code=partner_code,
         client_name=client_row.name if client_row else "",
         recipient=order.recipient,
         destination=order.destination,
@@ -111,10 +120,11 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
     )
 
     logger.info(
-        "Irsway payload для заказа %s: client_code=%s client_phone=%s "
+        "Irsway payload для заказа %s: client_code=%s partner_code=%s client_phone=%s "
         "items=%d insurance_percent=%s china_delivery=%s packing=%s market_fee=%s",
         order.order_number,
         payload.client_code,
+        payload.partner_code,
         payload.client_phone,
         len(payload.items),
         payload.insurance_percent,
