@@ -290,7 +290,8 @@
       "status_customs": "На таможне (растаможка)",
       "status_move_ru": "В пути по России",
       "status_moscow": "Прибыл в Москву"
-    }
+    },
+    "excluded_from_accounting": "Не учитывать в бухгалтерии"
   },
   "purchase": {
     "title": "Закупки",

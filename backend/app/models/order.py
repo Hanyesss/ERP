@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum as PyEnum
-from sqlalchemy import String, Text, Enum, Numeric, Date, ForeignKey, DateTime, func
+from sqlalchemy import String, Text, Enum, Numeric, Date, ForeignKey, DateTime, func, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -63,3 +63,4 @@ class Order(Base, TimestampMixin):
     sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    excluded_from_accounting: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -73,6 +73,7 @@ class OrderCreate(BaseModel):
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
     warehouse_id: Optional[uuid.UUID] = None
+    excluded_from_accounting: bool = False
 
 
 class OrderUpdate(BaseModel):
@@ -89,6 +90,7 @@ class OrderUpdate(BaseModel):
     arrival_date: Optional[date] = None
     tracking_number: Optional[str] = None
     warehouse_id: Optional[uuid.UUID] = None
+    excluded_from_accounting: Optional[bool] = None
 
 
 # ── Item response (role-aware) ─────────────────────────────────────────────────
@@ -183,6 +185,7 @@ class OrderListItem(BaseModel):
     paid_amount_cny: Decimal = Decimal("0")
     remaining_amount_cny: Decimal = Decimal("0")
     sync_status: Optional[str] = None
+    excluded_from_accounting: bool = False
 
 
 class OrderResponseManager(BaseModel):
@@ -223,6 +226,7 @@ class OrderResponseManager(BaseModel):
     sync_status: Optional[str] = None
     sync_error: Optional[str] = None
     synced_at: Optional[datetime] = None
+    excluded_from_accounting: bool = False
 
 
 class OrderResponseFull(BaseModel):
@@ -266,6 +270,7 @@ class OrderResponseFull(BaseModel):
     sync_status: Optional[str] = None
     sync_error: Optional[str] = None
     synced_at: Optional[datetime] = None
+    excluded_from_accounting: bool = False
 
 
 # Alias for imports that still use OrderResponse

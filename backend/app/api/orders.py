@@ -198,6 +198,7 @@ async def _load_order_detail(
             sync_status=order.sync_status,
             sync_error=order.sync_error,
             synced_at=order.synced_at,
+            excluded_from_accounting=order.excluded_from_accounting,
         )
 
     # Purchaser/accountant/admin — load purchase_items per order_item
@@ -281,6 +282,7 @@ async def _load_order_detail(
         sync_status=order.sync_status,
         sync_error=order.sync_error,
         synced_at=order.synced_at,
+        excluded_from_accounting=order.excluded_from_accounting,
     )
 
 
@@ -427,6 +429,7 @@ async def list_orders(
             Order.payment_status, Order.supplier_payment_status,
             Order.client_id, Order.business_type_id, Order.manager_id,
             Order.sync_status,
+            Order.excluded_from_accounting,
             ClientAlias.name.label("client_name"),
             ClientAlias.code.label("client_code"),
             ManagerAlias.full_name.label("manager_name"),
@@ -484,6 +487,7 @@ async def list_orders(
             paid_amount_cny=r.paid_amount_cny or Decimal("0"),
             remaining_amount_cny=max(r.total_sale_cny - (r.paid_amount_cny or Decimal("0")), Decimal("0")),
             sync_status=r.sync_status,
+            excluded_from_accounting=r.excluded_from_accounting,
         )
         for r in rows
     ]
@@ -619,6 +623,7 @@ async def create_order(
         tracking_number=body.tracking_number,
         warehouse_id=body.warehouse_id,
         created_by=current_user.id,
+        excluded_from_accounting=body.excluded_from_accounting,
     )
     db.add(order)
     await db.flush()

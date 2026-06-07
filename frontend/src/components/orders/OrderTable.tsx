@@ -76,10 +76,17 @@ export default function OrderTable() {
       ellipsis: true,
       render: (num, row) => (
         <Tooltip title={num} placement="topLeft">
-          <Button type="link" style={{ padding: 0, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}
-            onClick={() => navigate(`/orders/${row.id}`)}>
-            {num}
-          </Button>
+          <Space size={4}>
+            <Button type="link" style={{ padding: 0, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}
+              onClick={() => navigate(`/orders/${row.id}`)}>
+              {num}
+            </Button>
+            {row.excluded_from_accounting && (
+              <Tooltip title={t("order.excluded_from_accounting")}>
+                <Tag color="default" style={{ fontSize: 10, padding: "0 4px", lineHeight: "16px", borderRadius: 3 }}>∅</Tag>
+              </Tooltip>
+            )}
+          </Space>
         </Tooltip>
       ),
     },

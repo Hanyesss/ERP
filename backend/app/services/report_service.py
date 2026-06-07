@@ -40,6 +40,7 @@ async def _calc_pnl_for_period(
         Order.order_date >= date_from,
         Order.order_date <= date_to,
         Order.status != OrderStatus.cancelled,
+        Order.excluded_from_accounting == False,
     ]
     if business_type_id:
         order_filter.append(Order.business_type_id == business_type_id)
@@ -175,6 +176,7 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
         Order.order_date >= date_from,
         Order.order_date <= date_to,
         Order.status != OrderStatus.cancelled,
+        Order.excluded_from_accounting == False,
     ]
 
     # Revenue + paid per client
@@ -318,6 +320,7 @@ async def get_by_supplier(db: AsyncSession, date_from: date, date_to: date):
         Purchase.purchase_date >= date_from,
         Purchase.purchase_date <= date_to,
         Purchase.is_deleted == False,
+        Purchase.excluded_from_accounting == False,
     ]
 
     purch_rows = await db.execute(
@@ -416,6 +419,7 @@ async def get_client_detail(
         Order.order_date >= date_from,
         Order.order_date <= date_to,
         Order.status != OrderStatus.cancelled,
+        Order.excluded_from_accounting == False,
     ]
 
     # Client name
@@ -602,6 +606,7 @@ async def get_supplier_detail(
         Purchase.purchase_date >= date_from,
         Purchase.purchase_date <= date_to,
         Purchase.is_deleted == False,
+        Purchase.excluded_from_accounting == False,
     ]
 
     # Supplier name

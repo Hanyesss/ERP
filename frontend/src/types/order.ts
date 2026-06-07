@@ -123,6 +123,7 @@ export interface Order {
   sync_status?: string;
   sync_error?: string;
   synced_at?: string;
+  excluded_from_accounting?: boolean;
 }
 
 export interface OrderListItem {
@@ -147,6 +148,7 @@ export interface OrderListItem {
   paid_amount_cny: number;
   remaining_amount_cny: number;
   sync_status?: string;
+  excluded_from_accounting?: boolean;
 }
 
 export interface OrderListResponse {
@@ -172,6 +174,7 @@ export interface OrderFormData {
   destination?: string;
   arrival_date?: string;
   tracking_number?: string;
+  excluded_from_accounting?: boolean;
 }
 
 export interface AvailableForPurchaseItem {

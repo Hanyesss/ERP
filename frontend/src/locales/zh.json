@@ -320,7 +320,8 @@
       "status_customs": "清关中",
       "status_move_ru": "俄罗斯境内运输中",
       "status_moscow": "已到达莫斯科"
-    }
+    },
+    "excluded_from_accounting": "不计入财务"
   },
   "purchase": {
     "title": "采购单",

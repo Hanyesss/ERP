@@ -28,6 +28,7 @@ export interface Purchase {
   items: PurchaseItem[];
   order_id?: string;
   order_number?: string;
+  excluded_from_accounting?: boolean;
 }
 
 export interface PurchaseListItem {
@@ -45,6 +46,7 @@ export interface PurchaseListItem {
   remaining_amount_cny: number;
   order_id?: string;
   order_number?: string;
+  excluded_from_accounting?: boolean;
 }
 
 export interface PurchaseListResponse {
@@ -71,4 +73,5 @@ export interface PurchaseFormData {
   items: PurchaseItemFormData[];
   order_id?: string;
   total_amount?: number;
+  excluded_from_accounting?: boolean;
 }

@@ -39,5 +39,6 @@ class Purchase(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    excluded_from_accounting: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     items: Mapped[list["PurchaseItem"]] = relationship("PurchaseItem", back_populates="purchase", lazy="selectin")

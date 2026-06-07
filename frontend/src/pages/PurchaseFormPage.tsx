@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
-  Space, Row, Col, InputNumber, Table, message, Alert, Spin,
+  Space, Row, Col, InputNumber, Table, message, Alert, Spin, Checkbox,
 } from "antd";
 import { UploadOutlined, PaperClipOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -149,6 +149,7 @@ export default function PurchaseFormPage() {
         items: [],
         order_id: selectedOrderId,
         total_amount: totalAmount,
+        excluded_from_accounting: values.excluded_from_accounting ?? false,
       });
     } else {
       const selectedItems = itemRows.filter(r => r.selected && r.input_quantity > 0 && r.cost_price > 0);
@@ -168,6 +169,7 @@ export default function PurchaseFormPage() {
           quantity: item.input_quantity,
           cost_price: item.cost_price,
         })),
+        excluded_from_accounting: values.excluded_from_accounting ?? false,
       });
     }
   };
@@ -272,6 +274,11 @@ export default function PurchaseFormPage() {
             <Col span={24}>
               <Form.Item name="notes" label={t("purchase.notes")}>
                 <Input.TextArea rows={2} />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item name="excluded_from_accounting" valuePropName="checked">
+                <Checkbox>{t("order.excluded_from_accounting")}</Checkbox>
               </Form.Item>
             </Col>
           </Row>

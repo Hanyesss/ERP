@@ -517,57 +517,77 @@ async def create_payment(
     db.add(payment)
     await db.flush()
 
-    # Создаём транзакцию кассы — сумма в ВАЛЮТЕ КАССЫ
-    from app.api.cash_registers import _get_balance
-    reg = (await db.execute(
-        select(CashRegister).where(CashRegister.id == body.cash_register_id)
-    )).scalar_one()
-    reg_currency = reg.currency
+    # Проверяем: все ли аллокации ведут на исключённые записи → не создаём CashTransaction
+    skip_cash_tx = False
+    if body.allocations:
+        excluded_count = 0
+        for alloc in body.allocations:
+            if alloc.order_id:
+                excl = (await db.execute(
+                    select(Order.excluded_from_accounting).where(Order.id == alloc.order_id)
+                )).scalar_one_or_none()
+                if excl:
+                    excluded_count += 1
+            elif alloc.purchase_id:
+                excl = (await db.execute(
+                    select(Purchase.excluded_from_accounting).where(Purchase.id == alloc.purchase_id)
+                )).scalar_one_or_none()
+                if excl:
+                    excluded_count += 1
+        skip_cash_tx = (excluded_count == len(body.allocations) and excluded_count > 0)
 
-    _RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
-    exp_rank = _RANK.get(body.currency, 1)
-    reg_rank = _RANK.get(reg_currency, 1)
+    if not skip_cash_tx:
+        # Создаём транзакцию кассы — сумма в ВАЛЮТЕ КАССЫ
+        from app.api.cash_registers import _get_balance
+        reg = (await db.execute(
+            select(CashRegister).where(CashRegister.id == body.cash_register_id)
+        )).scalar_one()
+        reg_currency = reg.currency
 
-    if body.currency == reg_currency:
-        cash_amount = body.amount
-    elif reg_currency == "CNY":
-        cash_amount = amount_cny
-    else:
-        if not body.cash_rate or body.cash_rate <= 0:
-            raise HTTPException(
-                422,
-                f"cross_currency_rate_required:{body.currency}:{reg_currency}"
-            )
-        if exp_rank > reg_rank:
-            # Платёж в крупной валюте (напр. USD→CNY): cash_rate = 1 USD = X CNY
-            cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+        _RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
+        exp_rank = _RANK.get(body.currency, 1)
+        reg_rank = _RANK.get(reg_currency, 1)
+
+        if body.currency == reg_currency:
+            cash_amount = body.amount
+        elif reg_currency == "CNY":
+            cash_amount = amount_cny
         else:
-            # Платёж в мелкой валюте (напр. CNY→USDT): cash_rate = 1 USDT = X CNY
-            cash_amount = (body.amount / body.cash_rate).quantize(Decimal("0.000001"))
+            if not body.cash_rate or body.cash_rate <= 0:
+                raise HTTPException(
+                    422,
+                    f"cross_currency_rate_required:{body.currency}:{reg_currency}"
+                )
+            if exp_rank > reg_rank:
+                # Платёж в крупной валюте (напр. USD→CNY): cash_rate = 1 USD = X CNY
+                cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
+            else:
+                # Платёж в мелкой валюте (напр. CNY→USDT): cash_rate = 1 USDT = X CNY
+                cash_amount = (body.amount / body.cash_rate).quantize(Decimal("0.000001"))
 
-    current_balance = await _get_balance(db, body.cash_register_id)
-    tx_direction = "in" if body.direction == "in" else "out"
-    new_balance = current_balance + cash_amount if tx_direction == "in" else current_balance - cash_amount
-    cash_tx = CashTransaction(
-        id=uuid.uuid4(),
-        cash_register_id=body.cash_register_id,
-        payment_id=payment.id,
-        direction=tx_direction,
-        amount=cash_amount,
-        balance_after=new_balance,
-        operation_type="payment_in" if tx_direction == "in" else "payment_out",
-        notes=body.notes,   # пользовательский текст (примечание к платежу)
-        created_by=current_user.id,
-    )
-    db.add(cash_tx)
-    await db.flush()
-    await write_audit(db, current_user.id, "cash_transaction", cash_tx.id, AuditActionEnum.create, {
-        "register_id": str(body.cash_register_id),
-        "direction": tx_direction,
-        "amount": str(body.amount),
-        "reason": "payment",
-        "payment_id": str(payment.id),
-    })
+        current_balance = await _get_balance(db, body.cash_register_id)
+        tx_direction = "in" if body.direction == "in" else "out"
+        new_balance = current_balance + cash_amount if tx_direction == "in" else current_balance - cash_amount
+        cash_tx = CashTransaction(
+            id=uuid.uuid4(),
+            cash_register_id=body.cash_register_id,
+            payment_id=payment.id,
+            direction=tx_direction,
+            amount=cash_amount,
+            balance_after=new_balance,
+            operation_type="payment_in" if tx_direction == "in" else "payment_out",
+            notes=body.notes,   # пользовательский текст (примечание к платежу)
+            created_by=current_user.id,
+        )
+        db.add(cash_tx)
+        await db.flush()
+        await write_audit(db, current_user.id, "cash_transaction", cash_tx.id, AuditActionEnum.create, {
+            "register_id": str(body.cash_register_id),
+            "direction": tx_direction,
+            "amount": str(body.amount),
+            "reason": "payment",
+            "payment_id": str(payment.id),
+        })
 
     await _apply_allocations(db, payment, body.allocations)
     await db.flush()

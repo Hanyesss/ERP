@@ -111,6 +111,7 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         order_id=linked_order_id,
         order_number=linked_order_number,
         created_by_name=created_by_name,
+        excluded_from_accounting=pur.excluded_from_accounting,
     )
 
 
@@ -232,6 +233,7 @@ async def list_purchases(
             order_id=r.linked_order_id,
             order_number=r.order_number,
             remaining_amount_cny=max(r[0].total_amount_cny - (r.paid_cny or Decimal("0")), Decimal("0")),
+            excluded_from_accounting=r[0].excluded_from_accounting,
         )
         for r in rows
     ]
@@ -319,6 +321,7 @@ async def create_purchase(
             order_id=body.order_id,
             notes=body.notes,
             created_by=current_user.id,
+            excluded_from_accounting=body.excluded_from_accounting,
         )
         db.add(purchase)
         await db.flush()
@@ -369,6 +372,7 @@ async def create_purchase(
             payment_status=PurchasePaymentStatus.unpaid,
             notes=body.notes,
             created_by=current_user.id,
+            excluded_from_accounting=body.excluded_from_accounting,
         )
         db.add(purchase)
         await db.flush()

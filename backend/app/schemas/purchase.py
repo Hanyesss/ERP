@@ -22,6 +22,7 @@ class PurchaseCreate(BaseModel):
     # logistics-only fields
     order_id: Optional[uuid.UUID] = None
     total_amount: Optional[Decimal] = None
+    excluded_from_accounting: bool = False
 
 
 class PurchaseUpdate(BaseModel):
@@ -32,6 +33,7 @@ class PurchaseUpdate(BaseModel):
     payment_status: Optional[str] = None
     notes: Optional[str] = None
     items: Optional[List[PurchaseItemCreate]] = None
+    excluded_from_accounting: Optional[bool] = None
 
 
 class PurchaseItemResponse(BaseModel):
@@ -63,6 +65,7 @@ class PurchaseResponse(BaseModel):
     order_id: Optional[uuid.UUID] = None
     order_number: Optional[str] = None
     created_by_name: Optional[str] = None
+    excluded_from_accounting: bool = False
 
 
 class PurchaseListItem(BaseModel):
@@ -80,6 +83,7 @@ class PurchaseListItem(BaseModel):
     remaining_amount_cny: Decimal = Decimal("0")
     order_id: Optional[uuid.UUID] = None
     order_number: Optional[str] = None
+    excluded_from_accounting: bool = False
 
 
 class PurchaseListResponse(BaseModel):

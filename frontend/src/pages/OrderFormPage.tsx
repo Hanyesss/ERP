@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography, Alert,
-  Space, Row, Col, Statistic, message, Divider, Tooltip, Tag,
+  Space, Row, Col, Statistic, message, Divider, Tooltip, Tag, Checkbox,
 } from "antd";
 import { UploadOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -202,6 +202,7 @@ export default function OrderFormPage({ user }: Props) {
         business_type_id: existingOrder.business_type_id,
         client_currency: existingOrder.client_currency,
         notes: existingOrder.notes,
+        excluded_from_accounting: existingOrder.excluded_from_accounting ?? false,
         recipient: existingOrder.recipient,
         destination: existingOrder.destination,
         arrival_date: existingOrder.arrival_date ? dayjs(existingOrder.arrival_date) : null,
@@ -512,6 +513,11 @@ export default function OrderFormPage({ user }: Props) {
             <Col span={clientPhone ? 15 : 19}>
               <Form.Item name="notes" label={t("order.notes")}>
                 <Input.TextArea rows={2} />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item name="excluded_from_accounting" valuePropName="checked">
+                <Checkbox>{t("order.excluded_from_accounting")}</Checkbox>
               </Form.Item>
             </Col>
           </Row>
