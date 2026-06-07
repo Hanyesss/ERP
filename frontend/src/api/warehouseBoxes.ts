@@ -1,5 +1,11 @@
 import apiClient from "./client";
 
+export interface BoxPhotoData {
+  id: string;
+  photo_url: string;
+  photo_path: string;
+}
+
 export interface BoxItemPhotoData {
   id: string;
   photo_url: string;
@@ -12,8 +18,8 @@ export interface BoxItemData {
   quantity: number;
   tracking_code: string | null;
   photos: BoxItemPhotoData[];
-  photo_url: string | null;   // первое фото (backward compat)
-  photo_path: string | null;  // первое фото (backward compat)
+  photo_url: string | null;
+  photo_path: string | null;
   sort_order: number;
 }
 
@@ -32,8 +38,9 @@ export interface WarehouseBox {
   density: number;
   item_name: string;
   description: string | null;
-  items: BoxItemData[];      // позиции товаров внутри коробки
-  photo_url: string | null;
+  items: BoxItemData[];
+  photos: BoxPhotoData[];     // до 3 фото коробки
+  photo_url: string | null;   // первое фото (backward compat)
   status: "on_warehouse" | "shipped";
   received_at: string | null;
   shipped_at: string | null;
@@ -95,12 +102,15 @@ export const deleteBox = (id: string) =>
 export const uploadBoxPhoto = (boxId: string, file: File) => {
   const fd = new FormData();
   fd.append("file", file);
-  return apiClient.post<{ photo_url: string; photo_path: string }>(
+  return apiClient.post<{ id: string; photo_url: string; photo_path: string }>(
     `/api/warehouse-boxes/${boxId}/photo`,
     fd,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
 };
+
+export const deleteBoxPhoto = (boxId: string, photoId: string) =>
+  apiClient.delete(`/api/warehouse-boxes/${boxId}/photos/${photoId}`);
 
 export const uploadBoxItemPhoto = (boxId: string, itemId: string, file: File) => {
   const fd = new FormData();

@@ -20,7 +20,7 @@ import {
   getQrLabelUrl, generatePackingListPreview, generateQrBulkPdf, shipBoxes,
   getShipped, getPackingLists,
   type ClientGroup, type WarehouseBox, type BoxCreate, type BoxItemIn,
-  type BoxItemData, type PackingListRecord,
+  type BoxItemData, type PackingListRecord, type BoxPhotoData,
 } from "../api/warehouseBoxes";
 import apiClient from "../api/client";
 import { getCounterparties } from "../api/counterparties";
@@ -251,9 +251,9 @@ function ReceiptModal({
   const [form] = Form.useForm();
   const [creating, setCreating] = useState(false);
   const [createdBoxes, setCreatedBoxes] = useState<WarehouseBox[]>([]);
-  // Главное фото коробки
-  const [mainPhotoFile, setMainPhotoFile] = useState<File | null>(null);
-  const [mainPhotoPreview, setMainPhotoPreview] = useState<string | null>(null);
+  // Фото коробки — до 3 штук
+  const [boxPhotoFiles, setBoxPhotoFiles] = useState<File[]>([]);
+  const [boxPhotoPreviews, setBoxPhotoPreviews] = useState<string[]>([]);
   // Камера для сканирования трек-номера
   const [trackingScanOpen, setTrackingScanOpen] = useState(false);
   const trackingScannerRef = useRef<any>(null);
@@ -326,13 +326,15 @@ function ReceiptModal({
       const rawBoxes = Array.isArray(res.data) ? res.data : [res.data];
 
       const firstBox = rawBoxes[0];
-      // Загружаем главное фото коробки (сжимаем перед загрузкой)
-      if (firstBox && mainPhotoFile) {
-        try {
-          const compressed = await compressImage(mainPhotoFile, 800, 0.72);
-          const f = new File([compressed], "box_photo.jpg", { type: "image/jpeg" });
-          await uploadBoxPhoto(firstBox.id, f);
-        } catch {}
+      // Загружаем фото коробки (до 3 штук, сжимаем перед загрузкой)
+      if (firstBox && boxPhotoFiles.length > 0) {
+        for (const f of boxPhotoFiles) {
+          try {
+            const compressed = await compressImage(f, 800, 0.72);
+            const cf = new File([compressed], "box_photo.jpg", { type: "image/jpeg" });
+            await uploadBoxPhoto(firstBox.id, cf);
+          } catch {}
+        }
       }
       // Загружаем фото позиций для первой коробки (до 3 на позицию)
       if (firstBox && firstBox.items) {
@@ -360,18 +362,33 @@ function ReceiptModal({
     }
   };
 
+  const handleBoxPhoto = (file: File) => {
+    if (boxPhotoFiles.length >= 3) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBoxPhotoFiles(prev => [...prev, file]);
+      setBoxPhotoPreviews(prev => [...prev, reader.result as string]);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeBoxPhoto = (pi: number) => {
+    setBoxPhotoFiles(prev => prev.filter((_, j) => j !== pi));
+    setBoxPhotoPreviews(prev => prev.filter((_, j) => j !== pi));
+  };
+
   const handleClose = () => {
     form.resetFields();
     setItems([{ name: "", qty: 1, tracking: "", files: [], previews: [] }]);
     setCreatedBoxes([]);
-    setMainPhotoFile(null); setMainPhotoPreview(null);
+    setBoxPhotoFiles([]); setBoxPhotoPreviews([]);
     onClose();
   };
 
   const handleAddMore = () => {
     form.setFieldValue("box_count", 1);
     setItems([{ name: "", qty: 1, tracking: "", files: [], previews: [] }]);
-    setMainPhotoFile(null); setMainPhotoPreview(null);
+    setBoxPhotoFiles([]); setBoxPhotoPreviews([]);
     setCreatedBoxes([]);
     // Оставляем клиента и склад
   };
@@ -436,28 +453,27 @@ function ReceiptModal({
           </Form.Item>
 
 
-          {/* Задача 2: главное фото коробки */}
+          {/* Фото коробки — до 3 штук */}
           <Form.Item label={t("warehouse.photo_optional")}>
-            <Space align="start">
-              <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
-                beforeUpload={f => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => setMainPhotoPreview(reader.result as string);
-                  reader.readAsDataURL(f);
-                  setMainPhotoFile(f);
-                  return false;
-                }}>
-                <Button icon={<UploadOutlined />} style={{ background: mainPhotoPreview ? "#f6ffed" : undefined }}>
-                  {mainPhotoPreview ? "✓ " + t("warehouse.photo") : t("warehouse.upload_photo")}
-                </Button>
-              </Upload>
-              {mainPhotoPreview && (
-                <Image src={mainPhotoPreview} width={48} height={48}
-                  style={{ objectFit: "cover", borderRadius: 4, cursor: "pointer" }} />
-              )}
-              {mainPhotoPreview && (
-                <Button size="small" type="text" danger
-                  onClick={() => { setMainPhotoFile(null); setMainPhotoPreview(null); }}>✕</Button>
+            <Space align="start" wrap>
+              {boxPhotoPreviews.map((prev, pi) => (
+                <div key={pi} style={{ position: "relative" }}>
+                  <Image src={prev} width={48} height={48}
+                    style={{ objectFit: "cover", borderRadius: 4 }} />
+                  <Button
+                    size="small" type="text" danger
+                    style={{ position: "absolute", top: -6, right: -6, padding: 0, width: 18, height: 18, fontSize: 11, lineHeight: "16px", minWidth: 0 }}
+                    onClick={() => removeBoxPhoto(pi)}
+                  >✕</Button>
+                </div>
+              ))}
+              {boxPhotoFiles.length < 3 && (
+                <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
+                  beforeUpload={f => { handleBoxPhoto(f); return false; }}>
+                  <Button icon={<UploadOutlined />}>
+                    {boxPhotoFiles.length === 0 ? t("warehouse.upload_photo") : "+"}
+                  </Button>
+                </Upload>
               )}
             </Space>
           </Form.Item>
@@ -851,33 +867,26 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
     {
       title: "",
       key: "photo",
-      width: 44,
-      render: (_, b) =>
-        b.photo_url ? (
-          <Image
-            src={b.photo_url}
-            width={36}
-            height={36}
-            style={{ objectFit: "cover", borderRadius: 4 }}
-            preview={{ mask: false }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              background: "#f0f0f0",
-              borderRadius: 4,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 16,
-              color: "#ccc",
-            }}
-          >
+      width: 80,
+      render: (_, b) => {
+        const photos: BoxPhotoData[] = b.photos && b.photos.length > 0 ? b.photos : [];
+        if (photos.length > 0) {
+          return (
+            <Space size={2}>
+              {photos.map(p => (
+                <Image key={p.id} src={p.photo_url} width={32} height={32}
+                  style={{ objectFit: "cover", borderRadius: 3 }} preview={{ mask: false }} />
+              ))}
+            </Space>
+          );
+        }
+        return (
+          <div style={{ width: 32, height: 32, background: "#f0f0f0", borderRadius: 3,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#ccc" }}>
             <InboxOutlined />
           </div>
-        ),
+        );
+      },
     },
     {
       title: t("warehouse.item_name"),

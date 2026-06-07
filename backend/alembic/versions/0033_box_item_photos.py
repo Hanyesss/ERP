@@ -4,6 +4,7 @@ Revision ID: 0033
 Revises: 0032
 Create Date: 2026-06-07
 """
+import uuid
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
@@ -27,12 +28,19 @@ def upgrade():
     op.create_index("ix_box_item_photos_box_item_id", "box_item_photos", ["box_item_id"])
 
     # Мигрируем существующие одиночные фото из box_items.photo_path
-    op.execute("""
-        INSERT INTO box_item_photos (id, box_item_id, photo_path, sort_order)
-        SELECT gen_random_uuid(), id, photo_path, 0
-        FROM box_items
-        WHERE photo_path IS NOT NULL AND photo_path <> ''
-    """)
+    # UUID генерируем в Python — не зависит от расширений PostgreSQL
+    conn = op.get_bind()
+    rows = conn.execute(
+        sa.text("SELECT id, photo_path FROM box_items WHERE photo_path IS NOT NULL AND photo_path <> ''")
+    ).fetchall()
+    if rows:
+        conn.execute(
+            sa.text(
+                "INSERT INTO box_item_photos (id, box_item_id, photo_path, sort_order) "
+                "VALUES (:id, :box_item_id, :photo_path, 0)"
+            ),
+            [{"id": uuid.uuid4(), "box_item_id": r[0], "photo_path": r[1]} for r in rows],
+        )
 
 
 def downgrade():

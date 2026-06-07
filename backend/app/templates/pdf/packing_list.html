@@ -6,82 +6,97 @@
   @page { size: A4; margin: 14mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0;
       font-family: "DejaVu Sans", Arial, sans-serif; }
-  body { font-size: 9pt; color: #1a1a1a; background: #fff; }
+  body { font-size: 10pt; color: #1a1a1a; background: #fff; }
 
-  /* ── Заголовок документа ── */
+  /* ── Заголовок ── */
   .doc-header { margin-bottom: 10px; border-bottom: 1.5px solid #2c5f8a; padding-bottom: 6px; }
-  .doc-title { font-size: 14pt; font-weight: bold; color: #2c5f8a; letter-spacing: 0.5px; }
-  .doc-title span { font-size: 10pt; color: #666; font-weight: normal; margin-left: 6px; }
-  .doc-meta { font-size: 8pt; color: #888; margin-top: 3px; }
+  .doc-title { font-size: 15pt; font-weight: bold; color: #2c5f8a; letter-spacing: 0.5px; }
+  .doc-title span { font-size: 11pt; color: #666; font-weight: normal; margin-left: 6px; }
+  .doc-meta { font-size: 9pt; color: #888; margin-top: 3px; }
 
   /* ── Таблица ── */
   table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 
-  /* Шапка — один раз сверху на группу */
   .client-label {
-    font-size: 8pt; font-weight: bold; color: #2c5f8a;
+    font-size: 9pt; font-weight: bold; color: #2c5f8a;
     padding: 4px 0 2px 0; margin-top: 8px;
     border-bottom: 1px solid #b0c8e0;
-    letter-spacing: 0.3px;
   }
+
+  /* Колонки: № | Наименование | Изображение | Вес | Объём | Плотн. | Кол-во | Трек */
   thead th {
     background: #2c5f8a; color: #fff;
-    padding: 4px 5px; font-size: 7.5pt;
+    padding: 5px 6px; font-size: 8pt;
     text-align: left; white-space: nowrap;
     border: none;
   }
-  thead th.num   { width: 22px; text-align: center; }
-  thead th.photo { width: 42px; text-align: center; }
-  thead th.name  { } /* flex */
-  thead th.num-r { width: 56px; text-align: right; }
-  thead th.qty   { width: 38px; text-align: center; }
-  thead th.track { width: 120px; }
+  thead th.col-num    { width: 24px; text-align: center; }
+  thead th.col-name   { } /* flex */
+  thead th.col-img    { width: 220px; text-align: center; }
+  thead th.col-numr   { width: 60px; text-align: right; }
+  thead th.col-qty    { width: 42px; text-align: center; }
+  thead th.col-track  { width: 120px; }
 
-  /* Строка коробки */
+  /* ── Строка коробки ── */
   tr.box-row { border-top: 1px solid #d0dce8; }
   tr.box-row:nth-child(even of .box-row) { background: #f7f9fc; }
   tr.box-row td {
-    padding: 5px 5px; vertical-align: middle;
-    border-bottom: none; font-size: 8.5pt;
+    padding: 6px 6px; vertical-align: middle;
+    border-bottom: none;
   }
   .box-num {
-    font-size: 7.5pt; color: #888; text-align: center;
-    font-weight: normal; white-space: nowrap;
+    font-size: 8pt; color: #888; text-align: center; white-space: nowrap;
   }
-  .box-photo-cell { text-align: center; padding: 3px; }
-  .box-photo { width: 36px; height: 36px; object-fit: cover;
-    border-radius: 3px; border: 1px solid #ccd; }
-  .box-no-photo { width: 36px; height: 36px; display: inline-block; }
-  .box-code { font-size: 9pt; font-weight: bold; color: #1a1a1a;
-    line-height: 1.2; }
-  .box-name { font-size: 7.5pt; color: #555; margin-top: 1px; }
-  td.num-r { text-align: right; font-size: 8.5pt; white-space: nowrap; }
+  /* Наименование коробки */
+  .box-name-cell {}
+  .box-code-text {
+    font-size: 9pt; color: #555; line-height: 1.3;
+  }
+  .box-item-name {
+    font-size: 11pt; font-weight: bold; color: #1a1a1a; line-height: 1.3;
+  }
+  /* Фото коробки — в колонке Изображение */
+  .photos-row {
+    display: flex; gap: 4px; flex-wrap: nowrap; align-items: center;
+  }
+  .box-photo {
+    width: 80px; height: 80px; object-fit: cover;
+    border-radius: 4px; border: 1px solid #ccd;
+    flex-shrink: 0;
+  }
+  td.col-numr { text-align: right; font-size: 9.5pt; white-space: nowrap; }
 
-  /* Строка позиции товара (подстрока) */
+  /* ── Строка позиции товара ── */
   tr.item-row td {
-    padding: 2px 5px 2px 0; font-size: 8pt; color: #333;
+    padding: 4px 6px 4px 0; font-size: 9pt; color: #333;
     border-bottom: 1px solid #eef0f4; background: #fff;
   }
-  .item-indent { padding-left: 28px !important; }
-  .item-name-cell { font-size: 8pt; color: #222; }
-  .item-photos-row { display: flex; gap: 3px; margin-top: 2px; flex-wrap: nowrap; }
-  .item-photo { width: 32px; height: 32px; object-fit: cover;
-    border-radius: 2px; border: 1px solid #dde; flex-shrink: 0; }
-  .item-track { font-size: 7.5pt; color: #444; font-family: monospace; }
-  .item-qty { text-align: center; font-weight: bold; font-size: 8pt; }
+  .item-indent { padding-left: 32px !important; }
+  .item-name-text {
+    font-size: 10pt; font-weight: bold; color: #1a1a1a; line-height: 1.3;
+  }
+  .item-photo {
+    width: 75px; height: 75px; object-fit: cover;
+    border-radius: 3px; border: 1px solid #dde;
+    flex-shrink: 0;
+  }
+  .item-track { font-size: 8pt; color: #444; font-family: monospace; }
+  .item-qty { text-align: center; font-weight: bold; font-size: 10pt; }
 
-  /* Разделитель после последней позиции коробки */
-  tr.box-end td { border-bottom: 1px solid #c8d8e8; }
+  /* Разделитель после последней позиции */
+  tr.box-end td { border-bottom: 1.5px solid #c8d8e8; }
 
-  /* Итог */
-  .total-row { display: flex; gap: 24px; align-items: center;
+  /* ── Итог ── */
+  .total-row {
+    display: flex; gap: 24px; align-items: center;
     background: #f0f4f8; border: 1px solid #c0d0e0;
-    padding: 6px 10px; border-radius: 4px; margin-top: 4px;
-    font-size: 8.5pt; }
+    padding: 7px 12px; border-radius: 4px; margin-top: 4px;
+    font-size: 9.5pt;
+  }
   .total-row strong { color: #2c5f8a; }
-  .total-label { font-size: 7pt; color: #888; display: block; }
+  .total-label { font-size: 8pt; color: #888; display: block; }
 
-  .footer { margin-top: 10px; font-size: 7pt; color: #bbb;
+  .footer { margin-top: 10px; font-size: 8pt; color: #bbb;
     text-align: center; border-top: 1px solid #eee; padding-top: 4px; }
 </style>
 </head>
@@ -102,14 +117,14 @@
 <table>
   <thead>
     <tr>
-      <th class="num">№</th>
-      <th class="photo">Фото<br><span style="font-size:6pt;opacity:.8">照片</span></th>
-      <th class="name">Код короба / Наименование<br><span style="font-size:6pt;opacity:.8">箱号 / 品名</span></th>
-      <th class="num-r">Вес, кг<br><span style="font-size:6pt;opacity:.8">重量</span></th>
-      <th class="num-r">Объём, м³<br><span style="font-size:6pt;opacity:.8">体积</span></th>
-      <th class="num-r">Плотн.<br><span style="font-size:6pt;opacity:.8">密度</span></th>
-      <th class="qty">Кол-во<br><span style="font-size:6pt;opacity:.8">数量</span></th>
-      <th class="track">Трек-код / 追踪码</th>
+      <th class="col-num">№</th>
+      <th class="col-name">Наименование / 品名</th>
+      <th class="col-img">Изображение / 照片</th>
+      <th class="col-numr">Вес, кг<br><span style="font-size:6pt;opacity:.8">重量</span></th>
+      <th class="col-numr">Объём, м³<br><span style="font-size:6pt;opacity:.8">体积</span></th>
+      <th class="col-numr">Плотн.<br><span style="font-size:6pt;opacity:.8">密度</span></th>
+      <th class="col-qty">Кол-во<br><span style="font-size:6pt;opacity:.8">数量</span></th>
+      <th class="col-track">Трек-код / 追踪码</th>
     </tr>
   </thead>
   <tbody>
@@ -118,20 +133,22 @@
     {# ── Строка коробки ── #}
     <tr class="box-row">
       <td class="box-num">{{ box_num.value }}</td>
-      <td class="box-photo-cell">
-        {% if box.photo_b64 %}
-          <img class="box-photo" src="{{ box.photo_b64 }}" alt="" />
-        {% else %}
-          <span class="box-no-photo"></span>
-        {% endif %}
+      <td class="box-name-cell">
+        <div class="box-code-text">{{ box.box_code }}</div>
+        <div class="box-item-name">{{ box.item_name }}</div>
       </td>
       <td>
-        <div class="box-code">{{ box.box_code }}</div>
-        <div class="box-name">{{ box.item_name }}</div>
+        {% if box.photos_b64 %}
+        <div class="photos-row">
+          {% for pb64 in box.photos_b64 %}
+            <img class="box-photo" src="{{ pb64 }}" alt="" />
+          {% endfor %}
+        </div>
+        {% endif %}
       </td>
-      <td class="num-r">{{ box.weight | fmt_decimal }}</td>
-      <td class="num-r">{{ box.volume | fmt_decimal }}</td>
-      <td class="num-r">{{ box.density | fmt_decimal }}</td>
+      <td class="col-numr">{{ box.weight | fmt_decimal }}</td>
+      <td class="col-numr">{{ box.volume | fmt_decimal }}</td>
+      <td class="col-numr">{{ box.density | fmt_decimal }}</td>
       <td></td>
       <td></td>
     </tr>
@@ -139,16 +156,21 @@
     {% for it in box.box_items %}
     <tr class="item-row{% if loop.last %} box-end{% endif %}">
       <td></td>
-      <td colspan="5" class="item-indent item-name-cell">
-        <div>{{ it.name }}</div>
+      <td class="item-indent">
+        <div class="item-name-text">{{ it.name }}</div>
+      </td>
+      <td>
         {% if it.photos_b64 %}
-        <div class="item-photos-row">
+        <div class="photos-row">
           {% for pb64 in it.photos_b64 %}
             <img class="item-photo" src="{{ pb64 }}" alt="" />
           {% endfor %}
         </div>
         {% endif %}
       </td>
+      <td></td>
+      <td></td>
+      <td></td>
       <td class="item-qty">×{{ it.quantity }}</td>
       <td class="item-track">{{ it.tracking_code or "" }}</td>
     </tr>
@@ -158,7 +180,6 @@
 </table>
 {% endfor %}
 
-{# ── Один итог внизу ── #}
 <div class="total-row">
   <div><span class="total-label">Всего коробок / 箱数</span><strong>{{ grand_count }}</strong></div>
   <div><span class="total-label">Общий вес / 总重量</span><strong>{{ grand_weight | fmt_decimal }} кг</strong></div>

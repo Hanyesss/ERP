@@ -43,6 +43,25 @@ class WarehouseBox(Base):
         cascade="all, delete-orphan",
         order_by="BoxItem.sort_order",
     )
+    photos: Mapped[list["BoxPhoto"]] = relationship(
+        "BoxPhoto", back_populates="box",
+        cascade="all, delete-orphan",
+        order_by="BoxPhoto.sort_order",
+    )
+
+
+class BoxPhoto(Base):
+    """Фото коробки (до 3 штук на коробку)."""
+    __tablename__ = "box_photos"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    box_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("warehouse_boxes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    photo_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    box: Mapped["WarehouseBox"] = relationship("WarehouseBox", back_populates="photos")
 
 
 class BoxItem(Base):

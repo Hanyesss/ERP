@@ -16,7 +16,7 @@ from sqlalchemy import select, func
 from app.database import get_db
 from app.core.deps import get_current_user, require_roles
 from app.models.user import User
-from app.models.warehouse_box import WarehouseBox, BoxItem, BoxItemPhoto, PackingList, BoxStatus
+from app.models.warehouse_box import WarehouseBox, BoxItem, BoxItemPhoto, BoxPhoto, PackingList, BoxStatus
 from sqlalchemy.orm import selectinload, aliased
 from app.models.counterparty import Counterparty
 from app.models.warehouse import Warehouse
@@ -192,11 +192,17 @@ async def _generate_packing_list_pdf(boxes_data: list[dict]) -> bytes:
         sum_v = sum(Decimal(str(b["volume"])) for b in g["boxes"])
         density = _calc_density(sum_w, sum_v)
         for b in g["boxes"]:
-            b["photo_b64"] = _photo_to_base64(b.get("photo_path"), max_px=300)
+            b["photos_b64"] = [
+                x for x in (
+                    _photo_to_base64(p, max_px=300) for p in (b.get("photos") or [])
+                ) if x
+            ]
+            # backward compat: первое фото
+            b["photo_b64"] = b["photos_b64"][0] if b["photos_b64"] else None
             for it in b.get("box_items", []):
                 it["photos_b64"] = [
                     x for x in (
-                        _photo_to_base64(p, max_px=150) for p in (it.get("photos") or [])
+                        _photo_to_base64(p, max_px=200) for p in (it.get("photos") or [])
                     ) if x
                 ]
         client_groups.append({
@@ -253,7 +259,14 @@ async def _next_box_code(db: AsyncSession, client_code: str) -> str:
 
 def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None, wh: Optional[Warehouse] = None,
                  received_by_name: Optional[str] = None, shipped_by_name: Optional[str] = None) -> dict:
-    # Позиции коробки (если загружены через selectinload)
+    # Фото коробки
+    box_photos = []
+    if hasattr(box, "photos") and box.photos:
+        box_photos = [
+            {"id": str(p.id), "photo_url": _photo_url(p.photo_path), "photo_path": p.photo_path}
+            for p in sorted(box.photos, key=lambda x: x.sort_order)
+        ]
+    # Позиции коробки
     items_data = []
     if hasattr(box, "items") and box.items is not None:
         for it in sorted(box.items, key=lambda x: x.sort_order):
@@ -290,8 +303,9 @@ def _box_to_dict(box: WarehouseBox, cp: Optional[Counterparty] = None, wh: Optio
         "description": box.description,
         "tracking_number": box.tracking_number,
         "items": items_data,
-        "photo_url": _photo_url(box.photo_path),
-        "photo_path": box.photo_path,
+        "photos": box_photos,
+        "photo_url": box_photos[0]["photo_url"] if box_photos else _photo_url(box.photo_path),
+        "photo_path": box_photos[0]["photo_path"] if box_photos else box.photo_path,
         "status": box.status.value,
         "received_at": box.received_at.isoformat() if box.received_at else None,
         "shipped_at": box.shipped_at.isoformat() if box.shipped_at else None,
@@ -329,7 +343,10 @@ async def get_balance(
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .join(Warehouse, WarehouseBox.warehouse_id == Warehouse.id)
         .where(WarehouseBox.status == BoxStatus.on_warehouse)
-        .options(selectinload(WarehouseBox.items).selectinload(BoxItem.photos))
+        .options(
+            selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+            selectinload(WarehouseBox.photos),
+        )
     )
     if warehouse_id:
         stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
@@ -393,7 +410,10 @@ async def get_shipped(
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .join(Warehouse, WarehouseBox.warehouse_id == Warehouse.id)
         .where(WarehouseBox.status == BoxStatus.shipped)
-        .options(selectinload(WarehouseBox.items).selectinload(BoxItem.photos))
+        .options(
+            selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+            selectinload(WarehouseBox.photos),
+        )
     )
     if warehouse_id:
         stmt = stmt.where(WarehouseBox.warehouse_id == warehouse_id)
@@ -469,7 +489,10 @@ async def generate_packing_list_preview(
         select(WarehouseBox, Counterparty)
         .join(Counterparty, WarehouseBox.counterparty_id == Counterparty.id)
         .where(WarehouseBox.id.in_(body.box_ids))
-        .options(selectinload(WarehouseBox.items).selectinload(BoxItem.photos))
+        .options(
+            selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+            selectinload(WarehouseBox.photos),
+        )
     )).all()
 
     if not rows:
@@ -488,7 +511,7 @@ async def generate_packing_list_preview(
             "volume": float(box.volume),
             "density": float(box.density),
             "description": box.description or "",
-            "photo_path": box.photo_path,
+            "photos": [p.photo_path for p in sorted(box.photos, key=lambda x: x.sort_order)] if hasattr(box, "photos") and box.photos else [],
             "box_items": [
                 {"name": it.name, "quantity": it.quantity, "tracking_code": it.tracking_code,
                  "photos": [p.photo_path for p in sorted(it.photos, key=lambda x: x.sort_order)] if hasattr(it, "photos") and it.photos else []}
@@ -537,7 +560,10 @@ async def ship_boxes(
             func.upper(WarehouseBox.box_code).in_(codes_upper),
             WarehouseBox.status == BoxStatus.on_warehouse,
         )
-        .options(selectinload(WarehouseBox.items).selectinload(BoxItem.photos))
+        .options(
+            selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+            selectinload(WarehouseBox.photos),
+        )
     )).all()
 
     if not rows:
@@ -568,7 +594,7 @@ async def ship_boxes(
             "volume": float(box.volume),
             "density": float(box.density),
             "description": box.description or "",
-            "photo_path": box.photo_path,
+            "photos": [p.photo_path for p in sorted(box.photos, key=lambda x: x.sort_order)] if hasattr(box, "photos") and box.photos else [],
             "box_items": [
                 {"name": it.name, "quantity": it.quantity, "tracking_code": it.tracking_code,
                  "photos": [p.photo_path for p in sorted(it.photos, key=lambda x: x.sort_order)] if hasattr(it, "photos") and it.photos else []}
@@ -670,10 +696,12 @@ async def create_box(
     # Возвращаем одну или список
     if count == 1:
         await db.refresh(created_boxes[0])
-        # Загружаем items
         box_with_items = (await db.execute(
             select(WarehouseBox).where(WarehouseBox.id == created_boxes[0].id)
-            .options(selectinload(WarehouseBox.items).selectinload(BoxItem.photos))
+            .options(
+                selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+                selectinload(WarehouseBox.photos),
+            )
         )).scalar_one()
         return _box_to_dict(box_with_items, cp)
 
@@ -681,7 +709,10 @@ async def create_box(
     box_ids = [b.id for b in created_boxes]
     boxes_loaded = (await db.execute(
         select(WarehouseBox).where(WarehouseBox.id.in_(box_ids))
-        .options(selectinload(WarehouseBox.items).selectinload(BoxItem.photos))
+        .options(
+            selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+            selectinload(WarehouseBox.photos),
+        )
         .order_by(WarehouseBox.box_code)
     )).scalars().all()
     return [_box_to_dict(b, cp) for b in boxes_loaded]
@@ -765,32 +796,60 @@ async def upload_box_photo(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_BOX_ROLES)),
 ):
+    """Добавить фото коробки (максимум 3)."""
     box = (await db.execute(
         select(WarehouseBox).where(WarehouseBox.id == box_id)
+        .options(selectinload(WarehouseBox.photos))
     )).scalar_one_or_none()
     if not box:
         raise HTTPException(404, "Box not found")
+    if len(box.photos) >= 3:
+        raise HTTPException(422, "Максимум 3 фото на коробку")
 
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(422, "File too large (max 10 MB)")
-
     mime = file.content_type or ""
     if mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(422, f"File type not allowed: {mime}")
 
-    # Сжимаем перед сохранением — экономит место и ускоряет пакинг-лист
     compressed = _compress_image(content, max_px=800, quality=72)
-    stored_name = f"{uuid.uuid4()}.jpg"
+    stored_name = f"box_{box_id}_{uuid.uuid4()}.jpg"
     dest = _box_dir(box_id) / stored_name
     dest.write_bytes(compressed)
 
     relative = f"boxes/{box_id}/{stored_name}"
-    box.photo_path = relative
+    photo = BoxPhoto(
+        id=uuid.uuid4(),
+        box_id=box.id,
+        photo_path=relative,
+        sort_order=len(box.photos),
+    )
+    db.add(photo)
     box.updated_at = datetime.now(timezone.utc)
     await db.commit()
+    await db.refresh(photo)
+    return {"id": str(photo.id), "photo_url": _photo_url(relative), "photo_path": relative}
 
-    return {"photo_url": _photo_url(relative), "photo_path": relative}
+
+@router.delete("/{box_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_box_photo(
+    box_id: uuid.UUID,
+    photo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_BOX_ROLES)),
+):
+    """Удалить одно фото коробки."""
+    photo = (await db.execute(
+        select(BoxPhoto).where(BoxPhoto.id == photo_id, BoxPhoto.box_id == box_id)
+    )).scalar_one_or_none()
+    if not photo:
+        raise HTTPException(404, "Photo not found")
+    full = UPLOADS_DIR / photo.photo_path
+    if full.exists():
+        full.unlink(missing_ok=True)
+    await db.delete(photo)
+    await db.commit()
 
 
 @router.post("/qr-bulk")
