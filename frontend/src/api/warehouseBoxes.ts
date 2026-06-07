@@ -1,12 +1,19 @@
 import apiClient from "./client";
 
+export interface BoxItemPhotoData {
+  id: string;
+  photo_url: string;
+  photo_path: string;
+}
+
 export interface BoxItemData {
   id: string;
   name: string;
   quantity: number;
   tracking_code: string | null;
-  photo_url: string | null;
-  photo_path: string | null;
+  photos: BoxItemPhotoData[];
+  photo_url: string | null;   // первое фото (backward compat)
+  photo_path: string | null;  // первое фото (backward compat)
   sort_order: number;
 }
 
@@ -98,12 +105,15 @@ export const uploadBoxPhoto = (boxId: string, file: File) => {
 export const uploadBoxItemPhoto = (boxId: string, itemId: string, file: File) => {
   const fd = new FormData();
   fd.append("file", file);
-  return apiClient.post<{ photo_url: string; photo_path: string }>(
+  return apiClient.post<{ id: string; photo_url: string; photo_path: string }>(
     `/api/warehouse-boxes/${boxId}/items/${itemId}/photo`,
     fd,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
 };
+
+export const deleteBoxItemPhoto = (boxId: string, itemId: string, photoId: string) =>
+  apiClient.delete(`/api/warehouse-boxes/${boxId}/items/${itemId}/photos/${photoId}`);
 
 export const getQrLabelUrl = (boxId: string) =>
   `/api/warehouse-boxes/${boxId}/qr`;

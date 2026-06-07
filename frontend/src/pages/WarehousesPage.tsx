@@ -218,7 +218,7 @@ function QrScanModal({
 
 // ── Receipt Modal ─────────────────────────────────────────────────────────────
 
-interface ItemRow { name: string; qty: number; tracking: string; file: File | null; preview: string | null; }
+interface ItemRow { name: string; qty: number; tracking: string; files: File[]; previews: string[]; }
 
 // Сжатие изображения на фронте перед загрузкой
 async function compressImage(file: File, maxPx = 800, quality = 0.72): Promise<Blob> {
@@ -259,7 +259,7 @@ function ReceiptModal({
   const trackingScannerRef = useRef<any>(null);
   const trackingDivId = "tracking-qr-scanner";
   // Динамический список позиций товаров
-  const [items, setItems] = useState<ItemRow[]>([{ name: "", qty: 1, tracking: "", file: null, preview: null }]);
+  const [items, setItems] = useState<ItemRow[]>([{ name: "", qty: 1, tracking: "", files: [], previews: [] }]);
 
   const { data: counterparties = [] } = useQuery({
     queryKey: ["counterparties-select"],
@@ -278,13 +278,26 @@ function ReceiptModal({
     setItems(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
 
   const handleItemPhoto = (idx: number, file: File) => {
+    const item = items[idx];
+    if (item.files.length >= 3) return;
     const reader = new FileReader();
-    reader.onloadend = () => setItemField(idx, "preview", reader.result as string);
+    reader.onloadend = () => {
+      setItems(prev => prev.map((r, i) =>
+        i === idx ? { ...r, files: [...r.files, file], previews: [...r.previews, reader.result as string] } : r
+      ));
+    };
     reader.readAsDataURL(file);
-    setItemField(idx, "file", file);
   };
 
-  const addItem = () => setItems(prev => [...prev, { name: "", qty: 1, tracking: "", file: null, preview: null }]);
+  const removeItemPhoto = (idx: number, photoIdx: number) => {
+    setItems(prev => prev.map((r, i) =>
+      i === idx
+        ? { ...r, files: r.files.filter((_, j) => j !== photoIdx), previews: r.previews.filter((_, j) => j !== photoIdx) }
+        : r
+    ));
+  };
+
+  const addItem = () => setItems(prev => [...prev, { name: "", qty: 1, tracking: "", files: [], previews: [] }]);
   const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async (values: any) => {
@@ -321,17 +334,19 @@ function ReceiptModal({
           await uploadBoxPhoto(firstBox.id, f);
         } catch {}
       }
-      // Загружаем фото позиций для первой коробки
+      // Загружаем фото позиций для первой коробки (до 3 на позицию)
       if (firstBox && firstBox.items) {
         for (let idx = 0; idx < validItems.length; idx++) {
-          const f = validItems[idx].file;
+          const files = validItems[idx].files;
           const savedItem = firstBox.items[idx];
-          if (f && savedItem) {
-            try {
-              const compressed = await compressImage(f, 800, 0.72);
-              const cf = new File([compressed], "item_photo.jpg", { type: "image/jpeg" });
-              await uploadBoxItemPhoto(firstBox.id, savedItem.id, cf);
-            } catch {}
+          if (savedItem && files.length > 0) {
+            for (const f of files) {
+              try {
+                const compressed = await compressImage(f, 800, 0.72);
+                const cf = new File([compressed], "item_photo.jpg", { type: "image/jpeg" });
+                await uploadBoxItemPhoto(firstBox.id, savedItem.id, cf);
+              } catch {}
+            }
           }
         }
       }
@@ -347,7 +362,7 @@ function ReceiptModal({
 
   const handleClose = () => {
     form.resetFields();
-    setItems([{ name: "", qty: 1, tracking: "", file: null, preview: null }]);
+    setItems([{ name: "", qty: 1, tracking: "", files: [], previews: [] }]);
     setCreatedBoxes([]);
     setMainPhotoFile(null); setMainPhotoPreview(null);
     onClose();
@@ -355,7 +370,7 @@ function ReceiptModal({
 
   const handleAddMore = () => {
     form.setFieldValue("box_count", 1);
-    setItems([{ name: "", qty: 1, tracking: "", file: null, preview: null }]);
+    setItems([{ name: "", qty: 1, tracking: "", files: [], previews: [] }]);
     setMainPhotoFile(null); setMainPhotoPreview(null);
     setCreatedBoxes([]);
     // Оставляем клиента и склад
@@ -527,19 +542,25 @@ function ReceiptModal({
                         }
                       />
                     </Col>
-                    <Col>
-                      <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
-                        beforeUpload={f => { handleItemPhoto(idx, f); return false; }}>
-                        <Button size="small" icon={<UploadOutlined />}
-                          style={{ background: item.preview ? "#f6ffed" : undefined }}>
-                          {item.preview ? "✓" : t("warehouse.item_row_photo")}
-                        </Button>
-                      </Upload>
-                    </Col>
-                    {item.preview && (
-                      <Col>
-                        <Image src={item.preview} width={32} height={32}
+                    {item.previews.map((prev, pi) => (
+                      <Col key={pi} style={{ position: "relative" }}>
+                        <Image src={prev} width={32} height={32}
                           style={{ objectFit: "cover", borderRadius: 3 }} />
+                        <Button
+                          size="small" type="text" danger
+                          style={{ position: "absolute", top: -6, right: -6, padding: 0, width: 16, height: 16, fontSize: 10, lineHeight: "14px", minWidth: 0 }}
+                          onClick={() => removeItemPhoto(idx, pi)}
+                        >✕</Button>
+                      </Col>
+                    ))}
+                    {item.files.length < 3 && (
+                      <Col>
+                        <Upload accept="image/jpeg,image/png,image/webp" showUploadList={false}
+                          beforeUpload={f => { handleItemPhoto(idx, f); return false; }}>
+                          <Button size="small" icon={<UploadOutlined />}>
+                            {item.files.length === 0 ? t("warehouse.item_row_photo") : "+"}
+                          </Button>
+                        </Upload>
                       </Col>
                     )}
                   </Row>
@@ -885,10 +906,10 @@ function BalanceTab({ warehouses }: { warehouses: Warehouse[] }) {
                   <div style={{ paddingLeft: 8, borderLeft: "2px solid #e8e8e8" }}>
                     {b.items.map((it: BoxItemData) => (
                       <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                        {it.photo_url && (
-                          <Image src={it.photo_url} width={24} height={24}
+                        {it.photos && it.photos.length > 0 && it.photos.map(p => (
+                          <Image key={p.id} src={p.photo_url} width={24} height={24}
                             style={{ objectFit: "cover", borderRadius: 3, flexShrink: 0 }} />
-                        )}
+                        ))}
                         <Text style={{ fontSize: 12 }}>{it.name}</Text>
                         <Tag style={{ fontSize: 10, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
                           ×{it.quantity}

@@ -54,10 +54,29 @@ class BoxItem(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     tracking_code: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)  # legacy, photos в box_item_photos
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     box: Mapped["WarehouseBox"] = relationship("WarehouseBox", back_populates="items")
+    photos: Mapped[list["BoxItemPhoto"]] = relationship(
+        "BoxItemPhoto", back_populates="item",
+        cascade="all, delete-orphan",
+        order_by="BoxItemPhoto.sort_order",
+    )
+
+
+class BoxItemPhoto(Base):
+    """Фото позиции товара в коробке (до 3 штук на позицию)."""
+    __tablename__ = "box_item_photos"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    box_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("box_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    photo_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    item: Mapped["BoxItem"] = relationship("BoxItem", back_populates="photos")
 
 
 class PackingList(Base):

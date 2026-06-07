@@ -31,7 +31,7 @@ export default function PeriodPicker({ value, onChange }: Props) {
   const presets = [
     { key: "today",   label: t("dashboard.period_today"),   from: dayjs(),                          to: dayjs() },
     { key: "week",    label: t("dashboard.period_week"),    from: dayjs().subtract(6, "day"),        to: dayjs() },
-    { key: "month",   label: t("dashboard.period_month"),   from: dayjs().startOf("month"),          to: dayjs() },
+    { key: "month",   label: t("dashboard.period_month"),   from: dayjs().startOf("month"),          to: dayjs().endOf("month") },
     { key: "quarter", label: t("dashboard.period_quarter"), from: dayjs().startOf("quarter"),        to: dayjs().endOf("quarter") },
     { key: "year",    label: t("dashboard.period_year"),    from: dayjs().startOf("year"),           to: dayjs().endOf("year") },
   ];

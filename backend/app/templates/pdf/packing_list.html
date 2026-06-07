@@ -63,11 +63,10 @@
     border-bottom: 1px solid #eef0f4; background: #fff;
   }
   .item-indent { padding-left: 28px !important; }
-  .item-photo-cell { text-align: center; padding: 2px; }
-  .item-photo { width: 28px; height: 28px; object-fit: cover;
-    border-radius: 2px; border: 1px solid #dde; }
-  .item-no-photo { width: 28px; height: 28px; display: inline-block; }
   .item-name-cell { font-size: 8pt; color: #222; }
+  .item-photos-row { display: flex; gap: 3px; margin-top: 2px; flex-wrap: nowrap; }
+  .item-photo { width: 32px; height: 32px; object-fit: cover;
+    border-radius: 2px; border: 1px solid #dde; flex-shrink: 0; }
   .item-track { font-size: 7.5pt; color: #444; font-family: monospace; }
   .item-qty { text-align: center; font-weight: bold; font-size: 8pt; }
 
@@ -138,17 +137,18 @@
     </tr>
     {# ── Строки позиций ── #}
     {% for it in box.box_items %}
-    <tr class="item-row{% if loop.last and not loop.revcount %} box-end{% endif %}">
+    <tr class="item-row{% if loop.last %} box-end{% endif %}">
       <td></td>
-      <td class="item-photo-cell">
-        {% if it.photo_b64 %}
-          <img class="item-photo" src="{{ it.photo_b64 }}" alt="" />
-        {% else %}
-          <span class="item-no-photo"></span>
+      <td colspan="5" class="item-indent item-name-cell">
+        <div>{{ it.name }}</div>
+        {% if it.photos_b64 %}
+        <div class="item-photos-row">
+          {% for pb64 in it.photos_b64 %}
+            <img class="item-photo" src="{{ pb64 }}" alt="" />
+          {% endfor %}
+        </div>
         {% endif %}
       </td>
-      <td class="item-indent item-name-cell">{{ it.name }}</td>
-      <td></td><td></td><td></td>
       <td class="item-qty">×{{ it.quantity }}</td>
       <td class="item-track">{{ it.tracking_code or "" }}</td>
     </tr>
