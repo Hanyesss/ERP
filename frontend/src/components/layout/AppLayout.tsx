@@ -72,7 +72,7 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.purchases"),
     },
 
-    hasRole(user, "employee", "seller", "accountant", "admin") && {
+    !hasRole(user, "partner") && {
       key: "/payments",
       icon: <WalletOutlined />,
       label: t("nav.payments"),

@@ -7,7 +7,8 @@ export default function CounterpartiesPage() {
   const { t } = useTranslation();
   const isManager = useHasRole("manager");
   const isPurchaser = useHasRole("purchaser");
-  const canSeeAll = useHasAnyRole("accountant", "admin");
+  // seller (sales) gets full access — can create both clients and suppliers
+  const canSeeAll = useHasAnyRole("accountant", "admin", "seller");
 
   // Force type filter based on role if they have only one allowed type
   let forcedType: "client" | "supplier" | undefined;

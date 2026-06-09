@@ -23,7 +23,7 @@ from app.models.warehouse import Warehouse
 
 router = APIRouter(prefix="/api/warehouse-boxes", tags=["warehouse-boxes"])
 
-_BOX_ROLES = ("employee", "manager", "accountant", "admin")
+_BOX_ROLES = ("employee", "seller", "manager", "accountant", "admin")
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates" / "pdf"

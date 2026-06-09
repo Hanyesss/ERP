@@ -77,6 +77,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderUpdate(BaseModel):
+    order_number: Optional[str] = None
     order_date: Optional[date] = None
     client_id: Optional[uuid.UUID] = None
     business_type_id: Optional[uuid.UUID] = None

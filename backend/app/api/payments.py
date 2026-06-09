@@ -32,7 +32,7 @@ from app.models.cash_register import CashRegister, CashTransaction
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-_ALLOWED = ("employee", "manager", "accountant", "admin")
+_ALLOWED = ("employee", "seller", "manager", "purchaser", "accountant", "admin", "partner")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

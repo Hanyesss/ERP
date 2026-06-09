@@ -688,6 +688,13 @@ async def update_order(
     old_data = {"order_number": order.order_number, "status": order.status}
     update_data = body.model_dump(exclude_unset=True)
 
+    if "order_number" in update_data and update_data["order_number"] != order.order_number:
+        conflict = (await db.execute(
+            select(Order.id).where(Order.order_number == update_data["order_number"], Order.id != order_id)
+        )).scalar_one_or_none()
+        if conflict:
+            raise HTTPException(409, f"Номер заказа '{update_data['order_number']}' уже занят")
+
     bt_id = update_data.get("business_type_id", order.business_type_id)
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == bt_id))).scalar_one_or_none()
     is_logistics = bt and bt.code == "logistics"
