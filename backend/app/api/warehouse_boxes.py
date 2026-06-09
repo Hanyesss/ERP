@@ -994,6 +994,14 @@ async def update_box(
     box.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
+    box = (await db.execute(
+        select(WarehouseBox)
+        .options(
+            selectinload(WarehouseBox.items).selectinload(BoxItem.photos),
+            selectinload(WarehouseBox.photos),
+        )
+        .where(WarehouseBox.id == box_id)
+    )).scalar_one_or_none()
     cp = (await db.execute(
         select(Counterparty).where(Counterparty.id == box.counterparty_id)
     )).scalar_one_or_none()
