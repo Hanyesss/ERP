@@ -51,7 +51,7 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
     )).scalar_one_or_none()
 
     items_stmt = (
-        select(PurchaseItem, OrderItem.name.label("item_name"), Order.order_number)
+        select(PurchaseItem, OrderItem.name.label("item_name"), Order.order_number, Order.id.label("order_id_col"))
         .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
         .join(Order, OrderItem.order_id == Order.id)
         .where(PurchaseItem.purchase_id == purchase_id)
@@ -84,10 +84,9 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         )).scalar_one_or_none()
         linked_order_number = order_row
     elif item_rows:
-        # For trade purchases: get order number from first item
-        linked_order_id = item_rows[0][0].order_id if hasattr(item_rows[0][0], "order_id") else None
-        # Already have order_number in items
-        linked_order_number = item_rows[0][2] if item_rows else None
+        # For trade purchases: order id and number come from the joined Order row
+        linked_order_id = item_rows[0][3]
+        linked_order_number = item_rows[0][2]
 
     # Resolve created_by name
     created_by_name = None
