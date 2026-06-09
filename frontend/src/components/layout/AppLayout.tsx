@@ -12,6 +12,7 @@ import type { User, UserRole } from "../../types";
 import { logout } from "../../api/auth";
 import NotificationBell from "../notifications/NotificationBell";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -32,6 +33,7 @@ export default function AppLayout({ user, onLogout }: Props) {
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { checkGuard } = useNavigationGuard();
 
   const handleLogout = async () => {
     await logout();
@@ -162,8 +164,11 @@ export default function AppLayout({ user, onLogout }: Props) {
     : location.pathname;
 
   const handleMenuClick = ({ key }: { key: string }) => {
-    navigate(key);
-    if (isMobile) setDrawerOpen(false);
+    checkGuard().then(canNav => {
+      if (!canNav) return;
+      navigate(key);
+      if (isMobile) setDrawerOpen(false);
+    });
   };
 
   const menuContent = (

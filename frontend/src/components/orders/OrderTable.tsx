@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Button, Space, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip, Modal } from "antd";
 import TopScrollTable from "../common/TopScrollTable";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { EyeOutlined, EditOutlined, DeleteOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
+import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import type { OrderListItem } from "../../types/order";
@@ -29,14 +29,37 @@ export default function OrderTable() {
   const [cancelModal, setCancelModal] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const [cancelReason, setCancelReason] = useState("");
 
-  const [search, setSearch] = useState("");
-  const [clientId, setClientId] = useState<string | undefined>();
-  const [btId, setBtId] = useState<string | undefined>();
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const [syncStatusFilter, setSyncStatusFilter] = useState<string | undefined>();
-  const [managerId, setManagerId] = useState<string | undefined>();
-  const [dateRange, setDateRange] = useState<[string, string] | null>(null);
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const search = searchParams.get("q") ?? "";
+  const clientId = searchParams.get("client") ?? undefined;
+  const btId = searchParams.get("bt") ?? undefined;
+  const statusFilter = searchParams.get("status") ?? undefined;
+  const syncStatusFilter = searchParams.get("sync") ?? undefined;
+  const managerId = searchParams.get("manager") ?? undefined;
+  const dateFrom = searchParams.get("from");
+  const dateTo = searchParams.get("to");
+  const dateRange: [string, string] | null = dateFrom && dateTo ? [dateFrom, dateTo] : null;
+  const page = Number(searchParams.get("page") ?? "1");
+
+  const setFilter = (updates: Record<string, string | undefined | null>) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(updates)) {
+        if (v != null && v !== "") next.set(k, v); else next.delete(k);
+      }
+      next.set("page", "1");
+      return next;
+    }, { replace: true });
+  };
+
+  const handlePageChange = (p: number) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set("page", String(p));
+      return next;
+    }, { replace: true });
+  };
 
   const params = {
     search: search || undefined, client_id: clientId, business_type_id: btId,
@@ -230,13 +253,15 @@ export default function OrderTable() {
       <Row gutter={[8, 8]} style={{ marginBottom: 12 }} className="mobile-full-width">
         <Col xs={24} sm="auto">
           <Input.Search placeholder={t("order.number")} allowClear style={{ width: isMobile ? "100%" : 180 }}
-            onSearch={v => { setSearch(v); setPage(1); }}
-            onChange={e => { if (!e.target.value) { setSearch(""); setPage(1); } }}
+            defaultValue={search}
+            onSearch={v => setFilter({ q: v || null })}
+            onChange={e => { if (!e.target.value) setFilter({ q: null }); }}
           />
         </Col>
         <Col xs={24} sm="auto">
           <DatePicker.RangePicker style={{ width: isMobile ? "100%" : 240 }}
-            onChange={(_, strs) => { setDateRange(strs[0] && strs[1] ? [strs[0], strs[1]] : null); setPage(1); }}
+            value={dateRange ? [dayjs(dateRange[0]), dayjs(dateRange[1])] : undefined}
+            onChange={(_, strs) => setFilter({ from: strs[0] || null, to: strs[1] || null })}
           />
         </Col>
         <Col xs={24} sm="auto">
@@ -245,30 +270,35 @@ export default function OrderTable() {
             placeholder={t("order.client")}
             style={{ width: isMobile ? "100%" : 180 }}
             allowClear
-            onChange={v => { setClientId(v); setPage(1); }}
+            value={clientId}
+            onChange={v => setFilter({ client: v ?? null })}
           />
         </Col>
         {!isMobile && (
           <>
             <Col>
               <Select allowClear placeholder={t("order.business_type")} style={{ width: 140 }} options={btOptions}
-                onChange={v => { setBtId(v); setPage(1); }} />
+                value={btId}
+                onChange={v => setFilter({ bt: v ?? null })} />
             </Col>
             <Col>
               <Select allowClear placeholder={t("order.title")} style={{ width: 130 }} options={statusOptions}
-                onChange={v => { setStatusFilter(v); setPage(1); }} />
+                value={statusFilter}
+                onChange={v => setFilter({ status: v ?? null })} />
             </Col>
             <Col>
               <Select allowClear placeholder={t("order.manager")} style={{ width: 150 }} options={managerOptions}
-                onChange={v => { setManagerId(v); setPage(1); }} />
+                value={managerId}
+                onChange={v => setFilter({ manager: v ?? null })} />
             </Col>
             <Col>
               <Select
                 allowClear
                 placeholder={t("order.sync.title")}
                 style={{ width: 130 }}
+                value={syncStatusFilter}
                 options={["synced", "failed", "disabled"].map(s => ({ value: s, label: t(`order.sync.${s}`) }))}
-                onChange={v => { setSyncStatusFilter(v); setPage(1); }}
+                onChange={v => setFilter({ sync: v ?? null })}
               />
             </Col>
           </>
@@ -281,7 +311,7 @@ export default function OrderTable() {
       <TopScrollTable
         columns={columns} dataSource={data?.items ?? []} rowKey="id" loading={isLoading} size="small"
         scroll={{ x: "max-content" }}
-        pagination={{ current: page, total: data?.total ?? 0, pageSize: 20, onChange: setPage, showTotal: t => `${t}`, size: isMobile ? "small" : "default" }}
+        pagination={{ current: page, total: data?.total ?? 0, pageSize: 20, onChange: handlePageChange, showTotal: t => `${t}`, size: isMobile ? "small" : "default" }}
         footer={() => (
           <Row justify="end" gutter={24}>
             <Col><Text type="secondary">{t("order.page_totals")}:</Text></Col>

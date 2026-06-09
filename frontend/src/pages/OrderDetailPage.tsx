@@ -817,7 +817,7 @@ export default function OrderDetailPage() {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/orders")}>{t("common.back")}</Button>
+            <Button onClick={() => navigate(-1)}>{t("common.back")}</Button>
             {canDownloadPdf && !isLogistics && (
               <Button
                 icon={<DownloadOutlined />}

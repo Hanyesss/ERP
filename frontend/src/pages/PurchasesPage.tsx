@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Table, Button, Input, Select, Tag, Row, Col, Typography, Space, Tooltip } from "antd";
 import TopScrollTable from "../components/common/TopScrollTable";
 import { PlusOutlined } from "@ant-design/icons";
@@ -24,11 +23,31 @@ const fmtCny = (v: number) =>
 export default function PurchasesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [search, setSearch] = useState("");
-  const [supplierId, setSupplierId] = useState<string | undefined>();
-  const [paymentStatus, setPaymentStatus] = useState<string | undefined>();
-  const [page, setPage] = useState(1);
+  const search = searchParams.get("q") ?? "";
+  const supplierId = searchParams.get("supplier") ?? undefined;
+  const paymentStatus = searchParams.get("status") ?? undefined;
+  const page = Number(searchParams.get("page") ?? "1");
+
+  const setFilter = (updates: Record<string, string | undefined | null>) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(updates)) {
+        if (v != null && v !== "") next.set(k, v); else next.delete(k);
+      }
+      next.set("page", "1");
+      return next;
+    }, { replace: true });
+  };
+
+  const handlePageChange = (p: number) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set("page", String(p));
+      return next;
+    }, { replace: true });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["purchases", search, supplierId, paymentStatus, page],
@@ -150,9 +169,10 @@ export default function PurchasesPage() {
           <Input.Search
             placeholder={t("purchase.search_placeholder")}
             allowClear
+            defaultValue={search}
             style={{ width: 220 }}
-            onSearch={val => { setSearch(val); setPage(1); }}
-            onChange={e => { if (!e.target.value) { setSearch(""); setPage(1); } }}
+            onSearch={val => setFilter({ q: val || null })}
+            onChange={e => { if (!e.target.value) setFilter({ q: null }); }}
           />
         </Col>
         <Col>
@@ -161,7 +181,8 @@ export default function PurchasesPage() {
             placeholder={t("purchase.supplier")}
             style={{ width: 200 }}
             allowClear
-            onChange={v => { setSupplierId(v); setPage(1); }}
+            value={supplierId}
+            onChange={v => setFilter({ supplier: v ?? null })}
           />
         </Col>
         <Col>
@@ -169,12 +190,13 @@ export default function PurchasesPage() {
             allowClear
             placeholder={t("purchase.payment_status")}
             style={{ width: 160 }}
+            value={paymentStatus}
             options={[
               { value: "unpaid", label: t("purchase.status_unpaid") },
               { value: "partial", label: t("purchase.status_partial") },
               { value: "paid", label: t("purchase.status_paid") },
             ]}
-            onChange={v => { setPaymentStatus(v); setPage(1); }}
+            onChange={v => setFilter({ status: v ?? null })}
           />
         </Col>
       </Row>
@@ -188,7 +210,7 @@ export default function PurchasesPage() {
           current: page,
           total: data?.total ?? 0,
           pageSize: 20,
-          onChange: setPage,
+          onChange: handlePageChange,
           showTotal: total => `${total}`,
         }}
         summary={() => data?.page_total_cny ? (

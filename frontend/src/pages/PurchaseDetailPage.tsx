@@ -263,7 +263,7 @@ export default function PurchaseDetailPage() {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/purchases")}>{t("common.back")}</Button>
+            <Button onClick={() => navigate(-1)}>{t("common.back")}</Button>
             {purchase.payment_status !== "paid" && (
               <>
                 <Button

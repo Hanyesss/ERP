@@ -33,6 +33,7 @@ import AdminPartnersPage from "./pages/AdminPartnersPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
+import { NavigationGuardProvider } from "./contexts/NavigationGuardContext";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -47,6 +48,7 @@ function Inner() {
 
   return (
     <ConfigProvider locale={antLocale}>
+      <NavigationGuardProvider>
       <BrowserRouter>
         <Routes>
           <Route
@@ -94,6 +96,7 @@ function Inner() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
+      </NavigationGuardProvider>
     </ConfigProvider>
   );
 }

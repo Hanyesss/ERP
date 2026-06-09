@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useNavigationGuard } from "../contexts/NavigationGuardContext";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography, Alert,
-  Space, Row, Col, Statistic, message, Divider, Tooltip, Tag, Checkbox,
+  Space, Row, Col, Statistic, message, Divider, Tooltip, Tag, Checkbox, Modal,
 } from "antd";
 import { UploadOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -54,6 +55,105 @@ export default function OrderFormPage({ user }: Props) {
   const [pendingFileType, setPendingFileType] = useState("cargo_photo");
   const pendingFilesInputRef = useRef<HTMLInputElement>(null);
   const orderNumberEditedRef = useRef(false); // защита от перезаписи ручного ввода
+
+  const DRAFT_KEY = "draft_order_new_v2";
+  const [isDirty, setIsDirty] = useState(false);
+  const [draftModalOpen, setDraftModalOpen] = useState(false);
+  const [draftAvailable, setDraftAvailable] = useState(false);
+  const guardResolveRef = useRef<((allow: boolean) => void) | null>(null);
+  const { registerGuard, unregisterGuard } = useNavigationGuard();
+
+  const markDirty = () => setIsDirty(true);
+  const clearDirty = () => setIsDirty(false);
+
+  const guardFn = useCallback((): Promise<boolean> => new Promise(resolve => {
+    guardResolveRef.current = resolve;
+    setDraftModalOpen(true);
+  }), []);
+
+  useEffect(() => {
+    if (isDirty) registerGuard(guardFn); else unregisterGuard();
+    return () => unregisterGuard();
+  }, [isDirty, guardFn, registerGuard, unregisterGuard]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!isEdit && localStorage.getItem(DRAFT_KEY)) setDraftAvailable(true);
+  }, [isEdit]);
+
+  const resolveGuard = (allow: boolean) => {
+    guardResolveRef.current?.(allow);
+    guardResolveRef.current = null;
+  };
+
+  const handleSaveDraft = () => {
+    const v = form.getFieldsValue();
+    const items = (v.items || []).map((item: any) => item ? {
+      name: item.name, name_cn: item.name_cn, model: item.model,
+      specification: item.specification, quantity: item.quantity, unit: item.unit,
+      sale_price: item.sale_price, sale_currency: item.sale_currency,
+      preferred_supplier_id: item.preferred_supplier_id,
+      weight_kg: item.weight_kg, volume_m3: item.volume_m3,
+      price_per_kg: item.price_per_kg, price_per_kg_currency: item.price_per_kg_currency,
+      cargo_value: item.cargo_value, cargo_value_currency: item.cargo_value_currency,
+      supplier_id: item.supplier_id, places_count: item.places_count,
+    } : null);
+    const charges = (v.charges || []).map((c: any) => c ? { amount: c.amount, currency: c.currency } : null);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      order_number: v.order_number,
+      order_date: v.order_date?.format?.("YYYY-MM-DD"),
+      arrival_date: v.arrival_date?.format?.("YYYY-MM-DD"),
+      client_id: v.client_id, business_type_id: v.business_type_id,
+      client_currency: v.client_currency, warehouse_id: v.warehouse_id,
+      notes: v.notes, excluded_from_accounting: v.excluded_from_accounting,
+      items, charges,
+    }));
+    clearDirty();
+    setDraftModalOpen(false);
+    resolveGuard(true);
+  };
+
+  const handleDiscardDraft = () => {
+    if (!isEdit) localStorage.removeItem(DRAFT_KEY);
+    clearDirty();
+    setDraftModalOpen(false);
+    resolveGuard(true);
+  };
+
+  const handleCancelNav = () => {
+    setDraftModalOpen(false);
+    resolveGuard(false);
+  };
+
+  const handleRestoreDraft = () => {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    if (!saved) return;
+    try {
+      const d = JSON.parse(saved);
+      form.setFieldsValue({
+        order_number: d.order_number,
+        order_date: d.order_date ? dayjs(d.order_date) : undefined,
+        arrival_date: d.arrival_date ? dayjs(d.arrival_date) : undefined,
+        client_id: d.client_id, business_type_id: d.business_type_id,
+        client_currency: d.client_currency, warehouse_id: d.warehouse_id,
+        notes: d.notes, excluded_from_accounting: d.excluded_from_accounting,
+        items: d.items ?? [], charges: d.charges ?? [],
+      });
+      setDraftAvailable(false);
+      markDirty();
+    } catch { localStorage.removeItem(DRAFT_KEY); setDraftAvailable(false); }
+  };
+
+  const safeNavigate = (to: string | number) => {
+    if (!isDirty) { navigate(to as any); return; }
+    guardFn().then(allow => { if (allow) navigate(to as any); });
+  };
 
   const orderDate: dayjs.Dayjs | null = Form.useWatch("order_date", form);
   const clientId: string = Form.useWatch("client_id", form);
@@ -333,6 +433,8 @@ export default function OrderFormPage({ user }: Props) {
       await uploadPendingPhotos(res.data.items || []);
       await uploadPendingOrderFiles(res.data.id);
       message.success("✓");
+      clearDirty();
+      localStorage.removeItem(DRAFT_KEY);
       navigate(`/orders/${res.data.id}`);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
@@ -345,6 +447,7 @@ export default function OrderFormPage({ user }: Props) {
       qc.invalidateQueries({ queryKey: ["order", id] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       message.success("✓");
+      clearDirty();
       navigate(`/orders/${res.data.id}`);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
@@ -412,7 +515,7 @@ export default function OrderFormPage({ user }: Props) {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/orders")}>{t("common.cancel")}</Button>
+            <Button onClick={() => safeNavigate(-1)}>{t("common.cancel")}</Button>
             <Button type="primary" onClick={() => form.submit()}
               loading={createMutation.isPending || updateMutation.isPending}>
               {t("common.save")}
@@ -469,7 +572,37 @@ export default function OrderFormPage({ user }: Props) {
         />
       )}
 
-      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+      {draftAvailable && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("draft.restore_prompt")}
+          action={
+            <Space>
+              <Button size="small" type="primary" onClick={handleRestoreDraft}>{t("draft.restore")}</Button>
+              <Button size="small" onClick={() => { localStorage.removeItem(DRAFT_KEY); setDraftAvailable(false); }}>{t("draft.discard")}</Button>
+            </Space>
+          }
+        />
+      )}
+
+      <Modal
+        open={draftModalOpen}
+        title={t("draft.unsaved_changes")}
+        footer={null}
+        onCancel={handleCancelNav}
+        destroyOnClose
+      >
+        <p>{t("draft.leave_warning")}</p>
+        <Space style={{ marginTop: 16 }} wrap>
+          {!isEdit && <Button type="primary" onClick={handleSaveDraft}>{t("draft.save_draft")}</Button>}
+          <Button danger onClick={handleDiscardDraft}>{t("draft.discard_and_leave")}</Button>
+          <Button onClick={handleCancelNav}>{t("common.cancel")}</Button>
+        </Space>
+      </Modal>
+
+      <Form form={form} layout="vertical" onFinish={handleSubmit} onValuesChange={() => { if (!isEdit || formInitializedRef.current) markDirty(); }}>
         {/* Main fields */}
         <Card title={t("order.tab_main")} style={{ marginBottom: 16 }}>
           <Row gutter={16}>

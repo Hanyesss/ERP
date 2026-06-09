@@ -773,6 +773,15 @@
     "file_type_not_allowed": "Тип файла не разрешён (только JPEG, PNG, WebP, PDF)",
     "min_length": "Минимум {{min}} символов"
   },
+  "draft": {
+    "restore_prompt": "Есть несохранённый черновик. Восстановить?",
+    "restore": "Восстановить",
+    "discard": "Удалить",
+    "unsaved_changes": "Несохранённые изменения",
+    "leave_warning": "Вы уходите со страницы. Несохранённые данные будут потеряны.",
+    "save_draft": "Сохранить черновик",
+    "discard_and_leave": "Не сохранять и уйти"
+  },
   "integration": {
     "title": "Интеграция с сайтом irsway.com",
     "base_url": "URL сайта",

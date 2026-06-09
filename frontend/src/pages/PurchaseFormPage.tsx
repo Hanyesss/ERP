@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
+import { useNavigationGuard } from "../contexts/NavigationGuardContext";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
-  Space, Row, Col, InputNumber, Table, message, Alert, Spin, Checkbox,
+  Space, Row, Col, InputNumber, Table, message, Alert, Spin, Checkbox, Modal,
 } from "antd";
 import { UploadOutlined, PaperClipOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -36,6 +37,94 @@ export default function PurchaseFormPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const purchaseNumberEditedRef = useRef(false);
+
+  const DRAFT_KEY = "draft_purchase_new_v2";
+  const [isDirty, setIsDirty] = useState(false);
+  const [draftModalOpen, setDraftModalOpen] = useState(false);
+  const [draftAvailable, setDraftAvailable] = useState(false);
+  const guardResolveRef = useRef<((allow: boolean) => void) | null>(null);
+  const { registerGuard, unregisterGuard } = useNavigationGuard();
+
+  const markDirty = () => setIsDirty(true);
+  const clearDirty = () => setIsDirty(false);
+
+  const guardFn = useCallback((): Promise<boolean> => new Promise(resolve => {
+    guardResolveRef.current = resolve;
+    setDraftModalOpen(true);
+  }), []);
+
+  useEffect(() => {
+    if (isDirty) registerGuard(guardFn); else unregisterGuard();
+    return () => unregisterGuard();
+  }, [isDirty, guardFn, registerGuard, unregisterGuard]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (localStorage.getItem(DRAFT_KEY)) setDraftAvailable(true);
+  }, []);
+
+  const resolveGuard = (allow: boolean) => {
+    guardResolveRef.current?.(allow);
+    guardResolveRef.current = null;
+  };
+
+  const handleSaveDraft = () => {
+    const v = form.getFieldsValue();
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      purchase_number: v.purchase_number,
+      purchase_date: v.purchase_date?.format?.("YYYY-MM-DD"),
+      supplier_id: v.supplier_id,
+      currency: v.currency,
+      rate_to_cny: v.rate_to_cny,
+      notes: v.notes,
+      excluded_from_accounting: v.excluded_from_accounting,
+    }));
+    clearDirty();
+    setDraftModalOpen(false);
+    resolveGuard(true);
+  };
+
+  const handleDiscardDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    clearDirty();
+    setDraftModalOpen(false);
+    resolveGuard(true);
+  };
+
+  const handleCancelNav = () => {
+    setDraftModalOpen(false);
+    resolveGuard(false);
+  };
+
+  const handleRestoreDraft = () => {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    if (!saved) return;
+    try {
+      const d = JSON.parse(saved);
+      form.setFieldsValue({
+        purchase_number: d.purchase_number,
+        purchase_date: d.purchase_date ? dayjs(d.purchase_date) : undefined,
+        supplier_id: d.supplier_id,
+        currency: d.currency,
+        rate_to_cny: d.rate_to_cny,
+        notes: d.notes,
+        excluded_from_accounting: d.excluded_from_accounting,
+      });
+      setDraftAvailable(false);
+      markDirty();
+    } catch { localStorage.removeItem(DRAFT_KEY); setDraftAvailable(false); }
+  };
+
+  const safeNavigate = (to: string | number) => {
+    if (!isDirty) { navigate(to as any); return; }
+    guardFn().then(allow => { if (allow) navigate(to as any); });
+  };
 
   const purchaseDate: dayjs.Dayjs | null = Form.useWatch("purchase_date", form);
   const dateStr = purchaseDate?.format("YYYY-MM-DD");
@@ -123,6 +212,8 @@ export default function PurchaseFormPage() {
         }
       }
       message.success("✓");
+      clearDirty();
+      localStorage.removeItem(DRAFT_KEY);
       navigate(`/purchases/${res.data.id}`);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
@@ -196,7 +287,7 @@ export default function PurchaseFormPage() {
         </Col>
         <Col>
           <Space>
-            <Button onClick={() => navigate("/purchases")}>{t("common.cancel")}</Button>
+            <Button onClick={() => safeNavigate(-1)}>{t("common.cancel")}</Button>
             <Button type="primary" onClick={() => form.submit()} loading={createMutation.isPending}>
               {t("common.save")}
             </Button>
@@ -204,7 +295,37 @@ export default function PurchaseFormPage() {
         </Col>
       </Row>
 
-      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+      {draftAvailable && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("draft.restore_prompt")}
+          action={
+            <Space>
+              <Button size="small" type="primary" onClick={handleRestoreDraft}>{t("draft.restore")}</Button>
+              <Button size="small" onClick={() => { localStorage.removeItem(DRAFT_KEY); setDraftAvailable(false); }}>{t("draft.discard")}</Button>
+            </Space>
+          }
+        />
+      )}
+
+      <Modal
+        open={draftModalOpen}
+        title={t("draft.unsaved_changes")}
+        footer={null}
+        onCancel={handleCancelNav}
+        destroyOnClose
+      >
+        <p>{t("draft.leave_warning")}</p>
+        <Space style={{ marginTop: 16 }} wrap>
+          <Button type="primary" onClick={handleSaveDraft}>{t("draft.save_draft")}</Button>
+          <Button danger onClick={handleDiscardDraft}>{t("draft.discard_and_leave")}</Button>
+          <Button onClick={handleCancelNav}>{t("common.cancel")}</Button>
+        </Space>
+      </Modal>
+
+      <Form form={form} layout="vertical" onFinish={handleSubmit} onValuesChange={markDirty}>
         <Card style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={6}>
