@@ -710,11 +710,12 @@ async def update_order(
         from app.schemas.order import OrderItemCreate, OrderChargeCreate
         from app.models.purchase_item import PurchaseItem
 
-        # Позиции с закупками — нельзя удалять физически
+        # Позиции с АКТИВНЫМИ (не удалёнными) закупками — нельзя удалять физически
         purchased_item_ids_rows = (await db.execute(
             select(PurchaseItem.order_item_id)
             .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
-            .where(OrderItem.order_id == order_id)
+            .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+            .where(OrderItem.order_id == order_id, Purchase.is_deleted == False)
         )).scalars().all()
         purchased_item_ids = set(purchased_item_ids_rows)
 
