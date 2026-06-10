@@ -23,6 +23,7 @@ import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import { uploadItemPhoto, uploadOrderFile } from "../api/orders";
 import type { User } from "../types";
+import { compressImage } from "../utils/compressImage";
 
 const { Title, Text } = Typography;
 
@@ -790,9 +791,12 @@ export default function OrderFormPage({ user }: Props) {
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
                   style={{ display: "none" }}
-                  onChange={e => {
+                  onChange={async e => {
                     const f = e.target.files?.[0];
-                    if (f) setPendingOrderFiles(prev => [...prev, { uid: Math.random().toString(36), file: f, fileType: pendingFileType }]);
+                    if (f) {
+                      const compressed = await compressImage(f);
+                      setPendingOrderFiles(prev => [...prev, { uid: Math.random().toString(36), file: compressed, fileType: pendingFileType }]);
+                    }
                     e.target.value = "";
                   }}
                 />

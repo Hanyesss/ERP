@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { createPayment, uploadPaymentReceipt } from "../api/payments";
+import { compressImage } from "../utils/compressImage";
 import { getCashRegisters } from "../api/cashRegisters";
 import { getOrders } from "../api/orders";
 import { getPurchases } from "../api/purchases";
@@ -388,8 +389,9 @@ export default function PaymentFormPage() {
           <Form.Item label={t("payment.receipt")}>
             <Space direction="vertical">
               <Upload
-                customRequest={({ file }: UploadRequestOption) => {
-                  setReceiptFile(file as File);
+                customRequest={async ({ file }: UploadRequestOption) => {
+                  const compressed = await compressImage(file as File);
+                  setReceiptFile(compressed);
                 }}
                 showUploadList={false}
                 maxCount={1}

@@ -9,6 +9,7 @@ import {
 } from "@ant-design/icons";
 import { getOrderFiles, uploadOrderFile, deleteOrderFile, getFileUrl } from "../../api/orders";
 import type { OrderFile } from "../../types/order";
+import { compressImage } from "../../utils/compressImage";
 
 const { Text } = Typography;
 
@@ -48,7 +49,8 @@ export default function OrderFilesTab({ orderId }: Props) {
     if (!file) return;
     setUploading(true);
     try {
-      await uploadOrderFile(orderId, file, pendingFileType);
+      const compressed = await compressImage(file);
+      await uploadOrderFile(orderId, compressed, pendingFileType);
       qc.invalidateQueries({ queryKey: ["order-files", orderId] });
       message.success(t("order.upload_file") + " ✓");
     } catch (err: any) {

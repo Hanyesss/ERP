@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import { getPayment, deletePayment, updatePayment, uploadPaymentReceipt, deletePaymentReceipt } from "../api/payments";
 import apiClient from "../api/client";
+import { compressImage } from "../utils/compressImage";
 
 const { Title, Text } = Typography;
 
@@ -76,8 +77,9 @@ export default function PaymentDetailPage() {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
-  const handleReceiptUpload = ({ file }: UploadRequestOption) => {
-    receiptMutation.mutate(file as File);
+  const handleReceiptUpload = async ({ file }: UploadRequestOption) => {
+    const compressed = await compressImage(file as File);
+    receiptMutation.mutate(compressed);
   };
 
   if (isLoading || !payment) return null;

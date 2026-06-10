@@ -13,6 +13,7 @@ import { getPurchase, deletePurchase, updatePurchase, requestPayment } from "../
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import { getPaymentsForPurchase } from "../api/payments";
 import apiClient from "../api/client";
+import { compressImage } from "../utils/compressImage";
 
 const { Title, Text } = Typography;
 
@@ -207,9 +208,12 @@ export default function PurchaseDetailPage() {
             type="file"
             accept="image/jpeg,image/png,image/webp,application/pdf"
             style={{ display: "none" }}
-            onChange={e => {
+            onChange={async e => {
               const file = e.target.files?.[0];
-              if (file) uploadFileMut.mutate(file);
+              if (file) {
+                const compressed = await compressImage(file);
+                uploadFileMut.mutate(compressed);
+              }
               e.target.value = "";
             }}
           />
