@@ -249,25 +249,13 @@ export default function PaymentDetailPage() {
 
       <Card title={t("payment.receipt")} style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: "100%" }}>
-          <Upload
-            customRequest={handleReceiptUpload}
-            showUploadList={false}
-            accept=".jpg,.jpeg,.png,.webp,.pdf"
-          >
-            <Button icon={<UploadOutlined />} loading={receiptMutation.isPending}>
-              {payment.file_url ? t("payment.receipt_replace") : t("payment.receipt_upload")}
-            </Button>
-          </Upload>
-          {payment.file_url && (
-            <Space>
-              <Button
-                icon={<FileOutlined />}
-                type="link"
-                href={`${apiClient.defaults.baseURL}/files/${payment.file_url}`}
-                target="_blank"
-              >
-                {t("payment.receipt_view")}
+          <Space wrap>
+            <Upload customRequest={handleReceiptUpload} showUploadList={false} accept=".jpg,.jpeg,.png,.webp,.pdf">
+              <Button icon={<UploadOutlined />} loading={receiptMutation.isPending}>
+                {payment.file_url ? t("payment.receipt_replace") : t("payment.receipt_upload")}
               </Button>
+            </Upload>
+            {payment.file_url && (
               <Popconfirm
                 title={t("payment.receipt_delete") + "?"}
                 onConfirm={() => deleteReceiptMutation.mutate()}
@@ -278,8 +266,26 @@ export default function PaymentDetailPage() {
                   {t("payment.receipt_delete")}
                 </Button>
               </Popconfirm>
-            </Space>
-          )}
+            )}
+          </Space>
+          {payment.file_url && (() => {
+            const url = `${apiClient.defaults.baseURL}/files/${payment.file_url}`;
+            const isPdf = payment.file_url.toLowerCase().endsWith(".pdf");
+            return isPdf ? (
+              <a href={url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <FileOutlined style={{ fontSize: 32, color: "#ff4d4f" }} />
+                <span>{t("payment.receipt_view")}</span>
+              </a>
+            ) : (
+              <a href={url} target="_blank" rel="noreferrer">
+                <img
+                  src={url}
+                  alt="receipt"
+                  style={{ maxWidth: "100%", maxHeight: 400, borderRadius: 6, border: "1px solid #f0f0f0", cursor: "zoom-in" }}
+                />
+              </a>
+            );
+          })()}
         </Space>
       </Card>
 

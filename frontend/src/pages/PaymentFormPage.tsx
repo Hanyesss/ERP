@@ -5,7 +5,7 @@ import {
   Space, Row, Col, InputNumber, Radio, Table, Alert, Divider,
   Upload, message, Statistic,
 } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
+import { UploadOutlined, FileOutlined } from "@ant-design/icons";
 import type { UploadRequestOption } from "rc-upload/lib/interface";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -386,20 +386,44 @@ export default function PaymentFormPage() {
           </Form.Item>
 
           <Form.Item label={t("payment.receipt")}>
-            <Upload
-              customRequest={({ file }: UploadRequestOption) => {
-                setReceiptFile(file as File);
-              }}
-              showUploadList
-              maxCount={1}
-              accept=".jpg,.jpeg,.png,.webp,.pdf"
-              onRemove={() => { setReceiptFile(null); return true; }}
-              fileList={receiptFile ? [{ uid: "1", name: receiptFile.name, status: "done" } as any] : []}
-            >
-              {!receiptFile && (
-                <Button icon={<UploadOutlined />}>{t("payment.receipt_upload")}</Button>
-              )}
-            </Upload>
+            <Space direction="vertical">
+              <Upload
+                customRequest={({ file }: UploadRequestOption) => {
+                  setReceiptFile(file as File);
+                }}
+                showUploadList={false}
+                maxCount={1}
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+              >
+                <Button icon={<UploadOutlined />}>
+                  {receiptFile ? t("payment.receipt_replace") : t("payment.receipt_upload")}
+                </Button>
+              </Upload>
+              {receiptFile && (() => {
+                const isPdf = receiptFile.type === "application/pdf";
+                return isPdf ? (
+                  <Space>
+                    <FileOutlined style={{ fontSize: 24, color: "#ff4d4f" }} />
+                    <span>{receiptFile.name}</span>
+                    <Button size="small" danger onClick={() => setReceiptFile(null)}>✕</Button>
+                  </Space>
+                ) : (
+                  <div style={{ position: "relative", display: "inline-block" }}>
+                    <img
+                      src={URL.createObjectURL(receiptFile)}
+                      alt="receipt preview"
+                      style={{ maxWidth: 300, maxHeight: 300, borderRadius: 6, border: "1px solid #f0f0f0" }}
+                    />
+                    <Button
+                      size="small"
+                      danger
+                      style={{ position: "absolute", top: 4, right: 4 }}
+                      onClick={() => setReceiptFile(null)}
+                    >✕</Button>
+                  </div>
+                );
+              })()}
+            </Space>
           </Form.Item>
         </Card>
 
