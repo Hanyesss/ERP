@@ -729,6 +729,9 @@ async def update_order(
         # ID позиций которые пришли с фронта (только те у кого есть id)
         incoming_ids = {i.id for i in items_list if i.id}
 
+        import logging as _logging
+        _logging.warning(f"DEBUG update_order {order_id}: incoming_ids={len(incoming_ids)} purchased={len(purchased_item_ids)} existing={len(existing_items)} items_list_ids={[str(i.id) for i in items_list][:5]}")
+
         # Удаляем позиции, которых НЕТ в incoming И они не купленные
         for item in existing_items:
             if item.id not in incoming_ids and item.id not in purchased_item_ids:
