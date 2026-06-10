@@ -502,6 +502,9 @@ async def delete_purchase(
     affected_order_ids = {row[1] for row in existing_pi}
 
     pur.is_deleted = True
+    # Физически удаляем purchase_items: иначе FK constraint блокирует
+    # удаление order_item при редактировании заказа (is_deleted не снимает ссылку)
+    await db.execute(delete(PurchaseItem).where(PurchaseItem.purchase_id == purchase_id))
     await db.flush()
 
     for order_id in affected_order_ids:
