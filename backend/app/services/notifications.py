@@ -131,3 +131,15 @@ async def on_payment_unassigned(
     link = f"/payments/{payment_id}"
     await notify_role(db, "accountant", "payment_unassigned", "payment_unassigned",
                       body, link, "payment", payment_id)
+
+
+async def on_purchase_payment_requested(
+    db: AsyncSession, purchase_id: uuid.UUID, purchase_number: str,
+    supplier_name: str, amount_cny: str, requester_id: uuid.UUID,
+) -> None:
+    body = f"{purchase_number} · {supplier_name} · {amount_cny} CNY"
+    link = f"/purchases/{purchase_id}"
+    for role in ("admin", "accountant"):
+        await notify_role(db, role, "purchase_payment_requested", "purchase_payment_requested",
+                          body, link, "purchase", purchase_id,
+                          exclude_user_id=requester_id)

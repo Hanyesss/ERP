@@ -29,6 +29,9 @@ export interface Purchase {
   order_id?: string;
   order_number?: string;
   excluded_from_accounting?: boolean;
+  payment_requested?: boolean;
+  payment_requested_by_name?: string;
+  payment_requested_at?: string;
 }
 
 export interface PurchaseListItem {
@@ -47,6 +50,7 @@ export interface PurchaseListItem {
   order_id?: string;
   order_number?: string;
   excluded_from_accounting?: boolean;
+  payment_requested?: boolean;
 }
 
 export interface PurchaseListResponse {

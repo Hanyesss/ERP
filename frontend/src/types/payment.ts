@@ -23,6 +23,7 @@ export interface Payment {
   amount_cny: number;
   network_fee?: number;
   notes?: string;
+  file_url?: string;
   is_active: boolean;
   created_by_name: string;
   created_at: string;

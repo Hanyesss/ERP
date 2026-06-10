@@ -66,6 +66,9 @@ class PurchaseResponse(BaseModel):
     order_number: Optional[str] = None
     created_by_name: Optional[str] = None
     excluded_from_accounting: bool = False
+    payment_requested: bool = False
+    payment_requested_by_name: Optional[str] = None
+    payment_requested_at: Optional[datetime] = None
 
 
 class PurchaseListItem(BaseModel):
@@ -84,6 +87,7 @@ class PurchaseListItem(BaseModel):
     order_id: Optional[uuid.UUID] = None
     order_number: Optional[str] = None
     excluded_from_accounting: bool = False
+    payment_requested: bool = False
 
 
 class PurchaseListResponse(BaseModel):

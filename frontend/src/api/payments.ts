@@ -46,6 +46,17 @@ export const getPaymentsForOrder = (orderId: string) =>
 export const getPaymentsForPurchase = (purchaseId: string) =>
   apiClient.get<any[]>(`/api/payments/for-purchase/${purchaseId}`);
 
+export const uploadPaymentReceipt = (id: string, file: File) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiClient.post<Payment>(`/api/payments/${id}/receipt`, fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const deletePaymentReceipt = (id: string) =>
+  apiClient.delete(`/api/payments/${id}/receipt`);
+
 export interface DashboardBalances {
   total_receivable_cny: string;
   total_payable_cny: string;

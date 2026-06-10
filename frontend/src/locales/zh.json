@@ -145,7 +145,8 @@
       "purchase_created": "已为您的订单创建采购单",
       "purchase_paid": "采购单已全额付款",
       "payment_unassigned": "付款需要分配",
-      "order_overdue": "订单已逾期"
+      "order_overdue": "订单已逾期",
+      "purchase_payment_requested": "请求采购付款"
     }
   },
   "login": {
@@ -355,7 +356,11 @@
     "logistics_amount_required": "请填写采购金额",
     "delete_confirm": "确认删除此采购单？",
     "purchaser": "采购员",
-    "purchaser_readonly_hint": "采购员 = 创建采购单的人，不可更改。"
+    "purchaser_readonly_hint": "采购员 = 创建采购单的人，不可更改。",
+    "request_payment_btn": "请求付款",
+    "payment_requested_status": "已请求付款",
+    "payment_requested_by": "请求人",
+    "payment_requested_badge": "待付款"
   },
   "role": {
     "employee": "员工",
@@ -546,7 +551,13 @@
     "purchase_payment_info": "采购单付款信息",
     "paid": "已付",
     "total": "合计",
-    "remaining_balance": "余额"
+    "remaining_balance": "余额",
+    "receipt": "收据 / 凭证",
+    "receipt_upload": "上传收据",
+    "receipt_replace": "替换收据",
+    "receipt_uploaded": "收据已上传",
+    "receipt_delete": "删除收据",
+    "receipt_view": "查看收据"
   },
   "tab_payments": "付款",
   "expense": {

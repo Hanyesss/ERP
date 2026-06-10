@@ -1,8 +1,9 @@
 import uuid
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -194,6 +195,7 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
         amount_cny=payment.amount_cny,
         network_fee=payment.network_fee,
         notes=payment.notes,
+        file_url=payment.file_url,
         cash_register_id=payment.cash_register_id,
         cash_register_name=cash_reg.name if cash_reg else None,
         is_active=payment.is_active,
@@ -611,14 +613,19 @@ async def create_payment(
                     client = (await db.execute(select(Counterparty).where(Counterparty.id == order.client_id))).scalar_one_or_none()
                     await on_order_paid(db, order.id, order.order_number, order.manager_id,
                                         client.name if client else "", str(order.total_sale_cny))
-    # Notify: purchase fully paid
+    # Notify: purchase fully paid + clear payment_requested
     if body.direction == "out" and body.allocations:
         for alloc in body.allocations:
             if alloc.purchase_id:
                 pur = (await db.execute(select(Purchase).where(Purchase.id == alloc.purchase_id))).scalar_one_or_none()
-                if pur and pur.payment_status == "paid":
-                    await on_purchase_paid(db, pur.id, pur.purchase_number,
-                                           pur.created_by, str(pur.total_amount_cny))
+                if pur:
+                    if pur.payment_requested:
+                        pur.payment_requested = False
+                        pur.payment_requested_by = None
+                        pur.payment_requested_at = None
+                    if pur.payment_status == "paid":
+                        await on_purchase_paid(db, pur.id, pur.purchase_number,
+                                               pur.created_by, str(pur.total_amount_cny))
     await db.commit()
     return await _load_payment(db, payment.id)
 
@@ -904,3 +911,72 @@ async def get_payments_for_purchase(
         }
         for r in result
     ]
+
+
+# ── Receipt upload for payment ────────────────────────────────────────────────
+
+UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+_MAX_FILE_SIZE = 10 * 1024 * 1024
+_ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+
+
+@router.post("/{payment_id}/receipt")
+async def upload_payment_receipt(
+    payment_id: uuid.UUID,
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
+):
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+
+    content = await file.read()
+    if len(content) > _MAX_FILE_SIZE:
+        raise HTTPException(422, "File too large (max 10 MB)")
+    mime = file.content_type or ""
+    if mime not in _ALLOWED_MIME:
+        raise HTTPException(422, "Allowed: jpg, png, webp, pdf")
+
+    dest_dir = UPLOADS_DIR / "payments" / str(payment_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "file").suffix.lower() or ".bin"
+    stored_name = f"{uuid.uuid4()}{ext}"
+    (dest_dir / stored_name).write_bytes(content)
+
+    if payment.file_url:
+        old = UPLOADS_DIR / payment.file_url
+        if old.exists():
+            old.unlink()
+
+    payment.file_url = f"payments/{payment_id}/{stored_name}"
+    await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
+                      {"receipt_uploaded": file.filename})
+    await db.commit()
+    return await _load_payment(db, payment.id)
+
+
+@router.delete("/{payment_id}/receipt", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payment_receipt(
+    payment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
+):
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+    if not payment.file_url:
+        raise HTTPException(404, "No receipt")
+
+    old = UPLOADS_DIR / payment.file_url
+    if old.exists():
+        old.unlink()
+
+    payment.file_url = None
+    await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
+                      {"receipt_deleted": True})
+    await db.commit()

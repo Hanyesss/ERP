@@ -115,7 +115,8 @@
       "purchase_created": "Создана закупка под ваш заказ",
       "purchase_paid": "Закупка полностью оплачена",
       "payment_unassigned": "Платёж требует распределения",
-      "order_overdue": "Просроченный заказ"
+      "order_overdue": "Просроченный заказ",
+      "purchase_payment_requested": "Запрос оплаты закупки"
     }
   },
   "login": {
@@ -325,7 +326,11 @@
     "logistics_amount_required": "Укажите сумму закупки",
     "delete_confirm": "Удалить эту закупку?",
     "purchaser": "Закупщик",
-    "purchaser_readonly_hint": "Закупщик = тот, кто создал закупку. Нельзя изменить."
+    "purchaser_readonly_hint": "Закупщик = тот, кто создал закупку. Нельзя изменить.",
+    "request_payment_btn": "Запросить оплату",
+    "payment_requested_status": "Оплата запрошена",
+    "payment_requested_by": "Запросил(а)",
+    "payment_requested_badge": "Ожидает оплаты"
   },
   "role": {
     "employee": "Сотрудник",
@@ -516,7 +521,13 @@
     "purchase_payment_info": "Оплата по закупке",
     "paid": "Оплачено",
     "total": "Итого",
-    "remaining_balance": "Остаток"
+    "remaining_balance": "Остаток",
+    "receipt": "Чек / квитанция",
+    "receipt_upload": "Загрузить чек",
+    "receipt_replace": "Заменить чек",
+    "receipt_uploaded": "Чек загружен",
+    "receipt_delete": "Удалить чек",
+    "receipt_view": "Открыть чек"
   },
   "tab_payments": "Платежи",
   "expense": {

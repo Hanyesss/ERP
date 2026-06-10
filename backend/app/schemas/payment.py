@@ -61,6 +61,7 @@ class PaymentResponse(BaseModel):
     amount_cny: Decimal
     network_fee: Optional[Decimal] = None
     notes: Optional[str] = None
+    file_url: Optional[str] = None
     cash_register_id: Optional[uuid.UUID] = None
     cash_register_name: Optional[str] = None
     is_active: bool

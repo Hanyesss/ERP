@@ -24,7 +24,7 @@ from app.schemas.purchase import (
     PurchaseListItem, PurchaseListResponse,
 )
 from app.utils.audit import write_audit
-from app.services.notifications import on_purchase_created
+from app.services.notifications import on_purchase_created, on_purchase_payment_requested
 
 router = APIRouter(prefix="/api/purchases", tags=["purchases"])
 
@@ -96,6 +96,13 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         )).scalar_one_or_none()
         created_by_name = cb_user.full_name if cb_user else None
 
+    payment_requested_by_name = None
+    if pur.payment_requested_by:
+        req_user = (await db.execute(
+            select(User).where(User.id == pur.payment_requested_by)
+        )).scalar_one_or_none()
+        payment_requested_by_name = req_user.full_name if req_user else None
+
     return PurchaseResponse(
         id=pur.id, purchase_number=pur.purchase_number,
         supplier_id=pur.supplier_id, supplier_name=supplier.name if supplier else "",
@@ -111,6 +118,9 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
         order_number=linked_order_number,
         created_by_name=created_by_name,
         excluded_from_accounting=pur.excluded_from_accounting,
+        payment_requested=pur.payment_requested,
+        payment_requested_by_name=payment_requested_by_name,
+        payment_requested_at=pur.payment_requested_at,
     )
 
 
@@ -233,6 +243,7 @@ async def list_purchases(
             order_number=r.order_number,
             remaining_amount_cny=max(r[0].total_amount_cny - (r.paid_cny or Decimal("0")), Decimal("0")),
             excluded_from_accounting=r[0].excluded_from_accounting,
+            payment_requested=r[0].payment_requested,
         )
         for r in rows
     ]
@@ -264,6 +275,42 @@ async def get_purchase(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_ALLOWED)),
 ):
+    return await _load_purchase(db, purchase_id)
+
+
+@router.post("/{purchase_id}/request-payment", response_model=PurchaseResponse)
+async def request_payment(
+    purchase_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(*_ALLOWED)),
+):
+    from datetime import datetime, timezone
+    pur = (await db.execute(
+        select(Purchase).where(Purchase.id == purchase_id, Purchase.is_deleted == False)
+    )).scalar_one_or_none()
+    if not pur:
+        raise HTTPException(404, "Purchase not found")
+    if pur.payment_status == PurchasePaymentStatus.paid:
+        raise HTTPException(422, "Purchase is already fully paid")
+    if pur.payment_requested:
+        return await _load_purchase(db, purchase_id)
+
+    supplier = (await db.execute(
+        select(Counterparty).where(Counterparty.id == pur.supplier_id)
+    )).scalar_one_or_none()
+
+    pur.payment_requested = True
+    pur.payment_requested_by = current_user.id
+    pur.payment_requested_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    await on_purchase_payment_requested(
+        db, pur.id, pur.purchase_number,
+        supplier.name if supplier else "",
+        str(pur.total_amount_cny),
+        current_user.id,
+    )
+    await db.commit()
     return await _load_purchase(db, purchase_id)
 
 

@@ -7,9 +7,9 @@ import {
   Modal, Popconfirm, Row, Select, DatePicker,
   Space, Statistic, Table, Tabs, Tag, Typography, Upload, message, List,
 } from "antd";
-import { DeleteOutlined, EditOutlined, UploadOutlined, FileOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, UploadOutlined, FileOutlined, BellOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { getPurchase, deletePurchase, updatePurchase } from "../api/purchases";
+import { getPurchase, deletePurchase, updatePurchase, requestPayment } from "../api/purchases";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import { getPaymentsForPurchase } from "../api/payments";
 import apiClient from "../api/client";
@@ -84,6 +84,16 @@ export default function PurchaseDetailPage() {
   const deleteFileMut = useMutation({
     mutationFn: (fileId: string) => apiClient.delete(`/api/purchases/${id}/files/${fileId}`),
     onSuccess: () => refetchFiles(),
+  });
+
+  const requestPaymentMut = useMutation({
+    mutationFn: () => requestPayment(id!),
+    onSuccess: () => {
+      message.success(t("purchase.payment_requested_status"));
+      qc.invalidateQueries({ queryKey: ["purchase", id] });
+      qc.invalidateQueries({ queryKey: ["purchases"] });
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
   if (isLoading || !purchase) return null;
@@ -265,6 +275,21 @@ export default function PurchaseDetailPage() {
           <Space>
             <Button onClick={() => navigate(-1)}>{t("common.back")}</Button>
             {purchase.payment_status !== "paid" && (
+              purchase.payment_requested ? (
+                <Button icon={<BellOutlined />} disabled>
+                  {t("purchase.payment_requested_status")}
+                </Button>
+              ) : (
+                <Button
+                  icon={<BellOutlined />}
+                  loading={requestPaymentMut.isPending}
+                  onClick={() => requestPaymentMut.mutate()}
+                >
+                  {t("purchase.request_payment_btn")}
+                </Button>
+              )
+            )}
+            {purchase.payment_status !== "paid" && (
               <>
                 <Button
                   icon={<EditOutlined />}
@@ -318,6 +343,17 @@ export default function PurchaseDetailPage() {
           {(purchase as any).created_by_name && (
             <Descriptions.Item label={t("purchase.purchaser")}>
               {(purchase as any).created_by_name}
+            </Descriptions.Item>
+          )}
+          {purchase.payment_requested && purchase.payment_requested_by_name && (
+            <Descriptions.Item label={t("purchase.payment_requested_by")} span={2}>
+              <Tag color="orange">{t("purchase.payment_requested_status")}</Tag>
+              {" "}{purchase.payment_requested_by_name}
+              {purchase.payment_requested_at && (
+                <Text type="secondary" style={{ marginLeft: 8 }}>
+                  {new Date(purchase.payment_requested_at).toLocaleString("ru-RU")}
+                </Text>
+              )}
             </Descriptions.Item>
           )}
           {purchase.notes && (

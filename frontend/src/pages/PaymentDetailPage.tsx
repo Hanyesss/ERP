@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Button, Card, Col, Descriptions, Divider, Form, Input, InputNumber,
   Modal, Popconfirm, Row, Select, DatePicker, Space, Statistic,
-  Table, Tag, Typography, message,
+  Table, Tag, Typography, Upload, message,
 } from "antd";
-import { DeleteOutlined, ArrowLeftOutlined, EditOutlined } from "@ant-design/icons";
+import { DeleteOutlined, ArrowLeftOutlined, EditOutlined, UploadOutlined, FileOutlined } from "@ant-design/icons";
+import type { UploadRequestOption } from "rc-upload/lib/interface";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
-import { getPayment, deletePayment, updatePayment } from "../api/payments";
+import { getPayment, deletePayment, updatePayment, uploadPaymentReceipt, deletePaymentReceipt } from "../api/payments";
+import apiClient from "../api/client";
 
 const { Title, Text } = Typography;
 
@@ -58,6 +60,25 @@ export default function PaymentDetailPage() {
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
+
+  const receiptMutation = useMutation({
+    mutationFn: (file: File) => uploadPaymentReceipt(id!, file),
+    onSuccess: () => {
+      message.success(t("payment.receipt_uploaded"));
+      qc.invalidateQueries({ queryKey: ["payment", id] });
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const deleteReceiptMutation = useMutation({
+    mutationFn: () => deletePaymentReceipt(id!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payment", id] }),
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const handleReceiptUpload = ({ file }: UploadRequestOption) => {
+    receiptMutation.mutate(file as File);
+  };
 
   if (isLoading || !payment) return null;
 
@@ -224,6 +245,42 @@ export default function PaymentDetailPage() {
             {t("payment.unallocated")} — платёж сохранён как аванс
           </Text>
         )}
+      </Card>
+
+      <Card title={t("payment.receipt")} style={{ marginBottom: 16 }}>
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Upload
+            customRequest={handleReceiptUpload}
+            showUploadList={false}
+            accept=".jpg,.jpeg,.png,.webp,.pdf"
+          >
+            <Button icon={<UploadOutlined />} loading={receiptMutation.isPending}>
+              {payment.file_url ? t("payment.receipt_replace") : t("payment.receipt_upload")}
+            </Button>
+          </Upload>
+          {payment.file_url && (
+            <Space>
+              <Button
+                icon={<FileOutlined />}
+                type="link"
+                href={`${apiClient.defaults.baseURL}/files/${payment.file_url}`}
+                target="_blank"
+              >
+                {t("payment.receipt_view")}
+              </Button>
+              <Popconfirm
+                title={t("payment.receipt_delete") + "?"}
+                onConfirm={() => deleteReceiptMutation.mutate()}
+                okText={t("common.yes")}
+                cancelText={t("common.no")}
+              >
+                <Button danger size="small" icon={<DeleteOutlined />} loading={deleteReceiptMutation.isPending}>
+                  {t("payment.receipt_delete")}
+                </Button>
+              </Popconfirm>
+            </Space>
+          )}
+        </Space>
       </Card>
 
       <Modal

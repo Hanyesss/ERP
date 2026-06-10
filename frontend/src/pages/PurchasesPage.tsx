@@ -145,8 +145,15 @@ export default function PurchasesPage() {
       title: t("purchase.payment_status"),
       dataIndex: "payment_status",
       key: "status",
-      render: (s: string) => (
-        <Tag color={STATUS_COLORS[s]}>{t(`purchase.status_${s}`)}</Tag>
+      render: (s: string, row) => (
+        <Space size={4}>
+          <Tag color={STATUS_COLORS[s]}>{t(`purchase.status_${s}`)}</Tag>
+          {row.payment_requested && (
+            <Tooltip title={t("purchase.payment_requested_badge")}>
+              <Tag color="orange" style={{ fontSize: 10, padding: "0 4px" }}>💬</Tag>
+            </Tooltip>
+          )}
+        </Space>
       ),
     },
   ];

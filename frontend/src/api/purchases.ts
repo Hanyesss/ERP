@@ -33,3 +33,6 @@ export const deletePurchase = (id: string) =>
 
 export const getAvailableForPurchase = (orderId: string) =>
   apiClient.get<AvailableForPurchaseItem[]>(`/api/orders/${orderId}/available-for-purchase`);
+
+export const requestPayment = (id: string) =>
+  apiClient.post<Purchase>(`/api/purchases/${id}/request-payment`);

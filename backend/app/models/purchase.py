@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum as PyEnum
-from sqlalchemy import String, Numeric, ForeignKey, Date, Boolean, Enum, Text
+from sqlalchemy import String, Numeric, ForeignKey, Date, Boolean, Enum, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -40,5 +41,8 @@ class Purchase(Base, TimestampMixin):
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     excluded_from_accounting: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    payment_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    payment_requested_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    payment_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     items: Mapped[list["PurchaseItem"]] = relationship("PurchaseItem", back_populates="purchase", lazy="selectin")
