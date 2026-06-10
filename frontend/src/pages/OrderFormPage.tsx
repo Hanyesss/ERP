@@ -295,7 +295,9 @@ export default function OrderFormPage({ user }: Props) {
       (existingOrder.items || []).forEach((item: any, idx: number) => {
         if (item.id) {
           idMap[idx] = item.id;
-          if (item.purchase_items && item.purchase_items.length > 0) {
+          const hasPurchase = (item.purchase_items && item.purchase_items.length > 0)
+            || (item.purchased_quantity != null && Number(item.purchased_quantity) > 0);
+          if (hasPurchase) {
             purchasedIds.add(item.id);
           }
         }
@@ -473,12 +475,15 @@ export default function OrderFormPage({ user }: Props) {
 
     // manager_id is excluded — always set server-side to current user
     const { manager_id: _ignored, ...restValues } = values;
+    // Read items directly from form store (includes `id` set via setFieldsValue,
+    // which onFinish/getFieldsValue might miss for unregistered sub-fields)
+    const rawItems: any[] = form.getFieldValue("items") || [];
     const payload = {
       ...restValues,
       order_date: values.order_date?.format("YYYY-MM-DD"),
       arrival_date: values.arrival_date?.format("YYYY-MM-DD") || null,
       charges,
-      items: (values.items || []).map((item: any) => ({
+      items: rawItems.map((item: any) => ({
         ...item,
         quantity: item.quantity != null ? Number(item.quantity) : undefined,
         sale_price: item.sale_price != null ? Number(item.sale_price) : undefined,

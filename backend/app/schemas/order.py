@@ -119,6 +119,7 @@ class OrderItemResponseManager(BaseModel):
     cargo_value: Optional[Decimal] = None
     cargo_value_currency: Optional[str] = None
     places_count: Optional[int] = None
+    purchased_quantity: Optional[Decimal] = None
     photos: List[OrderItemPhotoResponse] = []
 
 

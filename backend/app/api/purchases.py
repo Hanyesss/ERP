@@ -28,7 +28,7 @@ from app.services.notifications import on_purchase_created
 
 router = APIRouter(prefix="/api/purchases", tags=["purchases"])
 
-_ALLOWED = ("purchaser", "accountant", "admin")
+_ALLOWED = ("manager", "purchaser", "accountant", "admin")
 
 
 async def _get_default_company(db: AsyncSession) -> Company:

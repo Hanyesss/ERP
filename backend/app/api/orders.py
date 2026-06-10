@@ -156,6 +156,22 @@ async def _load_order_detail(
         for c in charge_rows
     ]
 
+    # Load purchase_items for all roles (needed to determine if item can be deleted)
+    purchase_item_rows = []
+    if item_ids:
+        pi_stmt = (
+            select(PurchaseItem, Purchase.purchase_number)
+            .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+            .where(PurchaseItem.order_item_id.in_(item_ids), Purchase.is_deleted == False)
+        )
+        purchase_item_rows = (await db.execute(pi_stmt)).all()
+
+    # Group purchase_items by order_item_id
+    pi_by_item: dict[uuid.UUID, list] = {}
+    for pi_row in purchase_item_rows:
+        oi_id = pi_row[0].order_item_id
+        pi_by_item.setdefault(oi_id, []).append(pi_row)
+
     if is_manager_only:
         items = [
             OrderItemResponseManager(
@@ -171,6 +187,9 @@ async def _load_order_detail(
                 price_per_kg=r[0].price_per_kg, price_per_kg_currency=r[0].price_per_kg_currency,
                 cargo_value=r[0].cargo_value, cargo_value_currency=r[0].cargo_value_currency,
                 places_count=r[0].places_count,
+                purchased_quantity=sum(
+                    pi[0].quantity for pi in pi_by_item.get(r[0].id, [])
+                ) or Decimal("0"),
                 photos=photos_by_item.get(r[0].id, []),
             )
             for r in item_rows
@@ -201,22 +220,7 @@ async def _load_order_detail(
             excluded_from_accounting=order.excluded_from_accounting,
         )
 
-    # Purchaser/accountant/admin — load purchase_items per order_item
-    purchase_item_rows = []
-    if item_ids:
-        pi_stmt = (
-            select(PurchaseItem, Purchase.purchase_number)
-            .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
-            .where(PurchaseItem.order_item_id.in_(item_ids), Purchase.is_deleted == False)
-        )
-        purchase_item_rows = (await db.execute(pi_stmt)).all()
-
-    # Group purchase_items by order_item_id
-    pi_by_item: dict[uuid.UUID, list] = {}
-    for pi_row in purchase_item_rows:
-        oi_id = pi_row[0].order_item_id
-        pi_by_item.setdefault(oi_id, []).append(pi_row)
-
+    # pi_by_item already loaded above (before is_manager_only branch)
     items = [
         OrderItemResponseFull(
             id=r[0].id, name=r[0].name, name_cn=r[0].name_cn,
