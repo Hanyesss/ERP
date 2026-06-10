@@ -56,7 +56,7 @@ export default function AppLayout({ user, onLogout }: Props) {
 
     !hasRole(user, "partner") && { key: "/dashboard", icon: <DashboardOutlined />, label: t("nav.dashboard") },
 
-    hasRole(user, "employee", "seller", "purchaser", "accountant", "admin") && {
+    !hasRole(user, "partner") && {
       key: "/counterparties",
       icon: <TeamOutlined />,
       label: t("nav.counterparties"),
