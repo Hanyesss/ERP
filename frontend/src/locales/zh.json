@@ -234,6 +234,7 @@
     "payment_status_paid": "已付款",
     "add_item": "+ 添加明细",
     "remove_item": "删除",
+    "item_has_purchase": "无法删除 — 该明细已有采购记录",
     "create_new": "新建订单",
     "edit": "编辑",
     "close_order": "关闭订单",

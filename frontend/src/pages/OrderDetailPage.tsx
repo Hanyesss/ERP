@@ -33,8 +33,8 @@ export default function OrderDetailPage() {
   const qc = useQueryClient();
 
   const canSeeCost = useHasAnyRole("purchaser", "accountant", "admin");
-  const canDownloadPdf = useHasAnyRole("manager", "accountant", "admin");
-  const canSync = useHasAnyRole("manager", "accountant", "admin");
+  const canDownloadPdf = useHasAnyRole("seller", "purchaser", "employee", "manager", "accountant", "admin");
+  const canSync = useHasAnyRole("seller", "purchaser", "employee", "manager", "accountant", "admin");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [logisticsPdfLoading, setLogisticsPdfLoading] = useState(false);
   const [cancelModal, setCancelModal] = useState(false);

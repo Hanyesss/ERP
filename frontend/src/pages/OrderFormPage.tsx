@@ -51,6 +51,7 @@ export default function OrderFormPage({ user }: Props) {
   const [clientPhone, setClientPhone] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingItemPhotos>({});
   const [savedItemIdByKey, setSavedItemIdByKey] = useState<Record<number, string>>({});
+  const [purchasedItemIds, setPurchasedItemIds] = useState<Set<string>>(new Set());
   const [pendingOrderFiles, setPendingOrderFiles] = useState<PendingOrderFile[]>([]);
   const [pendingFileType, setPendingFileType] = useState("cargo_photo");
   const pendingFilesInputRef = useRef<HTMLInputElement>(null);
@@ -290,10 +291,17 @@ export default function OrderFormPage({ user }: Props) {
       setPendingPhotos({});
       // Map Form.List key (=index for initial load) → saved item ID
       const idMap: Record<number, string> = {};
+      const purchasedIds = new Set<string>();
       (existingOrder.items || []).forEach((item: any, idx: number) => {
-        if (item.id) idMap[idx] = item.id;
+        if (item.id) {
+          idMap[idx] = item.id;
+          if (item.purchase_items && item.purchase_items.length > 0) {
+            purchasedIds.add(item.id);
+          }
+        }
       });
       setSavedItemIdByKey(idMap);
+      setPurchasedItemIds(purchasedIds);
 
       form.setFieldsValue({
         order_number: existingOrder.order_number,
@@ -717,6 +725,7 @@ export default function OrderFormPage({ user }: Props) {
               pendingPhotos={pendingPhotos}
               onPendingPhotosChange={setPendingPhotos}
               savedItemIdByKey={savedItemIdByKey}
+              purchasedItemIds={purchasedItemIds}
             />
           )}
 

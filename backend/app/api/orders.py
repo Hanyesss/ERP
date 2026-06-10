@@ -39,7 +39,7 @@ from app.services.notifications import notify_role, notify
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 _PURCHASER_ROLES = ("purchaser", "accountant", "admin")
-_ALL_EXCEPT_EMPLOYEE = ("employee", "manager", "purchaser", "accountant", "admin")
+_ALL_EXCEPT_EMPLOYEE = ("employee", "seller", "manager", "purchaser", "accountant", "admin")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Input, InputNumber, Select, Button, Row, Col, Typography, Popover } from "antd";
+import { Form, Input, InputNumber, Select, Button, Row, Col, Typography, Popover, Tooltip } from "antd";
 import { DeleteOutlined, PlusOutlined, FileTextOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
@@ -22,6 +22,8 @@ interface Props {
   onPendingPhotosChange: (photos: PendingItemPhotos) => void;
   /** Maps Form.List field key → saved item ID (for edit mode) */
   savedItemIdByKey?: Record<number, string>;
+  /** Set of item IDs that have linked purchases and cannot be deleted */
+  purchasedItemIds?: Set<string>;
 }
 
 function SpecPopover({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
@@ -64,6 +66,7 @@ export default function OrderItemsEditor({
   form, rates, clientCurrency,
   pendingPhotos, onPendingPhotosChange,
   savedItemIdByKey = {},
+  purchasedItemIds,
 }: Props) {
   const { t } = useTranslation();
 
@@ -93,8 +96,10 @@ export default function OrderItemsEditor({
 
           {fields.map(({ key, name }) => {
             const savedItemId = savedItemIdByKey[key];
+            const isPurchased = !!(savedItemId && purchasedItemIds?.has(savedItemId));
             return (
               <Row key={key} gutter={4} align="top" style={{ marginBottom: 8 }}>
+                <Form.Item name={[name, "id"]} hidden noStyle><Input /></Form.Item>
                 <Col span={3}>
                   <Form.Item name={[name, "name"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
                     <Input size="small" placeholder={t("order.item_name")} />
@@ -157,15 +162,18 @@ export default function OrderItemsEditor({
                   )}
                 </Col>
                 <Col span={1}>
-                  <Button
-                    size="small" danger icon={<DeleteOutlined />}
-                    onClick={() => {
-                      remove(name);
-                      const updated = { ...pendingPhotos };
-                      delete updated[key];
-                      onPendingPhotosChange(updated);
-                    }}
-                  />
+                  <Tooltip title={isPurchased ? t("order.item_has_purchase") : undefined}>
+                    <Button
+                      size="small" danger icon={<DeleteOutlined />}
+                      disabled={isPurchased}
+                      onClick={() => {
+                        remove(name);
+                        const updated = { ...pendingPhotos };
+                        delete updated[key];
+                        onPendingPhotosChange(updated);
+                      }}
+                    />
+                  </Tooltip>
                 </Col>
               </Row>
             );

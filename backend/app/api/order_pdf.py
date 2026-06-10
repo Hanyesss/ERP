@@ -24,7 +24,7 @@ from app.models.company import Company
 
 router = APIRouter(prefix="/api/orders", tags=["order-pdf"])
 
-_PDF_ROLES = ("manager", "accountant", "admin")
+_PDF_ROLES = ("seller", "purchaser", "employee", "manager", "accountant", "admin")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates" / "pdf"
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"

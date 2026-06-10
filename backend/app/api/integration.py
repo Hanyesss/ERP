@@ -18,7 +18,7 @@ from app.integrations.irsway_site.client import IrswayClient
 router = APIRouter(prefix="/api/integration-settings", tags=["integration"])
 orders_router = APIRouter(prefix="/api/orders", tags=["orders-sync"])
 
-_SYNC_ROLES = ("manager", "accountant", "admin")
+_SYNC_ROLES = ("seller", "purchaser", "employee", "manager", "accountant", "admin")
 
 
 def _mask_token(token: Optional[str]) -> Optional[str]:
