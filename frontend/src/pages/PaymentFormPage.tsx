@@ -3,12 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
   Space, Row, Col, InputNumber, Radio, Table, Alert, Divider,
-  message, Statistic,
+  Upload, message, Statistic,
 } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
+import type { UploadRequestOption } from "rc-upload/lib/interface";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createPayment } from "../api/payments";
+import { createPayment, uploadPaymentReceipt } from "../api/payments";
 import { getCashRegisters } from "../api/cashRegisters";
 import { getOrders } from "../api/orders";
 import { getPurchases } from "../api/purchases";
@@ -46,6 +48,7 @@ export default function PaymentFormPage() {
   const [amount, setAmount] = useState<number>(0);
   const [rateToCny, setRateToCny] = useState<number>(1);
   const [allocRows, setAllocRows] = useState<AllocRow[]>([]);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const paymentDate: dayjs.Dayjs | null = Form.useWatch("payment_date", form);
   const selectedCurrency: string = Form.useWatch("currency", form) || "CNY";
@@ -163,9 +166,17 @@ export default function PaymentFormPage() {
 
   const createMutation = useMutation({
     mutationFn: createPayment,
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
+      const paymentId = res.data.id;
+      if (receiptFile) {
+        try {
+          await uploadPaymentReceipt(paymentId, receiptFile);
+        } catch {
+          message.warning(t("payment.receipt_upload") + " — ошибка, загрузите вручную");
+        }
+      }
       message.success("✓");
-      navigate(`/payments/${res.data.id}?back=${encodeURIComponent(backUrl)}`);
+      navigate(`/payments/${paymentId}?back=${encodeURIComponent(backUrl)}`);
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -372,6 +383,23 @@ export default function PaymentFormPage() {
 
           <Form.Item name="notes" label={t("payment.notes")}>
             <Input.TextArea rows={2} />
+          </Form.Item>
+
+          <Form.Item label={t("payment.receipt")}>
+            <Upload
+              customRequest={({ file }: UploadRequestOption) => {
+                setReceiptFile(file as File);
+              }}
+              showUploadList
+              maxCount={1}
+              accept=".jpg,.jpeg,.png,.webp,.pdf"
+              onRemove={() => { setReceiptFile(null); return true; }}
+              fileList={receiptFile ? [{ uid: "1", name: receiptFile.name, status: "done" } as any] : []}
+            >
+              {!receiptFile && (
+                <Button icon={<UploadOutlined />}>{t("payment.receipt_upload")}</Button>
+              )}
+            </Upload>
           </Form.Item>
         </Card>
 
