@@ -716,7 +716,12 @@ export default function OrderFormPage({ user }: Props) {
           }
         >
           {isLogistics ? (
-            <LogisticsItemsEditor form={form} rates={rates} />
+            <LogisticsItemsEditor
+              form={form}
+              rates={rates}
+              savedItemIdByKey={savedItemIdByKey}
+              purchasedItemIds={purchasedItemIds}
+            />
           ) : (
             <OrderItemsEditor
               form={form}

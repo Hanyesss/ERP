@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Form, Input, InputNumber, Select, Button, Row, Col, Typography } from "antd";
+import { Form, Input, InputNumber, Select, Button, Row, Col, Typography, Tooltip } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
@@ -12,9 +12,11 @@ const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
 interface Props {
   form: FormInstance;
   rates: Record<string, number>;
+  savedItemIdByKey?: Record<number, string>;
+  purchasedItemIds?: Set<string>;
 }
 
-export default function LogisticsItemsEditor({ form, rates }: Props) {
+export default function LogisticsItemsEditor({ form, rates, savedItemIdByKey = {}, purchasedItemIds }: Props) {
   const { t } = useTranslation();
 
   const { data: suppliers } = useQuery({
@@ -47,10 +49,14 @@ export default function LogisticsItemsEditor({ form, rates }: Props) {
             ))}
           </Row>
 
-          {fields.map(({ key, name }) => (
-            <LogisticsItemRow key={key} name={name} remove={remove} form={form}
-              rates={rates} supplierOptions={supplierOptions} />
-          ))}
+          {fields.map(({ key, name }) => {
+            const savedItemId = savedItemIdByKey[key];
+            const isPurchased = !!(savedItemId && purchasedItemIds?.has(savedItemId));
+            return (
+              <LogisticsItemRow key={key} name={name} remove={remove} form={form}
+                rates={rates} supplierOptions={supplierOptions} isPurchased={isPurchased} />
+            );
+          })}
 
           <Button
             type="dashed" icon={<PlusOutlined />}
@@ -65,7 +71,7 @@ export default function LogisticsItemsEditor({ form, rates }: Props) {
   );
 }
 
-function LogisticsItemRow({ name, remove, form, rates, supplierOptions }: any) {
+function LogisticsItemRow({ name, remove, form, rates, supplierOptions, isPurchased }: any) {
   const { t } = useTranslation();
 
   // Compute density from form values
@@ -79,6 +85,7 @@ function LogisticsItemRow({ name, remove, form, rates, supplierOptions }: any) {
 
   return (
     <Row gutter={4} align="top" style={{ marginBottom: 4 }}>
+      <Form.Item name={[name, "id"]} hidden noStyle><Input /></Form.Item>
       <Col span={5}>
         <Form.Item name={[name, "name"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
           <Input size="small" placeholder={t("order.item_name")} />
@@ -144,7 +151,11 @@ function LogisticsItemRow({ name, remove, form, rates, supplierOptions }: any) {
         </Form.Item>
       </Col>
       <Col span={1}>
-        <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+        <Tooltip title={isPurchased ? t("order.item_has_purchase") : undefined}>
+          <Button size="small" danger icon={<DeleteOutlined />}
+            disabled={isPurchased}
+            onClick={() => remove(name)} />
+        </Tooltip>
       </Col>
     </Row>
   );
