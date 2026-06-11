@@ -42,6 +42,7 @@ export default function PurchaseDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
+  const [editItemPrices, setEditItemPrices] = useState<Record<string, number>>({});
 
   const deleteMutation = useMutation({
     mutationFn: () => deletePurchase(id!),
@@ -305,6 +306,9 @@ export default function PurchaseDetailPage() {
                       rate_to_cny: Number(purchase.rate_to_cny),
                       notes: purchase.notes,
                     });
+                    const prices: Record<string, number> = {};
+                    purchase.items?.forEach(item => { prices[item.id] = Number(item.cost_price); });
+                    setEditItemPrices(prices);
                     setEditOpen(true);
                   }}
                 >
@@ -387,6 +391,13 @@ export default function PurchaseDetailPage() {
             currency: v.currency,
             rate_to_cny: v.rate_to_cny,
             notes: v.notes ?? null,
+            items: purchase.items?.length
+              ? purchase.items.map(item => ({
+                  order_item_id: item.order_item_id,
+                  quantity: Number(item.quantity),
+                  cost_price: editItemPrices[item.id] ?? Number(item.cost_price),
+                }))
+              : undefined,
           })}
         >
           <Form.Item name="supplier_id" label={t("purchase.supplier")} rules={[{ required: true }]}>
@@ -410,6 +421,36 @@ export default function PurchaseDetailPage() {
           <Form.Item name="notes" label={t("purchase.notes")}>
             <Input.TextArea rows={2} />
           </Form.Item>
+          {purchase.items?.length > 0 && (
+            <Form.Item label={t("purchase.items")}>
+              <Table
+                dataSource={purchase.items}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                columns={[
+                  { title: t("order.item_name"), dataIndex: "order_item_name", key: "name", ellipsis: true },
+                  { title: t("order.item_quantity"), dataIndex: "quantity", key: "qty", align: "right" as const, width: 70 },
+                  {
+                    title: t("purchase.cost_price"),
+                    key: "cost_price",
+                    align: "right" as const,
+                    width: 120,
+                    render: (_: any, row: any) => (
+                      <InputNumber
+                        min={0}
+                        precision={2}
+                        step={0.01}
+                        value={editItemPrices[row.id] ?? Number(row.cost_price)}
+                        onChange={v => setEditItemPrices(prev => ({ ...prev, [row.id]: v ?? 0 }))}
+                        style={{ width: 110 }}
+                      />
+                    ),
+                  },
+                ]}
+              />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </div>

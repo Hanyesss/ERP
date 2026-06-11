@@ -475,6 +475,27 @@ async def update_purchase(
 
     affected_order_ids: set[uuid.UUID] = set()
 
+    if items_data is None and "rate_to_cny" in update_data:
+        # Rate changed but items not sent — recalculate totals from existing items
+        existing_items = (await db.execute(
+            select(PurchaseItem).where(PurchaseItem.purchase_id == purchase_id)
+        )).scalars().all()
+        if existing_items:
+            new_rate = Decimal(str(update_data["rate_to_cny"]))
+            total = sum(Decimal(str(i.quantity)) * Decimal(str(i.cost_price)) for i in existing_items)
+            pur.total_amount = total.quantize(Decimal("0.01"))
+            pur.total_amount_cny = (total * new_rate).quantize(Decimal("0.01"))
+            for i in existing_items:
+                i.cost_amount = (Decimal(str(i.quantity)) * Decimal(str(i.cost_price)) * new_rate).quantize(Decimal("0.01"))
+            existing_order_ids = (await db.execute(
+                select(PurchaseItem, OrderItem.order_id)
+                .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+                .where(PurchaseItem.purchase_id == purchase_id)
+            )).all()
+            for _, order_id in existing_order_ids:
+                affected_order_ids.add(order_id)
+            await db.flush()
+
     if items_data is not None:
         # Delete existing items, collect affected orders
         existing_pi = (await db.execute(
