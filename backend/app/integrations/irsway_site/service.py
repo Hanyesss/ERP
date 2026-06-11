@@ -179,10 +179,16 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
     else:
         # Нет отправления или номер изменился — создаём новое
         if number_changed:
+            old_number = order.external_shipment_number
             logger.info(
-                "Irsway: order_number changed (%s → %s), creating new shipment",
-                order.external_shipment_number, order.order_number,
+                "Irsway: order_number changed (%s → %s), deleting old and creating new shipment",
+                old_number, order.order_number,
             )
+            del_result = await loop.run_in_executor(
+                None, lambda: client.delete_shipment(old_number)
+            )
+            if del_result.error:
+                logger.warning("Irsway: delete old shipment %s → %s", old_number, del_result.error)
             order.external_shipment_number = None
             order.external_shipment_id = None
             order.external_invoice_url = None

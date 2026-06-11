@@ -197,6 +197,19 @@ class IrswayClient:
         except Exception as e:
             return ShipmentResult(error=str(e))
 
+    def delete_shipment(self, shipment_number: str) -> ShipmentResult:
+        try:
+            r = httpx.delete(
+                self._url(f"/api/v1/shipments/{shipment_number}/"),
+                headers=self.headers,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 204):
+                return ShipmentResult()
+            return ShipmentResult(error=f"HTTP {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            return ShipmentResult(error=str(e))
+
     def update_shipment(self, shipment_number: str, payload: ShipmentCreatePayload) -> ShipmentResult:
         try:
             body = self._build_shipment_body(payload)
