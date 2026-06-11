@@ -1,3 +1,4 @@
+import logging
 import uuid
 import io
 import base64
@@ -5,6 +6,8 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, Form, status
 from fastapi.responses import Response
@@ -621,6 +624,13 @@ async def ship_boxes(
     db.add(pl)
     await db.commit()
 
+    try:
+        from app.integrations.irsway_site.service import sync_box_to_site
+        for box, cp in rows:
+            await sync_box_to_site(box, cp, db)
+    except Exception as _e:
+        logger.warning("Warehouse ship sync failed: %s", _e)
+
     not_found = [c for c in body.box_codes if c not in {b.box_code for b, _ in rows}]
 
     return Response(
@@ -703,6 +713,11 @@ async def create_box(
                 selectinload(WarehouseBox.photos),
             )
         )).scalar_one()
+        try:
+            from app.integrations.irsway_site.service import sync_box_to_site
+            await sync_box_to_site(box_with_items, cp, db)
+        except Exception as _e:
+            logger.warning("Warehouse sync failed for %s: %s", box_with_items.box_code, _e)
         return _box_to_dict(box_with_items, cp)
 
     # Несколько коробок — возвращаем список
@@ -715,6 +730,12 @@ async def create_box(
         )
         .order_by(WarehouseBox.box_code)
     )).scalars().all()
+    try:
+        from app.integrations.irsway_site.service import sync_box_to_site
+        for b in boxes_loaded:
+            await sync_box_to_site(b, cp, db)
+    except Exception as _e:
+        logger.warning("Warehouse bulk sync failed: %s", _e)
     return [_box_to_dict(b, cp) for b in boxes_loaded]
 
 
@@ -1005,6 +1026,11 @@ async def update_box(
     cp = (await db.execute(
         select(Counterparty).where(Counterparty.id == box.counterparty_id)
     )).scalar_one_or_none()
+    try:
+        from app.integrations.irsway_site.service import sync_box_to_site
+        await sync_box_to_site(box, cp, db)
+    except Exception as _e:
+        logger.warning("Warehouse sync failed for %s: %s", box.box_code, _e)
     return _box_to_dict(box, cp)
 
 

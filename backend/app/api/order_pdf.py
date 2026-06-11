@@ -47,6 +47,112 @@ def _get_photo_abs_path(photo: OrderItemPhoto) -> str:
     return str(path)
 
 
+async def generate_trade_pdf_bytes(order_id: uuid.UUID, db: AsyncSession) -> bytes:
+    """Generate trade order PDF and return raw bytes (used by sync service)."""
+    ClientAlias = aliased(Counterparty)
+    stmt = (
+        select(Order, ClientAlias, BusinessType)
+        .join(ClientAlias, Order.client_id == ClientAlias.id)
+        .join(BusinessType, Order.business_type_id == BusinessType.id)
+        .where(Order.id == order_id)
+    )
+    row = (await db.execute(stmt)).first()
+    if not row:
+        raise ValueError(f"Order {order_id} not found")
+    order, client, bt = row
+
+    company = (await db.execute(
+        select(Company).where(Company.is_active == True).limit(1)
+    )).scalar_one_or_none()
+    company_name = company.name if company else "Наша компания"
+
+    client_phone = None
+    if client.contact_info and isinstance(client.contact_info, dict):
+        client_phone = client.contact_info.get("phone")
+
+    item_rows = (await db.execute(
+        select(OrderItem).where(OrderItem.order_id == order_id).order_by(OrderItem.id)
+    )).scalars().all()
+
+    item_ids = [it.id for it in item_rows]
+    photos_by_item: dict[uuid.UUID, list] = {}
+    if item_ids:
+        photo_rows = (await db.execute(
+            select(OrderItemPhoto)
+            .where(OrderItemPhoto.order_item_id.in_(item_ids))
+            .order_by(OrderItemPhoto.order_item_id, OrderItemPhoto.sort_order)
+        )).scalars().all()
+        for ph in photo_rows:
+            photos_by_item.setdefault(ph.order_item_id, []).append(ph)
+
+    has_photos = any(photos_by_item.get(it.id) for it in item_rows)
+
+    total_cny = Decimal("0")
+    template_items = []
+    currency_totals: dict[str, Decimal] = {}
+    for it in item_rows:
+        qty = it.quantity or Decimal("0")
+        price = it.sale_price or Decimal("0")
+        total = (qty * price).quantize(Decimal("0.01"))
+        cur_raw = it.sale_currency or "CNY"
+        cur = str(cur_raw.value if hasattr(cur_raw, 'value') else cur_raw)
+        currency_totals[cur] = currency_totals.get(cur, Decimal("0")) + total
+        rate_val = it.sale_rate_to_cny or Decimal("1")
+        total_cny += (total * rate_val).quantize(Decimal("0.01"))
+
+        photos_data = []
+        for ph in photos_by_item.get(it.id, []):
+            abs_path = _get_photo_abs_path(ph)
+            if Path(abs_path).exists():
+                photos_data.append({"abs_path": Path(abs_path).as_uri()})
+
+        template_items.append({
+            "name": it.name,
+            "name_cn": it.name_cn,
+            "model": it.model,
+            "specification": it.specification,
+            "quantity": it.quantity,
+            "unit": it.unit,
+            "sale_price": it.sale_price,
+            "sale_currency": cur,
+            "total": total,
+            "photos": photos_data,
+        })
+
+    client_currency = str(order.client_currency.value if hasattr(order.client_currency, 'value') else order.client_currency)
+    total_in_currency = currency_totals.get(client_currency, Decimal("0"))
+    if client_currency == "CNY":
+        total_in_currency = total_cny
+
+    if currency_totals:
+        price_currency = max(currency_totals, key=lambda k: currency_totals[k])
+    else:
+        price_currency = client_currency
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    env.filters["fmt_decimal"] = _fmt_decimal
+    tmpl = env.get_template("client_order.html")
+    html = tmpl.render(
+        company_name=company_name,
+        company_phone=None,
+        company_email=None,
+        order_number=order.order_number,
+        order_date=order.order_date.strftime("%d.%m.%Y"),
+        client_name=client.name,
+        client_phone=client_phone,
+        client_currency=client_currency,
+        items=template_items,
+        has_photos=has_photos,
+        price_currency=price_currency,
+        total_cny=total_cny,
+        total_in_currency=total_in_currency,
+        notes=order.notes,
+    )
+
+    import weasyprint
+    return weasyprint.HTML(string=html, base_url=str(UPLOADS_DIR)).write_pdf()
+
+
 @router.get("/{order_id}/client-pdf")
 async def download_client_pdf(
     order_id: uuid.UUID,

@@ -313,78 +313,80 @@ export default function OrderDetailPage() {
                   <Descriptions.Item label={t("order.tracking_number")}>{order.tracking_number}</Descriptions.Item>
                 )}
               </Descriptions>
+            </>
+          )}
 
-              {canSync && (
-                <>
-                  <Divider>{t("order.sync.title")}</Divider>
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    {order.sync_status === "synced" && (
-                      <Space wrap>
-                        <Tag color="green" icon={<CheckOutlined />}>{t("order.sync.synced")}</Tag>
-                        {order.synced_at && (
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {new Date(order.synced_at).toLocaleString("ru-RU")}
-                          </Text>
-                        )}
-                        {order.external_shipment_number && (
-                          <Text>{t("order.sync.shipment_number")}: <Text strong>{order.external_shipment_number}</Text></Text>
-                        )}
-                      </Space>
+          {canSync && (
+            <>
+              <Divider>{t("order.sync.title")}</Divider>
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {order.sync_status === "synced" && (
+                  <Space wrap>
+                    <Tag color="green" icon={<CheckOutlined />}>{t("order.sync.synced")}</Tag>
+                    {order.synced_at && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {new Date(order.synced_at).toLocaleString("ru-RU")}
+                      </Text>
                     )}
-                    {order.sync_status === "failed" && (
-                      <Space direction="vertical">
-                        <Tag color="red" icon={<CloseOutlined />}>{t("order.sync.failed")}</Tag>
-                        {order.sync_error && <Text type="danger" style={{ fontSize: 12 }}>{order.sync_error}</Text>}
-                      </Space>
+                    {order.external_shipment_number && (
+                      <Text>{t("order.sync.shipment_number")}: <Text strong>{order.external_shipment_number}</Text></Text>
                     )}
-                    {order.sync_status === "pending" && (
-                      <Tag color="orange" icon={<SyncOutlined />}>{t("order.sync.pending")}</Tag>
-                    )}
-                    {order.sync_status === "disabled" && (
-                      <Text type="secondary">{t("order.sync.disabled")}</Text>
-                    )}
-                    {!order.sync_status && (
-                      <Text type="secondary">{t("order.sync.not_synced")}</Text>
-                    )}
-
-                    <Space wrap>
-                      <Button
-                        icon={<SyncOutlined />}
-                        loading={syncMutation.isPending}
-                        onClick={() => syncMutation.mutate()}
-                      >
-                        {order.sync_status === "synced" ? t("order.sync.sync_again") : t("order.sync.sync_now")}
-                      </Button>
-
-                      {order.sync_status === "synced" && (
-                        <>
-                          {order.external_invoice_url && (
-                            <Button
-                              icon={<DownloadOutlined />}
-                              href={order.external_invoice_url}
-                              target="_blank"
-                            >
-                              {t("order.sync.download_invoice")}
-                            </Button>
-                          )}
-                          {order.external_tracking_url && (
-                            <Button
-                              icon={<LinkOutlined />}
-                              href={order.external_tracking_url}
-                              target="_blank"
-                            >
-                              {t("order.sync.open_tracking")}
-                            </Button>
-                          )}
-                          <Button onClick={() => setPushStatusOpen(true)}>
-                            {t("order.sync.push_status")}
-                          </Button>
-                        </>
-                      )}
-                    </Space>
                   </Space>
-                </>
-              )}
+                )}
+                {order.sync_status === "failed" && (
+                  <Space direction="vertical">
+                    <Tag color="red" icon={<CloseOutlined />}>{t("order.sync.failed")}</Tag>
+                    {order.sync_error && <Text type="danger" style={{ fontSize: 12 }}>{order.sync_error}</Text>}
+                  </Space>
+                )}
+                {order.sync_status === "pending" && (
+                  <Tag color="orange" icon={<SyncOutlined />}>{t("order.sync.pending")}</Tag>
+                )}
+                {order.sync_status === "disabled" && (
+                  <Text type="secondary">{t("order.sync.disabled")}</Text>
+                )}
+                {!order.sync_status && (
+                  <Text type="secondary">{t("order.sync.not_synced")}</Text>
+                )}
+
+                <Space wrap>
+                  <Button
+                    icon={<SyncOutlined />}
+                    loading={syncMutation.isPending}
+                    onClick={() => syncMutation.mutate()}
+                  >
+                    {order.sync_status === "synced" ? t("order.sync.sync_again") : t("order.sync.sync_now")}
+                  </Button>
+
+                  {order.sync_status === "synced" && (
+                    <>
+                      {order.external_invoice_url && (
+                        <Button
+                          icon={<DownloadOutlined />}
+                          href={order.external_invoice_url}
+                          target="_blank"
+                        >
+                          {t("order.sync.download_invoice")}
+                        </Button>
+                      )}
+                      {order.external_tracking_url && (
+                        <Button
+                          icon={<LinkOutlined />}
+                          href={order.external_tracking_url}
+                          target="_blank"
+                        >
+                          {t("order.sync.open_tracking")}
+                        </Button>
+                      )}
+                      {isLogistics && (
+                        <Button onClick={() => setPushStatusOpen(true)}>
+                          {t("order.sync.push_status")}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </Space>
+              </Space>
             </>
           )}
         </>

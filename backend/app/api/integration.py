@@ -12,7 +12,7 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.business_type import BusinessType
 from app.models.integration_settings import IntegrationSettings
-from app.integrations.irsway_site.service import sync_order_to_site, push_status_to_site, get_active_client, INTEGRATION_NAME
+from app.integrations.irsway_site.service import sync_order_to_site, sync_trade_order_to_site, push_status_to_site, get_active_client, INTEGRATION_NAME
 from app.integrations.irsway_site.client import IrswayClient
 
 router = APIRouter(prefix="/api/integration-settings", tags=["integration"])
@@ -169,10 +169,19 @@ async def sync_order(
         raise HTTPException(404, "Order not found")
 
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == order.business_type_id))).scalar_one_or_none()
-    if not bt or bt.code != "logistics":
-        raise HTTPException(422, "Sync is only available for logistics orders")
+    if not bt or bt.code not in ("logistics", "trade"):
+        raise HTTPException(422, "Sync is only available for logistics and trade orders")
 
-    success, msg = await sync_order_to_site(order, db)
+    if bt.code == "logistics":
+        success, msg = await sync_order_to_site(order, db)
+    else:
+        success, msg = await sync_trade_order_to_site(order, db)
+        if success:
+            try:
+                from app.integrations.irsway_site.service import push_reconciliation_to_site
+                await push_reconciliation_to_site(order.client_id, db)
+            except Exception:
+                pass
     await db.commit()
 
     return {

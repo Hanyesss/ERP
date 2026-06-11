@@ -5,6 +5,8 @@ from .schemas import (
     ShipmentCreatePayload, ShipmentStatusPayload,
     ShipmentResult, ShipmentClientResult, HealthResult, ClientCreateResult,
     TradeOrderPayload, TradeOrderResult,
+    WarehouseStockPayload, WarehouseStockResult,
+    ReconciliationPayload, ReconciliationResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -259,6 +261,49 @@ class IrswayClient:
             return TradeOrderResult(error=f"HTTP {r.status_code}: {r.text[:300]}")
         except Exception as e:
             return TradeOrderResult(error=str(e))
+
+    def upload_trade_invoice(self, number: str, pdf_bytes: bytes) -> TradeOrderResult:
+        upload_headers = {k: v for k, v in self.headers.items() if k != "Content-Type"}
+        try:
+            r = httpx.post(
+                self._url(f"/api/v1/trade-orders/{number}/invoice/"),
+                headers=upload_headers,
+                files={"invoice": (f"{number}.pdf", pdf_bytes, "application/pdf")},
+                timeout=30.0,
+            )
+            if r.status_code in (200, 201):
+                return TradeOrderResult(invoice_url=r.json().get("invoice_url"))
+            return TradeOrderResult(error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return TradeOrderResult(error=str(e))
+
+    def upsert_warehouse_stock(self, payload: WarehouseStockPayload) -> WarehouseStockResult:
+        try:
+            r = httpx.post(
+                self._url("/api/v1/warehouse-stock/"),
+                headers=self.headers,
+                json=payload.model_dump(exclude_none=True),
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 201):
+                return WarehouseStockResult()
+            return WarehouseStockResult(ok=False, error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return WarehouseStockResult(ok=False, error=str(e))
+
+    def push_reconciliation(self, payload: ReconciliationPayload) -> ReconciliationResult:
+        try:
+            r = httpx.post(
+                self._url("/api/v1/reconciliation/"),
+                headers=self.headers,
+                json=payload.model_dump(),
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 201):
+                return ReconciliationResult()
+            return ReconciliationResult(ok=False, error=f"HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            return ReconciliationResult(ok=False, error=str(e))
 
     def add_status(self, shipment_number: str, payload: ShipmentStatusPayload) -> ShipmentResult:
         try:

@@ -82,6 +82,7 @@ class TradeOrderResult(BaseModel):
     id: Optional[int] = None
     number: Optional[str] = None
     remaining_cny: Optional[str] = None
+    invoice_url: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -94,3 +95,56 @@ class ClientCreateResult(BaseModel):
     ok: bool
     error: Optional[str] = None
     user_id: Optional[str] = None
+
+
+class WarehouseStockItem(BaseModel):
+    name: str
+    quantity: int = 1
+    tracking_code: Optional[str] = None
+
+
+class WarehouseStockPayload(BaseModel):
+    box_code: str
+    client_code: str
+    item_name: str
+    items: list[WarehouseStockItem] = []
+    weight: Optional[float] = None
+    volume: Optional[float] = None
+    density: Optional[float] = None
+    status: str = "on_warehouse"
+    received_at: Optional[str] = None
+    shipped_at: Optional[str] = None
+    erp_box_id: Optional[str] = None
+
+
+class WarehouseStockResult(BaseModel):
+    ok: bool = True
+    error: Optional[str] = None
+
+
+class PaymentEntryPayload(BaseModel):
+    date: str
+    amount_cny: str
+
+
+class ReconciliationRowPayload(BaseModel):
+    order_number: str
+    order_date: Optional[str] = None
+    total_sale_cny: str
+    paid_cny: str
+    remaining: str
+    payment_status: str
+    payments: list[PaymentEntryPayload] = []
+
+
+class ReconciliationPayload(BaseModel):
+    client_code: str
+    rows: list[ReconciliationRowPayload] = []
+    total_revenue: float = 0.0
+    total_paid: float = 0.0
+    balance: float = 0.0
+
+
+class ReconciliationResult(BaseModel):
+    ok: bool = True
+    error: Optional[str] = None

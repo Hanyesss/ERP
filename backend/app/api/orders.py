@@ -669,6 +669,11 @@ async def create_order(
             await db.commit()
         except Exception:
             pass
+        try:
+            from app.integrations.irsway_site.service import push_reconciliation_to_site
+            await push_reconciliation_to_site(order.client_id, db)
+        except Exception:
+            pass
 
     return await _load_order_detail(db, order.id, current_user)
 
@@ -808,6 +813,11 @@ async def update_order(
         try:
             await sync_trade_order_to_site(order, db)
             await db.commit()
+        except Exception:
+            pass
+        try:
+            from app.integrations.irsway_site.service import push_reconciliation_to_site
+            await push_reconciliation_to_site(order.client_id, db)
         except Exception:
             pass
 

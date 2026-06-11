@@ -264,6 +264,7 @@ async def _recalc_all_for_payment(db: AsyncSession, payment: Payment) -> None:
             select(PaymentAllocation.order_id)
             .where(PaymentAllocation.payment_id == payment.id)
         )
+        affected_client_ids: set = set()
         for row in alloc_rows.all():
             await _recalc_order_payment_status(db, row[0])
             # Обновляем статус оплаты торгового заказа на сайте
@@ -271,14 +272,23 @@ async def _recalc_all_for_payment(db: AsyncSession, payment: Payment) -> None:
                 order_obj = (await db.execute(
                     select(Order).where(Order.id == row[0])
                 )).scalar_one_or_none()
-                if order_obj and order_obj.sync_status == "synced":
-                    from app.models.business_type import BusinessType
-                    bt = (await db.execute(
-                        select(BusinessType).where(BusinessType.id == order_obj.business_type_id)
-                    )).scalar_one_or_none()
-                    if bt and bt.code == "trade":
-                        from app.integrations.irsway_site.service import sync_trade_order_to_site
-                        await sync_trade_order_to_site(order_obj, db)
+                if order_obj:
+                    affected_client_ids.add(order_obj.client_id)
+                    if order_obj.sync_status == "synced":
+                        from app.models.business_type import BusinessType
+                        bt = (await db.execute(
+                            select(BusinessType).where(BusinessType.id == order_obj.business_type_id)
+                        )).scalar_one_or_none()
+                        if bt and bt.code == "trade":
+                            from app.integrations.irsway_site.service import sync_trade_order_to_site
+                            await sync_trade_order_to_site(order_obj, db)
+            except Exception:
+                pass
+        # Push reconciliation for affected clients
+        for cid in affected_client_ids:
+            try:
+                from app.integrations.irsway_site.service import push_reconciliation_to_site
+                await push_reconciliation_to_site(cid, db)
             except Exception:
                 pass
     else:
