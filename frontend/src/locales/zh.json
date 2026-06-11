@@ -307,6 +307,7 @@
       "failed": "同步失败",
       "disabled": "已停用",
       "not_synced": "未同步",
+      "pending": "需要重新同步",
       "sync_now": "立即同步",
       "sync_again": "重新同步",
       "shipment_number": "运单号",

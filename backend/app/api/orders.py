@@ -698,6 +698,9 @@ async def update_order(
         )).scalar_one_or_none()
         if conflict:
             raise HTTPException(409, f"Номер заказа '{update_data['order_number']}' уже занят")
+        # Логистический заказ был синхронизирован — пометить как требующий повторной синхронизации
+        if order.sync_status == "synced":
+            order.sync_status = "pending"
 
     bt_id = update_data.get("business_type_id", order.business_type_id)
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == bt_id))).scalar_one_or_none()

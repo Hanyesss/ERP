@@ -155,6 +155,21 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
             "Irsway update_shipment %s → error=%s id=%s",
             order.external_shipment_number, result.error, result.id,
         )
+        # 404 — отгрузка не найдена на сайте (удалена или номер изменился), пересоздаём
+        if result.error and "404" in result.error:
+            logger.warning(
+                "Irsway: shipment %s not found (404), re-creating as %s",
+                order.external_shipment_number, order.order_number,
+            )
+            order.external_shipment_number = None
+            order.external_shipment_id = None
+            result = await loop.run_in_executor(
+                None, lambda: client.create_shipment(payload)
+            )
+            logger.info(
+                "Irsway re-create %s → error=%s id=%s number=%s",
+                order.order_number, result.error, result.id, result.shipment_number,
+            )
     else:
         result = await loop.run_in_executor(
             None, lambda: client.create_shipment(payload)

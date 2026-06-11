@@ -337,6 +337,9 @@ export default function OrderDetailPage() {
                         {order.sync_error && <Text type="danger" style={{ fontSize: 12 }}>{order.sync_error}</Text>}
                       </Space>
                     )}
+                    {order.sync_status === "pending" && (
+                      <Tag color="orange" icon={<SyncOutlined />}>{t("order.sync.pending")}</Tag>
+                    )}
                     {order.sync_status === "disabled" && (
                       <Text type="secondary">{t("order.sync.disabled")}</Text>
                     )}

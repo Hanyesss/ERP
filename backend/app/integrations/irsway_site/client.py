@@ -46,6 +46,7 @@ class IrswayClient:
 
         body: dict = {
             "number": payload.erp_order_number,
+            "erp_order_id": payload.erp_order_id,
             "client_name": payload.client_name,
             "destination": payload.destination,
             "receiver_name": payload.recipient,
