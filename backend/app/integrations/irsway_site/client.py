@@ -200,7 +200,7 @@ class IrswayClient:
     def update_shipment(self, shipment_number: str, payload: ShipmentCreatePayload) -> ShipmentResult:
         try:
             body = self._build_shipment_body(payload)
-            body.pop("number", None)  # сайт запрещает менять номер отправления
+            body.pop("number", None)  # site does not allow renaming an existing shipment
             r = httpx.patch(
                 self._url(f"/api/v1/shipments/{shipment_number}/"),
                 headers=self.headers,

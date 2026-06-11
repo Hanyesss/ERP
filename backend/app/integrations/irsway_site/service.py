@@ -147,7 +147,13 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
 
     loop = asyncio.get_event_loop()
 
-    if order.external_shipment_number:
+    number_changed = (
+        order.external_shipment_number is not None
+        and order.external_shipment_number != order.order_number
+    )
+
+    if order.external_shipment_number and not number_changed:
+        # Номер не менялся — обновляем существующее отправление
         result = await loop.run_in_executor(
             None, lambda: client.update_shipment(order.external_shipment_number, payload)
         )
@@ -155,11 +161,11 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
             "Irsway update_shipment %s → error=%s id=%s",
             order.external_shipment_number, result.error, result.id,
         )
-        # 404 — отгрузка не найдена на сайте (удалена или номер изменился), пересоздаём
+        # 404 — отправление удалено на сайте, пересоздаём
         if result.error and "404" in result.error:
             logger.warning(
-                "Irsway: shipment %s not found (404), re-creating as %s",
-                order.external_shipment_number, order.order_number,
+                "Irsway: shipment %s not found (404), re-creating",
+                order.external_shipment_number,
             )
             order.external_shipment_number = None
             order.external_shipment_id = None
@@ -167,10 +173,20 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
                 None, lambda: client.create_shipment(payload)
             )
             logger.info(
-                "Irsway re-create %s → error=%s id=%s number=%s",
+                "Irsway re-create after 404: %s → error=%s id=%s number=%s",
                 order.order_number, result.error, result.id, result.shipment_number,
             )
     else:
+        # Нет отправления или номер изменился — создаём новое
+        if number_changed:
+            logger.info(
+                "Irsway: order_number changed (%s → %s), creating new shipment",
+                order.external_shipment_number, order.order_number,
+            )
+            order.external_shipment_number = None
+            order.external_shipment_id = None
+            order.external_invoice_url = None
+            order.external_tracking_url = None
         result = await loop.run_in_executor(
             None, lambda: client.create_shipment(payload)
         )
