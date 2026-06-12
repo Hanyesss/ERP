@@ -22,9 +22,9 @@ export default function IntegrationSettingsPage() {
 
   const bulkSyncMutation = useMutation({
     mutationFn: bulkSyncToSite,
-    onSuccess: (r) => {
-      setBulkResult(r.data);
-      message.success("Синхронизация завершена");
+    onSuccess: () => {
+      setBulkResult({ started: true });
+      message.success("Синхронизация запущена в фоне");
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Ошибка синхронизации"),
   });
@@ -162,15 +162,11 @@ export default function IntegrationSettingsPage() {
             <div style={{ color: "#888", fontSize: 12, marginBottom: 10 }}>
               Торговые заказы, склад, взаиморасчёты — все клиенты сразу
             </div>
-            {bulkResult && (
+            {bulkResult?.started && (
               <Alert
-                type={bulkResult.trade_errors + bulkResult.box_errors + bulkResult.recon_errors > 0 ? "warning" : "success"}
+                type="info"
                 style={{ marginBottom: 10 }}
-                message={
-                  `Заказы: ${bulkResult.trade_orders} ✓ / ${bulkResult.trade_errors} ✗ · ` +
-                  `Коробки: ${bulkResult.boxes} ✓ / ${bulkResult.box_errors} ✗ · ` +
-                  `Взаиморасчёты: ${bulkResult.reconciliations} ✓ / ${bulkResult.recon_errors} ✗`
-                }
+                message="Синхронизация запущена в фоне — данные обновятся на irsway.com в течение нескольких минут"
               />
             )}
             <Button

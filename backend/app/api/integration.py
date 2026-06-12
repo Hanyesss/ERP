@@ -2,7 +2,7 @@ import uuid
 import asyncio
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -218,67 +218,65 @@ async def push_order_status(
     return {"success": success, "message": msg}
 
 
-@router.post("/bulk-sync")
-async def bulk_sync_all(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("admin", "manager")),
-):
-    """Пересинкать все торговые заказы, склад и взаиморасчёты на irsway."""
+async def _run_bulk_sync():
+    """Фоновая задача: синхронизация всех данных на irsway."""
     from app.integrations.irsway_site.service import (
         sync_trade_order_to_site, sync_box_to_site, push_reconciliation_to_site,
     )
     from app.models.warehouse_box import WarehouseBox
     from app.models.counterparty import Counterparty
+    from app.database import AsyncSessionLocal
+    import logging
+    logger = logging.getLogger("bulk_sync")
 
-    results = {"trade_orders": 0, "trade_errors": 0,
-               "boxes": 0, "box_errors": 0,
-               "reconciliations": 0, "recon_errors": 0}
-
-    # ── Торговые заказы ───────────────────────────────────────────────────────
-    trade_bt = (await db.execute(
-        select(BusinessType).where(BusinessType.code == "trade")
-    )).scalar_one_or_none()
-
-    if trade_bt:
-        orders = (await db.execute(
-            select(Order).where(Order.business_type_id == trade_bt.id)
-        )).scalars().all()
-
-        synced_clients = set()
-        for order in orders:
-            try:
-                ok, _ = await sync_trade_order_to_site(order, db)
-                if ok:
-                    results["trade_orders"] += 1
-                    synced_clients.add(order.client_id)
-                else:
-                    results["trade_errors"] += 1
-            except Exception:
-                results["trade_errors"] += 1
-
-        # взаиморасчёты — по одному на клиента
-        for cid in synced_clients:
-            try:
-                await push_reconciliation_to_site(cid, db)
-                results["reconciliations"] += 1
-            except Exception:
-                results["recon_errors"] += 1
-
-    # ── Склад ─────────────────────────────────────────────────────────────────
-    boxes = (await db.execute(select(WarehouseBox))).scalars().all()
-    for box in boxes:
+    async with AsyncSessionLocal() as db:
         try:
-            cp = (await db.execute(
-                select(Counterparty).where(Counterparty.id == box.counterparty_id)
+            trade_bt = (await db.execute(
+                select(BusinessType).where(BusinessType.code == "trade")
             )).scalar_one_or_none()
-            if cp:
-                ok = await sync_box_to_site(box, cp, db)
-                if ok:
-                    results["boxes"] += 1
-                else:
-                    results["box_errors"] += 1
-        except Exception:
-            results["box_errors"] += 1
 
-    await db.commit()
-    return results
+            synced_clients = set()
+            if trade_bt:
+                orders = (await db.execute(
+                    select(Order).where(Order.business_type_id == trade_bt.id)
+                )).scalars().all()
+
+                for order in orders:
+                    try:
+                        ok, _ = await sync_trade_order_to_site(order, db)
+                        if ok:
+                            synced_clients.add(order.client_id)
+                    except Exception as e:
+                        logger.warning("Trade order sync error %s: %s", getattr(order, 'number', '?'), e)
+
+                for cid in synced_clients:
+                    try:
+                        await push_reconciliation_to_site(cid, db)
+                    except Exception as e:
+                        logger.warning("Reconciliation sync error %s: %s", cid, e)
+
+            boxes = (await db.execute(select(WarehouseBox))).scalars().all()
+            for box in boxes:
+                try:
+                    cp = (await db.execute(
+                        select(Counterparty).where(Counterparty.id == box.counterparty_id)
+                    )).scalar_one_or_none()
+                    if cp:
+                        await sync_box_to_site(box, cp, db)
+                except Exception as e:
+                    logger.warning("Box sync error %s: %s", getattr(box, 'code', '?'), e)
+
+            await db.commit()
+            logger.info("Bulk sync finished. clients=%d", len(synced_clients))
+        except Exception as e:
+            logger.error("Bulk sync fatal error: %s", e)
+
+
+@router.post("/bulk-sync")
+async def bulk_sync_all(
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_roles("admin", "manager")),
+):
+    """Запустить синхронизацию всех данных на irsway в фоне."""
+    background_tasks.add_task(_run_bulk_sync)
+    return {"started": True, "message": "Синхронизация запущена в фоне"}
