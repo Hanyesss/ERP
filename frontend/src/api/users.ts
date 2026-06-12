@@ -43,6 +43,7 @@ export interface UsersFilter {
   role?: string;
   is_active?: boolean;
   search?: string;
+  page_size?: number;
 }
 
 export async function fetchUsers(filter: UsersFilter = {}): Promise<UserListItem[]> {
@@ -50,6 +51,7 @@ export async function fetchUsers(filter: UsersFilter = {}): Promise<UserListItem
   if (filter.role) params.role = filter.role;
   if (filter.is_active !== undefined) params.is_active = String(filter.is_active);
   if (filter.search) params.search = filter.search;
+  if (filter.page_size !== undefined) params.page_size = String(filter.page_size);
   const res = await client.get("/api/users", { params });
   return res.data;
 }
