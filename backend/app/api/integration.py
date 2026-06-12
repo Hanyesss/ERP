@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -255,7 +256,9 @@ async def _run_bulk_sync():
                     except Exception as e:
                         logger.warning("Reconciliation sync error %s: %s", cid, e)
 
-            boxes = (await db.execute(select(WarehouseBox))).scalars().all()
+            boxes = (await db.execute(
+                select(WarehouseBox).options(selectinload(WarehouseBox.items))
+            )).scalars().all()
             for box in boxes:
                 try:
                     cp = (await db.execute(
@@ -264,7 +267,7 @@ async def _run_bulk_sync():
                     if cp:
                         await sync_box_to_site(box, cp, db)
                 except Exception as e:
-                    logger.warning("Box sync error %s: %s", getattr(box, 'code', '?'), e)
+                    logger.warning("Box sync error %s: %s", getattr(box, 'box_code', '?'), e)
 
             await db.commit()
             logger.info("Bulk sync finished. clients=%d", len(synced_clients))
