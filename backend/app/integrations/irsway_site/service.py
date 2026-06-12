@@ -353,8 +353,8 @@ async def sync_box_to_site(box, counterparty, db: AsyncSession) -> bool:
         volume=float(box.volume) if box.volume is not None else None,
         density=float(box.density) if box.density is not None else None,
         status=status_val,
-        received_at=box.received_at.isoformat() if box.received_at else None,
-        shipped_at=box.shipped_at.isoformat() if box.shipped_at else None,
+        received_at=str(box.received_at)[:10] if box.received_at else None,
+        shipped_at=str(box.shipped_at)[:10] if box.shipped_at else None,
         erp_box_id=str(box.id),
     )
 
