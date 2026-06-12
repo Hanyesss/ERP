@@ -33,3 +33,10 @@ export const syncOrderToSite = (orderId: string) =>
 
 export const pushOrderStatus = (orderId: string, status: string, comment?: string) =>
   apiClient.post<any>(`/api/orders/${orderId}/push-status`, { status, comment });
+
+export const bulkSyncToSite = () =>
+  apiClient.post<{
+    trade_orders: number; trade_errors: number;
+    boxes: number; box_errors: number;
+    reconciliations: number; recon_errors: number;
+  }>("/api/integration-settings/bulk-sync");

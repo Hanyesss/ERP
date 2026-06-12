@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  Button, Card, Form, Input, Switch, Space, Typography, Alert, Spin, message, Tag,
+  Button, Card, Form, Input, Switch, Space, Typography, Alert, Spin, message, Tag, Divider,
 } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from "@ant-design/icons";
 import {
-  getIntegrationSettings, updateIntegrationSettings, testIntegrationConnection,
+  getIntegrationSettings, updateIntegrationSettings, testIntegrationConnection, bulkSyncToSite,
 } from "../api/integration";
 
 const { Title, Text } = Typography;
@@ -18,6 +18,16 @@ export default function IntegrationSettingsPage() {
   const [testResult, setTestResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [testLoading, setTestLoading] = useState(false);
   const [changingToken, setChangingToken] = useState(false);
+  const [bulkResult, setBulkResult] = useState<any | null>(null);
+
+  const bulkSyncMutation = useMutation({
+    mutationFn: bulkSyncToSite,
+    onSuccess: (r) => {
+      setBulkResult(r.data);
+      message.success("Синхронизация завершена");
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Ошибка синхронизации"),
+  });
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["integration-settings"],
@@ -137,16 +147,40 @@ export default function IntegrationSettingsPage() {
           )}
 
           <Space>
-            <Button
-              onClick={handleTest}
-              loading={testLoading}
-            >
+            <Button onClick={handleTest} loading={testLoading}>
               {t("integration.test_connection")}
             </Button>
             <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
               {t("common.save")}
             </Button>
           </Space>
+
+          <Divider />
+
+          <div>
+            <Text strong>Синхронизировать все данные на irsway.com</Text>
+            <div style={{ color: "#888", fontSize: 12, marginBottom: 10 }}>
+              Торговые заказы, склад, взаиморасчёты — все клиенты сразу
+            </div>
+            {bulkResult && (
+              <Alert
+                type={bulkResult.trade_errors + bulkResult.box_errors + bulkResult.recon_errors > 0 ? "warning" : "success"}
+                style={{ marginBottom: 10 }}
+                message={
+                  `Заказы: ${bulkResult.trade_orders} ✓ / ${bulkResult.trade_errors} ✗ · ` +
+                  `Коробки: ${bulkResult.boxes} ✓ / ${bulkResult.box_errors} ✗ · ` +
+                  `Взаиморасчёты: ${bulkResult.reconciliations} ✓ / ${bulkResult.recon_errors} ✗`
+                }
+              />
+            )}
+            <Button
+              icon={<SyncOutlined />}
+              loading={bulkSyncMutation.isPending}
+              onClick={() => { setBulkResult(null); bulkSyncMutation.mutate(); }}
+            >
+              Синхронизировать всё
+            </Button>
+          </div>
         </Form>
       </Card>
     </div>

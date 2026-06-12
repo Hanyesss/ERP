@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -215,3 +216,69 @@ async def push_order_status(
     await db.commit()
 
     return {"success": success, "message": msg}
+
+
+@router.post("/bulk-sync")
+async def bulk_sync_all(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager")),
+):
+    """Пересинкать все торговые заказы, склад и взаиморасчёты на irsway."""
+    from app.integrations.irsway_site.service import (
+        sync_trade_order_to_site, sync_box_to_site, push_reconciliation_to_site,
+    )
+    from app.models.warehouse_box import WarehouseBox
+    from app.models.counterparty import Counterparty
+
+    results = {"trade_orders": 0, "trade_errors": 0,
+               "boxes": 0, "box_errors": 0,
+               "reconciliations": 0, "recon_errors": 0}
+
+    # ── Торговые заказы ───────────────────────────────────────────────────────
+    trade_bt = (await db.execute(
+        select(BusinessType).where(BusinessType.code == "trade")
+    )).scalar_one_or_none()
+
+    if trade_bt:
+        orders = (await db.execute(
+            select(Order).where(Order.business_type_id == trade_bt.id)
+        )).scalars().all()
+
+        synced_clients = set()
+        for order in orders:
+            try:
+                ok, _ = await sync_trade_order_to_site(order, db)
+                if ok:
+                    results["trade_orders"] += 1
+                    synced_clients.add(order.client_id)
+                else:
+                    results["trade_errors"] += 1
+            except Exception:
+                results["trade_errors"] += 1
+
+        # взаиморасчёты — по одному на клиента
+        for cid in synced_clients:
+            try:
+                await push_reconciliation_to_site(cid, db)
+                results["reconciliations"] += 1
+            except Exception:
+                results["recon_errors"] += 1
+
+    # ── Склад ─────────────────────────────────────────────────────────────────
+    boxes = (await db.execute(select(WarehouseBox))).scalars().all()
+    for box in boxes:
+        try:
+            cp = (await db.execute(
+                select(Counterparty).where(Counterparty.id == box.counterparty_id)
+            )).scalar_one_or_none()
+            if cp:
+                ok = await sync_box_to_site(box, cp, db)
+                if ok:
+                    results["boxes"] += 1
+                else:
+                    results["box_errors"] += 1
+        except Exception:
+            results["box_errors"] += 1
+
+    await db.commit()
+    return results
