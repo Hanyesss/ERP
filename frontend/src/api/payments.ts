@@ -12,6 +12,7 @@ export interface PaymentListParams {
   date_from?: string;
   date_to?: string;
   search?: string;
+  created_by_id?: string;
   page?: number;
   page_size?: number;
 }

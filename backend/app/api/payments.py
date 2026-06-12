@@ -337,6 +337,7 @@ async def list_payments(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     search: Optional[str] = Query(None),
+    created_by_id: Optional[uuid.UUID] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -389,6 +390,8 @@ async def list_payments(
         stmt = stmt.where(Payment.payment_date <= date_to)
     if search:
         stmt = stmt.where(Counterparty.name.ilike(f"%{search}%"))
+    if created_by_id:
+        stmt = stmt.where(Payment.created_by == created_by_id)
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
 

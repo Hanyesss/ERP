@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { getPayments, deletePayment } from "../api/payments";
+import { fetchUsers } from "../api/users";
 import type { PaymentListItem } from "../types/payment";
 
 const { Title, Text } = Typography;
@@ -31,7 +32,17 @@ export default function PaymentsPage() {
   const [direction, setDirection] = useState<string | undefined>();
   const [currency, setCurrency] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[string, string] | null>(null);
+  const [createdById, setCreatedById] = useState<string | undefined>();
   const [page, setPage] = useState(1);
+
+  const { data: usersData } = useQuery({
+    queryKey: ["users-list-filter"],
+    queryFn: () => fetchUsers({ page_size: 200 }),
+  });
+  const userOptions = (usersData ?? []).map((u: any) => ({
+    value: u.id,
+    label: u.full_name || u.username,
+  }));
 
   const params = {
     search: search || undefined,
@@ -39,6 +50,7 @@ export default function PaymentsPage() {
     currency,
     date_from: dateRange?.[0],
     date_to: dateRange?.[1],
+    created_by_id: createdById,
     page,
     page_size: 20,
   };
@@ -239,6 +251,17 @@ export default function PaymentsPage() {
               setDateRange(strs[0] && strs[1] ? [strs[0], strs[1]] : null);
               setPage(1);
             }}
+          />
+        </Col>
+        <Col>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t("common.filter_by_creator")}
+            style={{ width: 200 }}
+            options={userOptions}
+            onChange={v => { setCreatedById(v); setPage(1); }}
           />
         </Col>
       </Row>
