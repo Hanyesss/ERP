@@ -250,12 +250,6 @@ async def _run_bulk_sync():
                     except Exception as e:
                         logger.warning("Trade order sync error %s: %s", getattr(order, 'number', '?'), e)
 
-                for cid in synced_clients:
-                    try:
-                        await push_reconciliation_to_site(cid, db)
-                    except Exception as e:
-                        logger.warning("Reconciliation sync error %s: %s", cid, e)
-
             boxes = (await db.execute(
                 select(WarehouseBox).options(selectinload(WarehouseBox.items))
             )).scalars().all()
@@ -266,8 +260,22 @@ async def _run_bulk_sync():
                     )).scalar_one_or_none()
                     if cp:
                         await sync_box_to_site(box, cp, db)
+                        synced_clients.add(box.counterparty_id)
                 except Exception as e:
                     logger.warning("Box sync error %s: %s", getattr(box, 'box_code', '?'), e)
+
+            # Push reconciliation once per unique client_code (aggregated across all counterparties)
+            pushed_codes: set = set()
+            for cid in synced_clients:
+                try:
+                    cp = (await db.execute(
+                        select(Counterparty).where(Counterparty.id == cid)
+                    )).scalar_one_or_none()
+                    if cp and cp.code and cp.code.upper() not in pushed_codes:
+                        await push_reconciliation_to_site(cid, db)
+                        pushed_codes.add(cp.code.upper())
+                except Exception as e:
+                    logger.warning("Reconciliation sync error %s: %s", cid, e)
 
             await db.commit()
             logger.info("Bulk sync finished. clients=%d", len(synced_clients))

@@ -370,8 +370,11 @@ async def sync_box_to_site(box, counterparty, db: AsyncSession) -> bool:
 
 
 async def push_reconciliation_to_site(client_id, db: AsyncSession) -> bool:
-    """Compute safe reconciliation snapshot for a client and push to irsway."""
-    import uuid as _uuid
+    """Compute safe reconciliation snapshot for a client and push to irsway.
+
+    Aggregates orders from ALL counterparties sharing the same client code
+    to avoid partial/overwriting pushes when one code maps to multiple counterparties.
+    """
     from decimal import Decimal
     from sqlalchemy import func
 
@@ -384,6 +387,17 @@ async def push_reconciliation_to_site(client_id, db: AsyncSession) -> bool:
     )).scalar_one_or_none()
     if not cp or not cp.code:
         return False
+
+    client_code = cp.code.upper()
+
+    # Collect ALL counterparty IDs sharing this code (handles duplicate codes in ERP)
+    all_cp_ids = [
+        row[0] for row in (await db.execute(
+            select(Counterparty.id).where(
+                func.upper(Counterparty.code) == client_code
+            )
+        )).all()
+    ]
 
     from app.models.order import Order, OrderStatus
     from app.models.payment import Payment
@@ -411,7 +425,7 @@ async def push_reconciliation_to_site(client_id, db: AsyncSession) -> bool:
         )
         .outerjoin(paid_sq, Order.id == paid_sq.c.order_id)
         .where(
-            Order.client_id == client_id,
+            Order.client_id.in_(all_cp_ids),
             Order.status != OrderStatus.cancelled,
             Order.excluded_from_accounting == False,
         )
@@ -468,9 +482,13 @@ async def push_reconciliation_to_site(client_id, db: AsyncSession) -> bool:
             payments=payments_by_order.get(order_id, []),
         ))
 
+    if not rows:
+        logger.info("Skipping reconciliation push for %s: no active orders", client_code)
+        return True
+
     balance = total_paid_d - total_revenue
     payload = ReconciliationPayload(
-        client_code=cp.code.upper(),
+        client_code=client_code,
         rows=rows,
         total_revenue=float(total_revenue),
         total_paid=float(total_paid_d),
@@ -481,10 +499,10 @@ async def push_reconciliation_to_site(client_id, db: AsyncSession) -> bool:
     result = await loop.run_in_executor(None, lambda: client.push_reconciliation(payload))
 
     if not result.ok:
-        logger.warning("Reconciliation push failed for %s: %s", cp.code, result.error)
+        logger.warning("Reconciliation push failed for %s: %s", client_code, result.error)
         return False
 
-    logger.info("Reconciliation pushed for %s: %d orders", cp.code, len(rows))
+    logger.info("Reconciliation pushed for %s: %d orders across %d counterparties", client_code, len(rows), len(all_cp_ids))
     return True
 
 
