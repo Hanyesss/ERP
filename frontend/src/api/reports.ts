@@ -8,25 +8,17 @@ export interface PnLData {
   prev_date_from: string;
   prev_date_to: string;
   revenue: number;
-  revenue_by_type: Record<string, number>;
-  cogs: number;
-  direct_expenses: number;
-  client_expenses: number;
-  general_expenses: number;
-  gross_profit: number;
+  outgoing: number;
+  expenses: number;
   net_profit: number;
   expenses_by_category: { category_name: string; category_name_cn: string; amount_cny: number }[];
   prev_period: {
     revenue: number;
-    cogs: number;
-    direct_expenses: number;
-    client_expenses: number;
-    general_expenses: number;
-    gross_profit: number;
+    outgoing: number;
+    expenses: number;
     net_profit: number;
   };
   pct_revenue: number | null;
-  pct_gross_profit: number | null;
   pct_net_profit: number | null;
 }
 

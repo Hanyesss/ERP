@@ -12,12 +12,9 @@ HEADERS = {
             "current": "Текущий период",
             "prev": "Предыдущий период",
             "change_pct": "Изменение %",
-            "revenue": "Выручка",
-            "cogs": "Себестоимость",
-            "direct_expenses": "Прямые расходы",
-            "gross_profit": "Маржинальная прибыль",
-            "client_expenses": "Представительские",
-            "general_expenses": "Общехозяйственные",
+            "revenue": "Входящие платежи",
+            "outgoing": "Исходящие платежи",
+            "expenses": "Расходы",
             "net_profit": "Чистая прибыль",
         },
         "by_client": ["Клиент", "Выручка", "Оплачено", "Себестоимость", "Прямые расходы", "Представительские", "Чистая прибыль", "Долг"],
@@ -35,12 +32,9 @@ HEADERS = {
             "current": "当前期间",
             "prev": "上期",
             "change_pct": "变化%",
-            "revenue": "收入",
-            "cogs": "销货成本",
-            "direct_expenses": "直接费用",
-            "gross_profit": "毛利润",
-            "client_expenses": "招待费",
-            "general_expenses": "管理费用",
+            "revenue": "入账款",
+            "outgoing": "出账款",
+            "expenses": "费用",
             "net_profit": "净利润",
         },
         "by_client": ["客户", "收入", "已付", "成本", "直接费用", "招待费", "净利润", "欠款"],
@@ -116,14 +110,11 @@ def export_pnl(data: dict, lang: str = "ru") -> bytes:
 
     rows_data = [
         (h["revenue"], data.get("revenue"), prev.get("revenue"), data.get("pct_revenue")),
-        (h["cogs"], data.get("cogs"), prev.get("cogs"), None),
-        (h["direct_expenses"], data.get("direct_expenses"), prev.get("direct_expenses"), None),
-        (h["gross_profit"], data.get("gross_profit"), prev.get("gross_profit"), data.get("pct_gross_profit")),
-        (h["client_expenses"], data.get("client_expenses"), prev.get("client_expenses"), None),
-        (h["general_expenses"], data.get("general_expenses"), prev.get("general_expenses"), None),
+        (h["outgoing"], data.get("outgoing"), prev.get("outgoing"), None),
+        (h["expenses"], data.get("expenses"), prev.get("expenses"), None),
         (h["net_profit"], data.get("net_profit"), prev.get("net_profit"), data.get("pct_net_profit")),
     ]
-    profit_rows = {h["gross_profit"], h["net_profit"]}
+    profit_rows = {h["net_profit"]}
 
     for i, (label, curr_val, prev_val, pct) in enumerate(rows_data):
         row_num = ws.max_row + 1

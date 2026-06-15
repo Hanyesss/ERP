@@ -63,12 +63,9 @@ export default function PnLReport() {
     if (!data) return [];
     const prev = data.prev_period;
     return [
-      { key: "revenue", label: t("report.revenue"), value: data.revenue, prevValue: prev.revenue, pct: data.pct_revenue, bold: false, positive: true },
-      { key: "cogs", label: `− ${t("report.cogs")}`, value: data.cogs, prevValue: prev.cogs, pct: null, bold: false, positive: false },
-      { key: "direct_exp", label: `− ${t("report.direct_expenses")}`, value: data.direct_expenses, prevValue: prev.direct_expenses, pct: null, bold: false, positive: false },
-      { key: "gross", label: `= ${t("report.gross_profit")}`, value: data.gross_profit, prevValue: prev.gross_profit, pct: data.pct_gross_profit, bold: true, positive: data.gross_profit >= 0 },
-      { key: "client_exp", label: `− ${t("report.client_expenses")}`, value: data.client_expenses, prevValue: prev.client_expenses, pct: null, bold: false, positive: false },
-      { key: "general_exp", label: `− ${t("report.general_expenses")}`, value: data.general_expenses, prevValue: prev.general_expenses, pct: null, bold: false, positive: false },
+      { key: "revenue", label: t("report.incoming_payments"), value: data.revenue, prevValue: prev.revenue, pct: data.pct_revenue, bold: false, positive: true },
+      { key: "outgoing", label: `− ${t("report.outgoing_payments")}`, value: data.outgoing, prevValue: prev.outgoing, pct: null, bold: false, positive: false },
+      { key: "expenses", label: `− ${t("report.expenses_total")}`, value: data.expenses, prevValue: prev.expenses, pct: null, bold: false, positive: false },
       { key: "net", label: `= ${t("report.net_profit")}`, value: data.net_profit, prevValue: prev.net_profit, pct: data.pct_net_profit, bold: true, positive: data.net_profit >= 0 },
     ];
   }, [data, t]);
@@ -96,7 +93,7 @@ export default function PnLReport() {
       key: "value",
       align: "right" as const,
       render: (v: number, r: any) => (
-        <Text strong={r.bold} style={{ color: r.key.includes("gross") || r.key === "net" ? (r.positive ? "#389e0d" : "#cf1322") : undefined }}>
+        <Text strong={r.bold} style={{ color: r.key === "net" ? (r.positive ? "#389e0d" : "#cf1322") : undefined }}>
           {fmtCny(v)}
         </Text>
       ),

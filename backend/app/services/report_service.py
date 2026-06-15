@@ -35,108 +35,62 @@ async def _calc_pnl_for_period(
     business_type_id: Optional[uuid.UUID] = None,
     warehouse_id: Optional[uuid.UUID] = None,
 ):
-    # Build base order filter
-    order_filter = [
-        Order.order_date >= date_from,
-        Order.order_date <= date_to,
-        Order.status != OrderStatus.cancelled,
-        Order.excluded_from_accounting == False,
+    D0 = Decimal("0")
+
+    # Revenue = all incoming payments; outgoing = all supplier payments
+    pay_filter = [
+        Payment.is_active == True,
+        Payment.payment_date >= date_from,
+        Payment.payment_date <= date_to,
     ]
-    if business_type_id:
-        order_filter.append(Order.business_type_id == business_type_id)
-    if warehouse_id:
-        order_filter.append(Order.warehouse_id == warehouse_id)
 
-    # Revenue total
-    rev_row = await db.execute(
-        select(func.coalesce(func.sum(Order.total_sale_cny), Decimal("0")))
-        .where(*order_filter)
+    revenue_row = await db.execute(
+        select(func.coalesce(func.sum(Payment.amount_cny), D0))
+        .where(*pay_filter, Payment.direction == "in")
     )
-    revenue = rev_row.scalar_one() or Decimal("0")
+    revenue = revenue_row.scalar_one() or D0
 
-    # Revenue by business_type_code
-    rev_by_type_rows = await db.execute(
-        select(BusinessType.code, func.coalesce(func.sum(Order.total_sale_cny), Decimal("0")).label("rev"))
-        .join(BusinessType, Order.business_type_id == BusinessType.id)
-        .where(*order_filter)
-        .group_by(BusinessType.code)
+    outgoing_row = await db.execute(
+        select(func.coalesce(func.sum(Payment.amount_cny), D0))
+        .where(*pay_filter, Payment.direction == "out")
     )
-    revenue_by_type = {row[0]: row[1] or Decimal("0") for row in rev_by_type_rows.all()}
+    outgoing = outgoing_row.scalar_one() or D0
 
-    # Orders subquery for the period
-    orders_subq = (
-        select(Order.id)
-        .where(*order_filter)
-        .subquery()
-    )
-
-    # COGS: purchase_items linked to purchase linked to orders in period
-    cogs_row = await db.execute(
-        select(func.coalesce(func.sum(PurchaseItem.cost_amount), Decimal("0")))
-        .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
-        .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
-        .where(
-            OrderItem.order_id.in_(orders_subq),
-            Purchase.is_deleted == False,
-        )
-    )
-    cogs = cogs_row.scalar_one() or Decimal("0")
-
-    # Expenses in period
-    exp_filter_base = [
+    # All expenses in period
+    exp_filter = [
         Expense.expense_date >= date_from,
         Expense.expense_date <= date_to,
         Expense.is_active == True,
         not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
     ]
-    # When filtering by business_type, exclude company/employee expenses (link_type="none")
-    # Services business type should only count direct order-linked expenses
-    exp_filter_for_type = list(exp_filter_base)
-    if business_type_id:
-        exp_filter_for_type.append(Expense.link_type != "none")
 
-    exp_rows = await db.execute(
-        select(
-            Expense.link_type,
-            func.coalesce(func.sum(Expense.amount_cny), Decimal("0")).label("total")
-        )
-        .where(*exp_filter_for_type)
-        .group_by(Expense.link_type)
-    )
-    expenses_by_type = {row[0]: row[1] or Decimal("0") for row in exp_rows.all()}
-
-    direct_expenses = expenses_by_type.get("order", Decimal("0"))
-    client_expenses = expenses_by_type.get("client", Decimal("0"))
-    general_expenses = expenses_by_type.get("none", Decimal("0"))
+    expenses_sum = (await db.execute(
+        select(func.coalesce(func.sum(Expense.amount_cny), D0)).where(*exp_filter)
+    )).scalar_one() or D0
 
     # Expenses by category for pie chart
     cat_rows = await db.execute(
         select(
             ExpenseCategory.name,
             ExpenseCategory.name_cn,
-            func.coalesce(func.sum(Expense.amount_cny), Decimal("0")).label("amount_cny"),
+            func.coalesce(func.sum(Expense.amount_cny), D0).label("amount_cny"),
         )
         .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
-        .where(*exp_filter_for_type)
+        .where(*exp_filter)
         .group_by(ExpenseCategory.name, ExpenseCategory.name_cn)
         .order_by(func.sum(Expense.amount_cny).desc())
     )
     expenses_by_category = [
-        {"category_name": r[0], "category_name_cn": r[1], "amount_cny": r[2] or Decimal("0")}
+        {"category_name": r[0], "category_name_cn": r[1], "amount_cny": r[2] or D0}
         for r in cat_rows.all()
     ]
 
-    gross_profit = revenue - cogs - direct_expenses
-    net_profit = gross_profit - client_expenses - general_expenses
+    net_profit = revenue - outgoing - expenses_sum
 
     return {
         "revenue": revenue,
-        "revenue_by_type": revenue_by_type,
-        "cogs": cogs,
-        "direct_expenses": direct_expenses,
-        "client_expenses": client_expenses,
-        "general_expenses": general_expenses,
-        "gross_profit": gross_profit,
+        "outgoing": outgoing,
+        "expenses": expenses_sum,
         "net_profit": net_profit,
         "expenses_by_category": expenses_by_category,
     }
@@ -166,7 +120,6 @@ async def get_pnl(
         **current,
         "prev_period": prev,
         "pct_revenue": pct_change(current["revenue"], prev["revenue"]),
-        "pct_gross_profit": pct_change(current["gross_profit"], prev["gross_profit"]),
         "pct_net_profit": pct_change(current["net_profit"], prev["net_profit"]),
     }
 
