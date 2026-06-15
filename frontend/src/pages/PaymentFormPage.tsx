@@ -467,44 +467,15 @@ export default function PaymentFormPage() {
             </>
           )}
 
-          {/* Use client balance: debit register + optional rate */}
-          {useClientBalance && direction === "in" && (
-            <>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item label={t("payment.debit_register")} required>
-                    <Select
-                      options={debitRegOptions}
-                      placeholder={t("cash.select_register")}
-                      value={debitRegisterId}
-                      onChange={v => { setDebitRegisterId(v); setBalanceRate(1); }}
-                    />
-                  </Form.Item>
-                </Col>
-                {debitRegCurrency && debitRegCurrency !== "CNY" && (
-                  <Col span={12}>
-                    <Form.Item label={`${t("payment.rate_to_cny")} (${debitRegCurrency} → CNY)`} required>
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        min={0}
-                        step={0.00001}
-                        precision={8}
-                        value={balanceRate}
-                        onChange={v => setBalanceRate(v ?? 1)}
-                      />
-                    </Form.Item>
-                  </Col>
-                )}
-              </Row>
-              {selectedUnallocatedPay && (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={`${t("payment.from_payment")}: ${selectedUnallocatedPay.payment_date} ${fmtCny(Number(selectedUnallocatedPay.unallocated_cny))} CNY`}
-                />
-              )}
-            </>
+          {/* Use client balance: show source payment info */}
+          {useClientBalance && direction === "in" && selectedUnallocatedPay && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={`${t("payment.from_payment")}: ${selectedUnallocatedPay.payment_date} — ${fmtCny(Number(selectedUnallocatedPay.unallocated_cny))} CNY ${t("payment.available")}`}
+              description={t("payment.use_balance_hint")}
+            />
           )}
 
           <Form.Item name="notes" label={t("payment.notes")}>

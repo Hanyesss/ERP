@@ -1,11 +1,11 @@
 import { useState, useMemo } from "react";
-import { Button, DatePicker, Table, Typography, Row, Col, Space, Spin, Select } from "antd";
+import { Button, DatePicker, Table, Typography, Row, Col, Space, Spin, Input } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
+import { SearchOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import { getByClient, exportByClient, type ByClientRow } from "../../api/reports";
-import { getBusinessTypes } from "../../api/references";
 import type { ColumnsType } from "antd/es/table";
 import ClientDetailDrawer from "./ClientDetailDrawer";
 
@@ -15,16 +15,24 @@ const { RangePicker } = DatePicker;
 const fmtCny = (v: number) =>
   Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function ByClientReport() {
+interface Props {
+  businessTypeId?: string;
+  dateRange?: [dayjs.Dayjs, dayjs.Dayjs];
+}
+
+export default function ByClientReport({ businessTypeId, dateRange: externalDateRange }: Props = {}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const now = dayjs();
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+  const [internalDateRange, setInternalDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     now.startOf("month"),
     now.endOf("month"),
   ]);
-  const [businessTypeId, setBusinessTypeId] = useState<string | undefined>();
+  const [clientSearch, setClientSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
+
+  const dateRange = externalDateRange ?? internalDateRange;
+  const isEmbedded = !!externalDateRange;
 
   const params = {
     date_from: dateRange[0].format("YYYY-MM-DD"),
@@ -37,19 +45,16 @@ export default function ByClientReport() {
     queryFn: () => getByClient(params).then(r => r.data),
   });
 
-  const { data: businessTypes } = useQuery({
-    queryKey: ["business-types"],
-    queryFn: () => getBusinessTypes().then(r => r.data),
-  });
-
-  const btOptions = [
-    { value: "", label: t("report.all_types") },
-    ...(businessTypes || []).map((bt: any) => ({ value: bt.id, label: lang === "zh" && bt.name_cn ? bt.name_cn : bt.name })),
-  ];
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!clientSearch.trim()) return data;
+    const q = clientSearch.trim().toLowerCase();
+    return data.filter(r => r.client_name.toLowerCase().includes(q));
+  }, [data, clientSearch]);
 
   const totals = useMemo(() => {
-    if (!data) return null;
-    return data.reduce(
+    if (!filteredData.length) return null;
+    return filteredData.reduce(
       (acc, row) => ({
         revenue: acc.revenue + Number(row.revenue),
         paid: acc.paid + Number(row.paid),
@@ -62,11 +67,10 @@ export default function ByClientReport() {
       }),
       { revenue: 0, paid: 0, unallocated_cny: 0, cogs: 0, direct_expenses: 0, client_expenses: 0, net_profit: 0, balance: 0 }
     );
-  }, [data]);
+  }, [filteredData]);
 
   const tableData = useMemo(() => {
-    if (!data) return [];
-    const rows = [...data];
+    const rows = [...filteredData];
     if (totals) {
       rows.push({
         client_id: "__total__",
@@ -75,7 +79,7 @@ export default function ByClientReport() {
       } as any);
     }
     return rows;
-  }, [data, totals, t]);
+  }, [filteredData, totals, t]);
 
   const columns: ColumnsType<ByClientRow> = [
     {
@@ -137,25 +141,36 @@ export default function ByClientReport() {
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col><Title level={5} style={{ margin: 0 }}>{t("report.by_client")}</Title></Col>
-        <Col>
+      {!isEmbedded && (
+        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+          <Col><Title level={5} style={{ margin: 0 }}>{t("report.by_client")}</Title></Col>
+          <Col>
+            <Button icon={<DownloadOutlined />} onClick={() => exportByClient({ ...params, lang })}>
+              {t("report.export_excel")}
+            </Button>
+          </Col>
+        </Row>
+      )}
+      <Space wrap style={{ marginBottom: 16 }}>
+        {!isEmbedded && (
+          <RangePicker
+            value={internalDateRange}
+            onChange={(v) => { if (v?.[0] && v?.[1]) setInternalDateRange([v[0], v[1]]); }}
+          />
+        )}
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder={t("order.client")}
+          value={clientSearch}
+          onChange={e => setClientSearch(e.target.value)}
+          allowClear
+          style={{ width: 200 }}
+        />
+        {!isEmbedded && (
           <Button icon={<DownloadOutlined />} onClick={() => exportByClient({ ...params, lang })}>
             {t("report.export_excel")}
           </Button>
-        </Col>
-      </Row>
-      <Space wrap style={{ marginBottom: 16 }}>
-        <RangePicker
-          value={dateRange}
-          onChange={(v) => { if (v?.[0] && v?.[1]) setDateRange([v[0], v[1]]); }}
-        />
-        <Select
-          style={{ minWidth: 160 }}
-          options={btOptions}
-          value={businessTypeId || ""}
-          onChange={v => setBusinessTypeId(v || undefined)}
-        />
+        )}
       </Space>
       {isLoading ? <Spin /> : (
         <Table

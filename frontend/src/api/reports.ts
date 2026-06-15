@@ -142,6 +142,21 @@ export const getExpensesReport = (params: {
   link_type?: string;
 }) => apiClient.get<ExpensesData>(`${BASE}/expenses`, { params });
 
+export interface ByDirectionRow {
+  direction_id: string;
+  direction_name: string;
+  direction_name_cn: string;
+  revenue: number;
+  paid: number;
+  cogs: number;
+  direct_expenses: number;
+  net_profit: number;
+  balance: number;
+}
+
+export const getByDirection = (params: { date_from: string; date_to: string }) =>
+  apiClient.get<ByDirectionRow[]>(`${BASE}/by-direction`, { params });
+
 export const getTonnage = (params: {
   date_from: string;
   date_to: string;

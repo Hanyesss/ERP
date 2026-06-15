@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { User } from "../../types";
 import PnLReport from "./PnLReport";
 import ByClientReport from "./ByClientReport";
+import ByDirectionReport from "./ByDirectionReport";
 import BySupplierReport from "./BySupplierReport";
 import ExpensesReport from "./ExpensesReport";
 import TonnageReport from "./TonnageReport";
@@ -21,6 +22,7 @@ export default function ReportsPage({ user }: Props) {
     ...(isFinance ? [
       { key: "pnl", label: t("report.pnl"), children: <PnLReport /> },
       { key: "by_client", label: t("report.by_client"), children: <ByClientReport /> },
+      { key: "by_direction", label: t("report.by_direction"), children: <ByDirectionReport /> },
       { key: "by_supplier", label: t("report.by_supplier"), children: <BySupplierReport /> },
       { key: "expenses", label: t("report.expenses_structure"), children: <ExpensesReport /> },
     ] : []),

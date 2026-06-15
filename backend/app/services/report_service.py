@@ -184,27 +184,9 @@ async def get_by_client(
 
     client_ids = list(client_data.keys())
 
-    # Fill paid from payments (not allocations), scoped to same period
-    pay_rows = await db.execute(
-        select(
-            Payment.counterparty_id,
-            func.coalesce(func.sum(Payment.amount_cny), Decimal("0")).label("paid_cny"),
-        )
-        .where(
-            Payment.is_active == True,
-            Payment.direction == "in",
-            Payment.payment_date >= date_from,
-            Payment.payment_date <= date_to,
-            Payment.counterparty_id.in_(client_ids),
-        )
-        .group_by(Payment.counterparty_id)
-    )
-    for row in pay_rows.all():
-        if row[0] in client_data:
-            client_data[row[0]]["paid"] = row[1] or Decimal("0")
-
-    # Allocated per client (sum of PaymentAllocation for their orders)
-    alloc_rows = await db.execute(
+    # Paid = allocations for orders IN the period (from active payments, no payment_date filter).
+    # This correctly handles prepayments and payments made outside the report period.
+    alloc_period_rows = await db.execute(
         select(
             Order.client_id,
             func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("alloc_cny"),
@@ -212,16 +194,46 @@ async def get_by_client(
         .join(PaymentAllocation, PaymentAllocation.order_id == Order.id)
         .join(Payment, PaymentAllocation.payment_id == Payment.id)
         .where(
+            *order_filter,
             Order.client_id.in_(client_ids),
             Payment.is_active == True,
-            Payment.payment_date >= date_from,
-            Payment.payment_date <= date_to,
         )
         .group_by(Order.client_id)
     )
-    for row in alloc_rows.all():
+    for row in alloc_period_rows.all():
         if row[0] in client_data:
-            client_data[row[0]]["allocated"] = row[1] or Decimal("0")
+            client_data[row[0]]["paid"] = row[1] or Decimal("0")
+
+    # Unallocated balance = all-time incoming payments - all-time allocations to any order.
+    # Needed to show how much client money is sitting unassigned.
+    all_time_pay_rows = await db.execute(
+        select(
+            Payment.counterparty_id,
+            func.coalesce(func.sum(Payment.amount_cny), Decimal("0")).label("total_in"),
+        )
+        .where(
+            Payment.is_active == True,
+            Payment.direction == "in",
+            Payment.counterparty_id.in_(client_ids),
+        )
+        .group_by(Payment.counterparty_id)
+    )
+    all_time_pay = {row[0]: row[1] or Decimal("0") for row in all_time_pay_rows.all()}
+
+    all_time_alloc_rows = await db.execute(
+        select(
+            Order.client_id,
+            func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("total_alloc"),
+        )
+        .join(PaymentAllocation, PaymentAllocation.order_id == Order.id)
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(
+            Order.client_id.in_(client_ids),
+            Payment.is_active == True,
+        )
+        .group_by(Order.client_id)
+    )
+    all_time_alloc = {row[0]: row[1] or Decimal("0") for row in all_time_alloc_rows.all()}
 
     # COGS per client
     orders_subq = (
@@ -294,9 +306,10 @@ async def get_by_client(
         cogs = cd["cogs"]
         direct_exp = cd["direct_expenses"]
         client_exp = cd["client_expenses"]
-        paid = cd["paid"]
-        allocated = cd["allocated"]
-        unallocated = max(paid - allocated, Decimal("0"))
+        paid = cd["paid"]  # allocations for orders in period
+        total_in = all_time_pay.get(cd["client_id"], Decimal("0"))
+        total_alloc_any = all_time_alloc.get(cd["client_id"], Decimal("0"))
+        unallocated = max(total_in - total_alloc_any, Decimal("0"))
         net_profit = revenue - cogs - direct_exp - client_exp
         # positive = overpayment/credit, negative = debt
         balance = paid - revenue
@@ -309,6 +322,122 @@ async def get_by_client(
             "cogs": cogs,
             "direct_expenses": direct_exp,
             "client_expenses": client_exp,
+            "net_profit": net_profit,
+            "balance": balance,
+        })
+
+    result.sort(key=lambda x: x["net_profit"], reverse=True)
+    return result
+
+
+async def get_by_direction(db: AsyncSession, date_from: date, date_to: date):
+    """Report grouped by business type (direction)."""
+    order_filter = [
+        Order.order_date >= date_from,
+        Order.order_date <= date_to,
+        Order.status != OrderStatus.cancelled,
+        Order.excluded_from_accounting == False,
+    ]
+
+    # Revenue per direction
+    rev_rows = await db.execute(
+        select(
+            Order.business_type_id,
+            BusinessType.name.label("bt_name"),
+            BusinessType.name_cn.label("bt_name_cn"),
+            func.coalesce(func.sum(Order.total_sale_cny), Decimal("0")).label("revenue"),
+        )
+        .join(BusinessType, Order.business_type_id == BusinessType.id)
+        .where(*order_filter)
+        .group_by(Order.business_type_id, BusinessType.name, BusinessType.name_cn)
+    )
+    direction_data: dict = {}
+    for row in rev_rows.all():
+        direction_data[row[0]] = {
+            "direction_id": str(row[0]),
+            "direction_name": row[1],
+            "direction_name_cn": row[2] or "",
+            "revenue": row[3] or Decimal("0"),
+            "paid": Decimal("0"),
+            "cogs": Decimal("0"),
+            "direct_expenses": Decimal("0"),
+            "client_expenses": Decimal("0"),
+        }
+
+    if not direction_data:
+        return []
+
+    direction_ids = list(direction_data.keys())
+
+    # Paid = allocations for orders in period (no payment_date filter)
+    alloc_rows = await db.execute(
+        select(
+            Order.business_type_id,
+            func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("alloc_cny"),
+        )
+        .join(PaymentAllocation, PaymentAllocation.order_id == Order.id)
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(*order_filter, Order.business_type_id.in_(direction_ids), Payment.is_active == True)
+        .group_by(Order.business_type_id)
+    )
+    for row in alloc_rows.all():
+        if row[0] in direction_data:
+            direction_data[row[0]]["paid"] = row[1] or Decimal("0")
+
+    # COGS per direction
+    orders_subq = select(Order.id, Order.business_type_id).where(*order_filter).subquery()
+    cogs_rows = await db.execute(
+        select(
+            orders_subq.c.business_type_id,
+            func.coalesce(func.sum(PurchaseItem.cost_amount), Decimal("0")).label("cogs"),
+        )
+        .join(PurchaseItem, and_(PurchaseItem.purchase_id == Purchase.id))
+        .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+        .join(orders_subq, OrderItem.order_id == orders_subq.c.id)
+        .where(Purchase.is_deleted == False)
+        .group_by(orders_subq.c.business_type_id)
+        .select_from(Purchase)
+    )
+    for row in cogs_rows.all():
+        if row[0] in direction_data:
+            direction_data[row[0]]["cogs"] = row[1] or Decimal("0")
+
+    # Direct expenses per direction
+    direct_exp_rows = await db.execute(
+        select(
+            orders_subq.c.business_type_id,
+            func.coalesce(func.sum(Expense.amount_cny), Decimal("0")).label("direct_exp"),
+        )
+        .join(orders_subq, Expense.order_id == orders_subq.c.id)
+        .where(
+            Expense.link_type == "order",
+            Expense.expense_date >= date_from,
+            Expense.expense_date <= date_to,
+            Expense.is_active == True,
+            not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
+        )
+        .group_by(orders_subq.c.business_type_id)
+    )
+    for row in direct_exp_rows.all():
+        if row[0] in direction_data:
+            direction_data[row[0]]["direct_expenses"] = row[1] or Decimal("0")
+
+    result = []
+    for dd in direction_data.values():
+        revenue = dd["revenue"]
+        paid = dd["paid"]
+        cogs = dd["cogs"]
+        direct_exp = dd["direct_expenses"]
+        net_profit = revenue - cogs - direct_exp
+        balance = paid - revenue
+        result.append({
+            "direction_id": dd["direction_id"],
+            "direction_name": dd["direction_name"],
+            "direction_name_cn": dd["direction_name_cn"],
+            "revenue": revenue,
+            "paid": paid,
+            "cogs": cogs,
+            "direct_expenses": direct_exp,
             "net_profit": net_profit,
             "balance": balance,
         })
@@ -583,22 +712,31 @@ async def get_client_detail(
             "profit": profit,
         })
 
-    # Total incoming payments for this client in period (includes unallocated)
-    total_incoming_row = await db.execute(
+    # All-time incoming payments (no date filter) for unallocated balance calculation
+    all_time_incoming_row = await db.execute(
         select(func.coalesce(func.sum(Payment.amount_cny), Decimal("0")))
         .where(
             Payment.counterparty_id == client_id,
             Payment.is_active == True,
             Payment.direction == "in",
-            Payment.payment_date >= date_from,
-            Payment.payment_date <= date_to,
         )
     )
-    total_incoming = total_incoming_row.scalar_one() or Decimal("0")
-    unallocated_cny = max(total_incoming - total_paid, Decimal("0"))
+    all_time_incoming = all_time_incoming_row.scalar_one() or Decimal("0")
+
+    # All-time allocations to any order for this client (from active payments)
+    all_time_alloc_row = await db.execute(
+        select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .join(Order, PaymentAllocation.order_id == Order.id)
+        .where(Order.client_id == client_id, Payment.is_active == True)
+    )
+    all_time_alloc = all_time_alloc_row.scalar_one() or Decimal("0")
+
+    unallocated_cny = max(all_time_incoming - all_time_alloc, Decimal("0"))
 
     total_profit = (total_revenue - total_cogs - total_direct_exp) - client_expenses
-    balance = total_incoming - total_revenue
+    # balance: positive = overpayment, negative = debt (based on allocations, not payment dates)
+    balance = total_paid - total_revenue
 
     return {
         "client_id": str(client_id),
@@ -608,7 +746,7 @@ async def get_client_detail(
         "total_revenue": total_revenue,
         "total_cogs": total_cogs,
         "total_direct_expenses": total_direct_exp,
-        "total_paid": total_incoming,
+        "total_paid": total_paid,
         "unallocated_cny": unallocated_cny,
         "total_profit": total_profit,
         "balance": balance,

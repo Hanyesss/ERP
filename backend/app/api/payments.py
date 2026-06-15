@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, validator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.orm import aliased
 
 from app.database import get_db
@@ -873,7 +873,30 @@ async def add_allocations(
     if not payment:
         raise HTTPException(404, "Payment not found")
 
-    # Check existing allocations
+    # Replace existing allocations for the same orders/purchases (prevent duplicates).
+    # If an allocation for the same order already exists from this payment, it is replaced.
+    if payment.direction == "in":
+        order_ids = [a.order_id for a in allocations if a.order_id]
+        if order_ids:
+            await db.execute(
+                delete(PaymentAllocation).where(
+                    PaymentAllocation.payment_id == payment_id,
+                    PaymentAllocation.order_id.in_(order_ids),
+                )
+            )
+            await db.flush()
+    else:
+        purchase_ids = [a.purchase_id for a in allocations if a.purchase_id]
+        if purchase_ids:
+            await db.execute(
+                delete(PurchasePaymentLink).where(
+                    PurchasePaymentLink.payment_id == payment_id,
+                    PurchasePaymentLink.purchase_id.in_(purchase_ids),
+                )
+            )
+            await db.flush()
+
+    # Check remaining allocations after replacement
     existing_alloc = (await db.execute(
         select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
         .where(PaymentAllocation.payment_id == payment_id)

@@ -124,6 +124,16 @@ async def export_by_supplier_report(
     return _excel_response(data_bytes, f"by_supplier_{date_from}_{date_to}.xlsx")
 
 
+@router.get("/by-direction")
+async def get_by_direction_report(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_FINANCE_ROLES)),
+):
+    return await report_service.get_by_direction(db, date_from, date_to)
+
+
 @router.get("/by-supplier/{supplier_id}")
 async def get_supplier_detail(
     supplier_id: uuid.UUID,
