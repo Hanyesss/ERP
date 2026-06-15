@@ -12,8 +12,10 @@ import ClientDetailDrawer from "./ClientDetailDrawer";
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const fmtCny = (v: number) =>
-  Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtCny = (v: number | string | null | undefined) => {
+  const n = Number(v ?? 0);
+  return (isNaN(n) ? 0 : n).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 interface Props {
   businessTypeId?: string;
