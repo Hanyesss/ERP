@@ -559,6 +559,7 @@
     "no_register_for_currency": "没有 {{currency}} 货币的收银台",
     "no_unpaid_orders": "该客户没有未付订单。付款将保存为预付款。",
     "no_unpaid_purchases": "该供应商没有未付采购单。付款将保存为预付款。",
+    "insufficient_cash": "收银台 {{currency}} 余额不足：余额 {{balance}}，需要 {{amount}}",
     "select_order": "选择订单",
     "alloc_amount": "人民币金额",
     "add_allocation": "添加关联",

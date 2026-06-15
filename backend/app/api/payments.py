@@ -494,6 +494,7 @@ async def list_payments(
             currency=r[0].currency,
             amount=r[0].amount,
             amount_cny=r[0].amount_cny,
+            rate_to_cny=r[0].rate_to_cny,
             allocations_count=alloc_counts.get(r[0].id, 0),
             allocated_cny=r.order_alloc + r.pur_alloc,
             is_active=r[0].is_active,
@@ -623,6 +624,11 @@ async def create_payment(
         current_balance = await _get_balance(db, body.cash_register_id)
         tx_direction = "in" if body.direction == "in" else "out"
         new_balance = current_balance + cash_amount if tx_direction == "in" else current_balance - cash_amount
+        if tx_direction == "out" and new_balance < 0:
+            raise HTTPException(
+                422,
+                f"insufficient_cash_balance:{reg_currency}:{float(current_balance):.2f}:{float(cash_amount):.2f}"
+            )
         cash_tx = CashTransaction(
             id=uuid.uuid4(),
             cash_register_id=body.cash_register_id,

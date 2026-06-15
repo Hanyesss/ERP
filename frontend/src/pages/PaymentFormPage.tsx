@@ -233,7 +233,15 @@ export default function PaymentFormPage() {
       message.success("✓");
       navigate(`/payments/${paymentId}?back=${encodeURIComponent(backUrl)}`);
     },
-    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+    onError: (e: any) => {
+      const detail: string = e.response?.data?.detail || "Error";
+      if (detail.startsWith("insufficient_cash_balance:")) {
+        const [, cur, bal, amt] = detail.split(":");
+        message.error(t("payment.insufficient_cash", { currency: cur, balance: Number(bal).toFixed(2), amount: Number(amt).toFixed(2) }));
+      } else {
+        message.error(detail);
+      }
+    },
   });
 
   const handleSubmit = async (values: any) => {

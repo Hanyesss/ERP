@@ -83,6 +83,7 @@ class PaymentListItem(BaseModel):
     currency: str
     amount: Decimal
     amount_cny: Decimal
+    rate_to_cny: Decimal
     allocations_count: int = 0
     allocated_cny: Decimal = Decimal("0")
     is_active: bool

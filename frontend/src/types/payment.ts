@@ -43,6 +43,7 @@ export interface PaymentListItem {
   currency: PaymentCurrency;
   amount: number;
   amount_cny: number;
+  rate_to_cny: number;
   allocations_count: number;
   allocated_cny: number;
   is_active: boolean;
