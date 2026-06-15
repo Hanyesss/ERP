@@ -26,7 +26,8 @@ export interface ByClientRow {
   client_id: string;
   client_name: string;
   revenue: number;
-  paid: number;
+  paid_by_client: number;
+  paid_to_supplier: number;
   unallocated_cny: number;
   cogs: number;
   direct_expenses: number;
@@ -147,7 +148,8 @@ export interface ByDirectionRow {
   direction_name: string;
   direction_name_cn: string;
   revenue: number;
-  paid: number;
+  paid_by_client: number;
+  paid_to_supplier: number;
   cogs: number;
   direct_expenses: number;
   net_profit: number;

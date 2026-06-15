@@ -826,6 +826,8 @@
     "order_count": "订单数",
     "has_overdue": "逾期",
     "debt": "欠款",
+    "paid_by_client": "客户已付",
+    "paid_to_supplier": "已付供应商",
     "prev_period": "上期",
     "change_pct": "变化%",
     "trade": "贸易",

@@ -175,6 +175,7 @@ async def get_by_client(
             "cogs": Decimal("0"),
             "direct_expenses": Decimal("0"),
             "client_expenses": Decimal("0"),
+            "paid_to_supplier": Decimal("0"),
         }
         for row in order_rows.all()
     }
@@ -300,6 +301,56 @@ async def get_by_client(
         if row[0] in client_data:
             client_data[row[0]]["client_expenses"] = row[1] or Decimal("0")
 
+    # paid_to_supplier: PurchasePaymentLink amounts for purchases linked to orders in period,
+    # split proportionally by COGS share per client (handles multi-client purchases correctly)
+    dir_pur_cogs_sq = (
+        select(
+            Purchase.id.label("purchase_id"),
+            orders_subq.c.client_id,
+            func.coalesce(func.sum(PurchaseItem.cost_amount), Decimal("0")).label("client_cogs"),
+        )
+        .select_from(Purchase)
+        .join(PurchaseItem, PurchaseItem.purchase_id == Purchase.id)
+        .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+        .join(orders_subq, OrderItem.order_id == orders_subq.c.id)
+        .where(Purchase.is_deleted == False)
+        .group_by(Purchase.id, orders_subq.c.client_id)
+        .subquery()
+    )
+    pur_total_cogs_sq = (
+        select(
+            dir_pur_cogs_sq.c.purchase_id,
+            func.sum(dir_pur_cogs_sq.c.client_cogs).label("total_cogs"),
+        )
+        .group_by(dir_pur_cogs_sq.c.purchase_id)
+        .subquery()
+    )
+    paid_supplier_rows = await db.execute(
+        select(
+            dir_pur_cogs_sq.c.client_id,
+            func.coalesce(
+                func.sum(
+                    PurchasePaymentLink.amount_cny *
+                    dir_pur_cogs_sq.c.client_cogs /
+                    func.nullif(pur_total_cogs_sq.c.total_cogs, 0)
+                ),
+                Decimal("0"),
+            ).label("paid_supplier"),
+        )
+        .select_from(PurchasePaymentLink)
+        .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+        .join(dir_pur_cogs_sq, PurchasePaymentLink.purchase_id == dir_pur_cogs_sq.c.purchase_id)
+        .join(pur_total_cogs_sq, PurchasePaymentLink.purchase_id == pur_total_cogs_sq.c.purchase_id)
+        .where(
+            Payment.is_active == True,
+            dir_pur_cogs_sq.c.client_id.in_(client_ids),
+        )
+        .group_by(dir_pur_cogs_sq.c.client_id)
+    )
+    for row in paid_supplier_rows.all():
+        if row[0] in client_data:
+            client_data[row[0]]["paid_to_supplier"] = row[1] or Decimal("0")
+
     result = []
     for cd in client_data.values():
         revenue = cd["revenue"]
@@ -317,7 +368,8 @@ async def get_by_client(
             "client_id": cd["client_id"],
             "client_name": cd["client_name"],
             "revenue": revenue,
-            "paid": paid,
+            "paid_by_client": paid,
+            "paid_to_supplier": cd["paid_to_supplier"],
             "unallocated_cny": unallocated,
             "cogs": cogs,
             "direct_expenses": direct_exp,
@@ -362,6 +414,7 @@ async def get_by_direction(db: AsyncSession, date_from: date, date_to: date):
             "cogs": Decimal("0"),
             "direct_expenses": Decimal("0"),
             "client_expenses": Decimal("0"),
+            "paid_to_supplier": Decimal("0"),
         }
 
     if not direction_data:
@@ -422,6 +475,52 @@ async def get_by_direction(db: AsyncSession, date_from: date, date_to: date):
         if row[0] in direction_data:
             direction_data[row[0]]["direct_expenses"] = row[1] or Decimal("0")
 
+    # paid_to_supplier per direction: proportional by COGS share
+    bt_pur_cogs_sq = (
+        select(
+            Purchase.id.label("purchase_id"),
+            orders_subq.c.business_type_id,
+            func.coalesce(func.sum(PurchaseItem.cost_amount), Decimal("0")).label("client_cogs"),
+        )
+        .select_from(Purchase)
+        .join(PurchaseItem, PurchaseItem.purchase_id == Purchase.id)
+        .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+        .join(orders_subq, OrderItem.order_id == orders_subq.c.id)
+        .where(Purchase.is_deleted == False)
+        .group_by(Purchase.id, orders_subq.c.business_type_id)
+        .subquery()
+    )
+    bt_total_cogs_sq = (
+        select(
+            bt_pur_cogs_sq.c.purchase_id,
+            func.sum(bt_pur_cogs_sq.c.client_cogs).label("total_cogs"),
+        )
+        .group_by(bt_pur_cogs_sq.c.purchase_id)
+        .subquery()
+    )
+    paid_supplier_dir_rows = await db.execute(
+        select(
+            bt_pur_cogs_sq.c.business_type_id,
+            func.coalesce(
+                func.sum(
+                    PurchasePaymentLink.amount_cny *
+                    bt_pur_cogs_sq.c.client_cogs /
+                    func.nullif(bt_total_cogs_sq.c.total_cogs, 0)
+                ),
+                Decimal("0"),
+            ).label("paid_supplier"),
+        )
+        .select_from(PurchasePaymentLink)
+        .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+        .join(bt_pur_cogs_sq, PurchasePaymentLink.purchase_id == bt_pur_cogs_sq.c.purchase_id)
+        .join(bt_total_cogs_sq, PurchasePaymentLink.purchase_id == bt_total_cogs_sq.c.purchase_id)
+        .where(Payment.is_active == True)
+        .group_by(bt_pur_cogs_sq.c.business_type_id)
+    )
+    for row in paid_supplier_dir_rows.all():
+        if row[0] in direction_data:
+            direction_data[row[0]]["paid_to_supplier"] = row[1] or Decimal("0")
+
     result = []
     for dd in direction_data.values():
         revenue = dd["revenue"]
@@ -435,7 +534,8 @@ async def get_by_direction(db: AsyncSession, date_from: date, date_to: date):
             "direction_name": dd["direction_name"],
             "direction_name_cn": dd["direction_name_cn"],
             "revenue": revenue,
-            "paid": paid,
+            "paid_by_client": paid,
+            "paid_to_supplier": dd["paid_to_supplier"],
             "cogs": cogs,
             "direct_expenses": direct_exp,
             "net_profit": net_profit,

@@ -38,13 +38,14 @@ export default function ByDirectionReport() {
     return data.reduce(
       (acc, row) => ({
         revenue: acc.revenue + Number(row.revenue),
-        paid: acc.paid + Number(row.paid),
+        paid_by_client: acc.paid_by_client + Number(row.paid_by_client),
+        paid_to_supplier: acc.paid_to_supplier + Number(row.paid_to_supplier),
         cogs: acc.cogs + Number(row.cogs),
         direct_expenses: acc.direct_expenses + Number(row.direct_expenses),
         net_profit: acc.net_profit + Number(row.net_profit),
         balance: acc.balance + Number(row.balance),
       }),
-      { revenue: 0, paid: 0, cogs: 0, direct_expenses: 0, net_profit: 0, balance: 0 }
+      { revenue: 0, paid_by_client: 0, paid_to_supplier: 0, cogs: 0, direct_expenses: 0, net_profit: 0, balance: 0 }
     );
   }, [data]);
 
@@ -84,9 +85,16 @@ export default function ByDirectionReport() {
       render: (v, r: any) => r.direction_id === "__total__" ? <Text strong>{fmtCny(v)}</Text> : fmtCny(v),
     },
     {
-      title: t("payment.paid"),
-      dataIndex: "paid",
-      key: "paid",
+      title: t("report.paid_by_client"),
+      dataIndex: "paid_by_client",
+      key: "paid_by_client",
+      align: "right",
+      render: (v) => fmtCny(v),
+    },
+    {
+      title: t("report.paid_to_supplier"),
+      dataIndex: "paid_to_supplier",
+      key: "paid_to_supplier",
       align: "right",
       render: (v) => fmtCny(v),
     },
