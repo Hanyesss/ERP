@@ -116,8 +116,18 @@ class PurchasePaymentBalance(BaseModel):
     payment_status: str
 
 
+class UnallocatedPaymentItem(BaseModel):
+    payment_id: uuid.UUID
+    payment_date: str
+    amount: Decimal
+    currency: str
+    amount_cny: Decimal
+    unallocated_cny: Decimal
+
+
 class CounterpartyBalance(BaseModel):
     counterparty_id: uuid.UUID
     total_paid_cny: Decimal
     total_allocated_cny: Decimal
     unallocated_cny: Decimal
+    unallocated_payments: list[UnallocatedPaymentItem] = []

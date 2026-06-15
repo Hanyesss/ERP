@@ -3,14 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
   Space, Row, Col, InputNumber, Radio, Table, Alert, Divider,
-  Upload, message, Statistic,
+  Upload, message, Statistic, Modal,
 } from "antd";
 import { UploadOutlined, FileOutlined } from "@ant-design/icons";
 import type { UploadRequestOption } from "rc-upload/lib/interface";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createPayment, uploadPaymentReceipt, getCounterpartyBalance } from "../api/payments";
+import { createPayment, uploadPaymentReceipt, getCounterpartyBalance, addAllocations, type CounterpartyBalanceData } from "../api/payments";
 import { compressImage } from "../utils/compressImage";
 import { getCashRegisters } from "../api/cashRegisters";
 import { getOrders } from "../api/orders";
@@ -51,6 +51,11 @@ export default function PaymentFormPage() {
   const [rateToCny, setRateToCny] = useState<number>(1);
   const [allocRows, setAllocRows] = useState<AllocRow[]>([]);
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [distributeOpen, setDistributeOpen] = useState(false);
+  const [distributePaymentId, setDistributePaymentId] = useState<string | undefined>();
+  const [distributeOrderId, setDistributeOrderId] = useState<string | undefined>();
+  const [distributeAmount, setDistributeAmount] = useState<number>(0);
+  const [distributing, setDistributing] = useState(false);
 
   const paymentDate: dayjs.Dayjs | null = Form.useWatch("payment_date", form);
   const selectedCurrency: string = Form.useWatch("currency", form) || "CNY";
@@ -157,6 +162,25 @@ export default function PaymentFormPage() {
     () => allocRows.reduce((sum, r) => sum + r.alloc_amount, 0),
     [allocRows]
   );
+
+  const handleDistribute = async () => {
+    if (!distributePaymentId || !distributeOrderId || distributeAmount <= 0) return;
+    setDistributing(true);
+    try {
+      await addAllocations(distributePaymentId, [{ order_id: distributeOrderId, amount_cny: distributeAmount }]);
+      message.success("✓");
+      setDistributeOpen(false);
+      // Refresh orders data
+      setAllocRows(rows => rows.map(r => r.id === distributeOrderId
+        ? { ...r, paid_cny: r.paid_cny + distributeAmount, remaining_cny: Math.max(r.remaining_cny - distributeAmount, 0) }
+        : r
+      ));
+    } catch (e: any) {
+      message.error(e.response?.data?.detail || "Error");
+    } finally {
+      setDistributing(false);
+    }
+  };
 
   const handleAutoAllocate = () => {
     let remaining = amountCny;
@@ -454,7 +478,7 @@ export default function PaymentFormPage() {
           </Form.Item>
         </Card>
 
-        {/* Unallocated balance warning */}
+        {/* Unallocated balance warning + distribute button */}
         {direction === "in" && counterpartyBalance && Number(counterpartyBalance.unallocated_cny) > 0 && (
           <Alert
             type="warning"
@@ -463,6 +487,23 @@ export default function PaymentFormPage() {
             message={t("payment.unallocated_balance_warning", {
               amount: fmtCny(Number(counterpartyBalance.unallocated_cny)),
             })}
+            action={
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  const firstPay = counterpartyBalance.unallocated_payments[0];
+                  if (firstPay) {
+                    setDistributePaymentId(firstPay.payment_id);
+                    setDistributeAmount(0);
+                    setDistributeOrderId(undefined);
+                    setDistributeOpen(true);
+                  }
+                }}
+              >
+                {t("payment.distribute_balance")}
+              </Button>
+            }
           />
         )}
 
@@ -511,6 +552,69 @@ export default function PaymentFormPage() {
           </Card>
         )}
       </Form>
+
+      {/* Distribute existing balance modal */}
+      <Modal
+        open={distributeOpen}
+        title={t("payment.distribute_balance")}
+        onCancel={() => setDistributeOpen(false)}
+        onOk={handleDistribute}
+        okText={t("payment.distribute_confirm")}
+        confirmLoading={distributing}
+        okButtonProps={{ disabled: !distributePaymentId || !distributeOrderId || distributeAmount <= 0 }}
+      >
+        {counterpartyBalance && counterpartyBalance.unallocated_payments.length > 1 && (
+          <Form.Item label={t("payment.select_payment")} style={{ marginBottom: 12 }}>
+            <Select
+              value={distributePaymentId}
+              onChange={v => setDistributePaymentId(v)}
+              options={counterpartyBalance.unallocated_payments.map(p => ({
+                value: p.payment_id,
+                label: `${p.payment_date} — ${fmtCny(Number(p.unallocated_cny))} CNY`,
+              }))}
+            />
+          </Form.Item>
+        )}
+        {counterpartyBalance && counterpartyBalance.unallocated_payments.length === 1 && (
+          <div style={{ marginBottom: 12 }}>
+            <Text type="secondary">
+              {t("payment.from_payment")}: {counterpartyBalance.unallocated_payments[0].payment_date} ({fmtCny(Number(counterpartyBalance.unallocated_payments[0].unallocated_cny))} CNY)
+            </Text>
+          </div>
+        )}
+        <Form.Item label={t("order.order")} style={{ marginBottom: 12 }}>
+          <Select
+            value={distributeOrderId}
+            onChange={v => {
+              setDistributeOrderId(v);
+              const row = allocRows.find(r => r.id === v);
+              const pay = counterpartyBalance?.unallocated_payments.find(p => p.payment_id === distributePaymentId);
+              if (row && pay) {
+                setDistributeAmount(Number(Math.min(row.remaining_cny, Number(pay.unallocated_cny)).toFixed(2)));
+              }
+            }}
+            options={allocRows.filter(r => r.remaining_cny > 0).map(r => ({
+              value: r.id,
+              label: `${r.label} (${t("payment.remaining")}: ${fmtCny(r.remaining_cny)} CNY)`,
+            }))}
+            placeholder={t("payment.select_order")}
+          />
+        </Form.Item>
+        <Form.Item label={`${t("payment.amount")} CNY`} style={{ marginBottom: 0 }}>
+          <InputNumber
+            value={distributeAmount}
+            onChange={v => setDistributeAmount(Number(v) || 0)}
+            min={0.01}
+            max={(() => {
+              const row = allocRows.find(r => r.id === distributeOrderId);
+              const pay = counterpartyBalance?.unallocated_payments.find(p => p.payment_id === distributePaymentId);
+              return Math.min(row?.remaining_cny ?? 999999, Number(pay?.unallocated_cny ?? 999999));
+            })()}
+            precision={2}
+            style={{ width: "100%" }}
+          />
+        </Form.Item>
+      </Modal>
     </div>
   );
 }

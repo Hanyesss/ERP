@@ -26,7 +26,7 @@ from app.schemas.payment import (
     PaymentCreate, PaymentUpdate,
     PaymentResponse, PaymentListItem, PaymentListResponse,
     AllocationResponse, AllocationIn,
-    OrderPaymentBalance, PurchasePaymentBalance, CounterpartyBalance,
+    OrderPaymentBalance, PurchasePaymentBalance, CounterpartyBalance, UnallocatedPaymentItem,
 )
 from app.utils.audit import write_audit
 from app.services.notifications import on_payment_unassigned, on_order_paid, on_purchase_paid
@@ -968,31 +968,59 @@ async def get_counterparty_payment_balance(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles("manager", "purchaser", "accountant", "admin")),
 ):
-    total_paid_row = await db.execute(
-        select(func.coalesce(func.sum(Payment.amount_cny), Decimal("0")))
+    from app.schemas.payment import UnallocatedPaymentItem
+
+    # All incoming payments for this client
+    payments = (await db.execute(
+        select(Payment)
         .where(
             Payment.counterparty_id == counterparty_id,
             Payment.is_active == True,
             Payment.direction == "in",
         )
-    )
-    total_paid = total_paid_row.scalar_one() or Decimal("0")
+        .order_by(Payment.payment_date.desc())
+    )).scalars().all()
 
-    total_alloc_row = await db.execute(
-        select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
-        .join(Payment, PaymentAllocation.payment_id == Payment.id)
-        .where(
-            Payment.counterparty_id == counterparty_id,
-            Payment.is_active == True,
-        )
-    )
-    total_alloc = total_alloc_row.scalar_one() or Decimal("0")
+    total_paid = sum(p.amount_cny for p in payments) or Decimal("0")
+
+    # Allocations per payment
+    if payments:
+        pay_ids = [p.id for p in payments]
+        alloc_rows = (await db.execute(
+            select(
+                PaymentAllocation.payment_id,
+                func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("alloc"),
+            )
+            .where(PaymentAllocation.payment_id.in_(pay_ids))
+            .group_by(PaymentAllocation.payment_id)
+        )).all()
+        alloc_map: dict = {r[0]: r[1] for r in alloc_rows}
+    else:
+        alloc_map = {}
+
+    total_alloc = sum(alloc_map.values()) or Decimal("0")
+
+    unallocated_payments = []
+    for p in payments:
+        paid = p.amount_cny or Decimal("0")
+        alloc = alloc_map.get(p.id, Decimal("0"))
+        unalloc = max(paid - alloc, Decimal("0"))
+        if unalloc > Decimal("0.01"):
+            unallocated_payments.append(UnallocatedPaymentItem(
+                payment_id=p.id,
+                payment_date=str(p.payment_date),
+                amount=p.amount,
+                currency=p.currency.value if hasattr(p.currency, 'value') else str(p.currency),
+                amount_cny=paid,
+                unallocated_cny=unalloc,
+            ))
 
     return CounterpartyBalance(
         counterparty_id=counterparty_id,
         total_paid_cny=total_paid,
         total_allocated_cny=total_alloc,
         unallocated_cny=max(total_paid - total_alloc, Decimal("0")),
+        unallocated_payments=unallocated_payments,
     )
 
 
