@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
-import { Button, DatePicker, Table, Typography, Row, Col, Space, Spin } from "antd";
+import { Button, DatePicker, Table, Typography, Row, Col, Space, Spin, Select } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import { getByClient, exportByClient, type ByClientRow } from "../../api/reports";
+import { getBusinessTypes } from "../../api/references";
 import type { ColumnsType } from "antd/es/table";
 import ClientDetailDrawer from "./ClientDetailDrawer";
 
@@ -22,17 +23,29 @@ export default function ByClientReport() {
     now.startOf("month"),
     now.endOf("month"),
   ]);
+  const [businessTypeId, setBusinessTypeId] = useState<string | undefined>();
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
 
   const params = {
     date_from: dateRange[0].format("YYYY-MM-DD"),
     date_to: dateRange[1].format("YYYY-MM-DD"),
+    business_type_id: businessTypeId,
   };
 
   const { data, isLoading } = useQuery({
     queryKey: ["by-client", params],
     queryFn: () => getByClient(params).then(r => r.data),
   });
+
+  const { data: businessTypes } = useQuery({
+    queryKey: ["business-types"],
+    queryFn: () => getBusinessTypes().then(r => r.data),
+  });
+
+  const btOptions = [
+    { value: "", label: t("report.all_types") },
+    ...(businessTypes || []).map((bt: any) => ({ value: bt.id, label: lang === "zh" && bt.name_cn ? bt.name_cn : bt.name })),
+  ];
 
   const totals = useMemo(() => {
     if (!data) return null;
@@ -105,10 +118,8 @@ export default function ByClientReport() {
       render: (v) => {
         const val = Number(v);
         if (val >= 0) {
-          // overpayment: client paid more
           return <Text style={{ color: "#389e0d" }}>+{fmtCny(val)}</Text>;
         }
-        // debt: client owes us
         return <Text style={{ color: "#cf1322" }}>{fmtCny(Math.abs(val))}</Text>;
       },
     },
@@ -124,10 +135,16 @@ export default function ByClientReport() {
           </Button>
         </Col>
       </Row>
-      <Space style={{ marginBottom: 16 }}>
+      <Space wrap style={{ marginBottom: 16 }}>
         <RangePicker
           value={dateRange}
           onChange={(v) => { if (v?.[0] && v?.[1]) setDateRange([v[0], v[1]]); }}
+        />
+        <Select
+          style={{ minWidth: 160 }}
+          options={btOptions}
+          value={businessTypeId || ""}
+          onChange={v => setBusinessTypeId(v || undefined)}
         />
       </Space>
       {isLoading ? <Spin /> : (

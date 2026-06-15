@@ -118,7 +118,7 @@ export const getPnL = (params: {
   warehouse_id?: string;
 }) => apiClient.get<PnLData>(`${BASE}/pnl`, { params });
 
-export const getByClient = (params: { date_from: string; date_to: string }) =>
+export const getByClient = (params: { date_from: string; date_to: string; business_type_id?: string }) =>
   apiClient.get<ByClientRow[]>(`${BASE}/by-client`, { params });
 
 export const getClientDetail = (
@@ -163,7 +163,7 @@ async function downloadExcel(path: string, params: Record<string, any>, filename
 export const exportPnL = (params: { date_from: string; date_to: string; lang: string }) =>
   downloadExcel(`${BASE}/pnl/export`, params, `pnl_${params.date_from}_${params.date_to}.xlsx`);
 
-export const exportByClient = (params: { date_from: string; date_to: string; lang: string }) =>
+export const exportByClient = (params: { date_from: string; date_to: string; lang: string; business_type_id?: string }) =>
   downloadExcel(`${BASE}/by-client/export`, params, `by_client_${params.date_from}_${params.date_to}.xlsx`);
 
 export const exportBySupplier = (params: { date_from: string; date_to: string; lang: string }) =>

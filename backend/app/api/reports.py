@@ -69,21 +69,23 @@ async def export_pnl_report(
 async def get_by_client_report(
     date_from: date = Query(...),
     date_to: date = Query(...),
+    business_type_id: Optional[uuid.UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_FINANCE_ROLES)),
 ):
-    return await report_service.get_by_client(db, date_from, date_to)
+    return await report_service.get_by_client(db, date_from, date_to, business_type_id)
 
 
 @router.get("/by-client/export")
 async def export_by_client_report(
     date_from: date = Query(...),
     date_to: date = Query(...),
+    business_type_id: Optional[uuid.UUID] = Query(None),
     lang: str = Query("ru"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_FINANCE_ROLES)),
 ):
-    data = await report_service.get_by_client(db, date_from, date_to)
+    data = await report_service.get_by_client(db, date_from, date_to, business_type_id)
     data_bytes = export_by_client(data, lang)
     return _excel_response(data_bytes, f"by_client_{date_from}_{date_to}.xlsx")
 

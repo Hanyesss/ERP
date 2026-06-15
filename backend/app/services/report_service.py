@@ -124,23 +124,34 @@ async def get_pnl(
     }
 
 
-async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
+async def get_by_client(
+    db: AsyncSession,
+    date_from: date,
+    date_to: date,
+    business_type_id: Optional[uuid.UUID] = None,
+):
     order_filter = [
         Order.order_date >= date_from,
         Order.order_date <= date_to,
         Order.status != OrderStatus.cancelled,
         Order.excluded_from_accounting == False,
     ]
+    if business_type_id:
+        order_filter.append(Order.business_type_id == business_type_id)
 
-    # Revenue + paid per client
-    paid_sq = (
+    # Total incoming payments per client in period (not just allocated amounts)
+    payment_sq = (
         select(
-            PaymentAllocation.order_id,
-            func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("paid_cny"),
+            Payment.counterparty_id,
+            func.coalesce(func.sum(Payment.amount_cny), Decimal("0")).label("paid_cny"),
         )
-        .join(Payment, PaymentAllocation.payment_id == Payment.id)
-        .where(Payment.is_active == True)
-        .group_by(PaymentAllocation.order_id)
+        .where(
+            Payment.is_active == True,
+            Payment.direction == "in",
+            Payment.payment_date >= date_from,
+            Payment.payment_date <= date_to,
+        )
+        .group_by(Payment.counterparty_id)
         .subquery()
     )
 
@@ -149,10 +160,8 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
             Order.client_id,
             Counterparty.name.label("client_name"),
             func.coalesce(func.sum(Order.total_sale_cny), Decimal("0")).label("revenue"),
-            func.coalesce(func.sum(func.coalesce(paid_sq.c.paid_cny, Decimal("0"))), Decimal("0")).label("paid"),
         )
         .join(Counterparty, Order.client_id == Counterparty.id)
-        .outerjoin(paid_sq, Order.id == paid_sq.c.order_id)
         .where(*order_filter)
         .group_by(Order.client_id, Counterparty.name)
     )
@@ -161,7 +170,7 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
             "client_id": row[0],
             "client_name": row[1],
             "revenue": row[2] or Decimal("0"),
-            "paid": row[3] or Decimal("0"),
+            "paid": Decimal("0"),
             "cogs": Decimal("0"),
             "direct_expenses": Decimal("0"),
             "client_expenses": Decimal("0"),
@@ -173,6 +182,25 @@ async def get_by_client(db: AsyncSession, date_from: date, date_to: date):
         return []
 
     client_ids = list(client_data.keys())
+
+    # Fill paid from payments (not allocations), scoped to same period
+    pay_rows = await db.execute(
+        select(
+            Payment.counterparty_id,
+            func.coalesce(func.sum(Payment.amount_cny), Decimal("0")).label("paid_cny"),
+        )
+        .where(
+            Payment.is_active == True,
+            Payment.direction == "in",
+            Payment.payment_date >= date_from,
+            Payment.payment_date <= date_to,
+            Payment.counterparty_id.in_(client_ids),
+        )
+        .group_by(Payment.counterparty_id)
+    )
+    for row in pay_rows.all():
+        if row[0] in client_data:
+            client_data[row[0]]["paid"] = row[1] or Decimal("0")
 
     # COGS per client
     orders_subq = (
@@ -531,8 +559,21 @@ async def get_client_detail(
             "profit": profit,
         })
 
+    # Total incoming payments for this client in period (includes unallocated)
+    total_incoming_row = await db.execute(
+        select(func.coalesce(func.sum(Payment.amount_cny), Decimal("0")))
+        .where(
+            Payment.counterparty_id == client_id,
+            Payment.is_active == True,
+            Payment.direction == "in",
+            Payment.payment_date >= date_from,
+            Payment.payment_date <= date_to,
+        )
+    )
+    total_incoming = total_incoming_row.scalar_one() or Decimal("0")
+
     total_profit = (total_revenue - total_cogs - total_direct_exp) - client_expenses
-    balance = total_paid - total_revenue
+    balance = total_incoming - total_revenue
 
     return {
         "client_id": str(client_id),
@@ -542,7 +583,7 @@ async def get_client_detail(
         "total_revenue": total_revenue,
         "total_cogs": total_cogs,
         "total_direct_expenses": total_direct_exp,
-        "total_paid": total_paid,
+        "total_paid": total_incoming,
         "total_profit": total_profit,
         "balance": balance,
     }
