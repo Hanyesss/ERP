@@ -262,6 +262,19 @@ class IrswayClient:
         except Exception as e:
             return TradeOrderResult(error=str(e))
 
+    def delete_trade_order(self, number: str) -> TradeOrderResult:
+        try:
+            r = httpx.delete(
+                self._url(f"/api/v1/trade-orders/{number}/"),
+                headers=self.headers,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if r.status_code in (200, 204):
+                return TradeOrderResult()
+            return TradeOrderResult(error=f"HTTP {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            return TradeOrderResult(error=str(e))
+
     def upload_trade_invoice(self, number: str, pdf_bytes: bytes) -> TradeOrderResult:
         upload_headers = {k: v for k, v in self.headers.items() if k != "Content-Type"}
         try:

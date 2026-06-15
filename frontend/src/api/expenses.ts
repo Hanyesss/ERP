@@ -59,6 +59,17 @@ export const uploadReceipt = (id: string, file: File) => {
   });
 };
 
+export const uploadQrPhoto = (id: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return apiClient.post<import("../types/expense").Expense>(`/api/expenses/${id}/qr`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const deleteQrPhoto = (id: string) =>
+  apiClient.delete(`/api/expenses/${id}/qr`);
+
 export const getExpenseHistory = (id: string) =>
   apiClient.get<any[]>(`/api/expenses/${id}/history`);
 

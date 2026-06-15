@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -34,6 +35,23 @@ from app.models.cash_register import CashRegister, CashTransaction
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 _ALLOWED = ("employee", "seller", "manager", "purchaser", "accountant", "admin", "partner")
+_MAX_FILES = 10
+
+
+def _parse_file_urls(payment) -> list[str]:
+    if payment.file_urls:
+        try:
+            return json.loads(payment.file_urls)
+        except Exception:
+            pass
+    if payment.file_url:
+        return [payment.file_url]
+    return []
+
+
+def _save_file_urls(payment, urls: list[str]) -> None:
+    payment.file_urls = json.dumps(urls) if urls else None
+    payment.file_url = urls[0] if urls else None
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -183,6 +201,8 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
 
     allocated = sum(a.amount_cny for a in allocations)
 
+    urls = _parse_file_urls(payment)
+
     return PaymentResponse(
         id=payment.id,
         direction=payment.direction,
@@ -195,7 +215,8 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
         amount_cny=payment.amount_cny,
         network_fee=payment.network_fee,
         notes=payment.notes,
-        file_url=payment.file_url,
+        file_url=urls[0] if urls else None,
+        file_urls=urls,
         cash_register_id=payment.cash_register_id,
         cash_register_name=cash_reg.name if cash_reg else None,
         is_active=payment.is_active,
@@ -946,6 +967,10 @@ async def upload_payment_receipt(
     if not payment:
         raise HTTPException(404, "Payment not found")
 
+    urls = _parse_file_urls(payment)
+    if len(urls) >= _MAX_FILES:
+        raise HTTPException(422, f"Максимум {_MAX_FILES} файлов на платёж")
+
     content = await file.read()
     if len(content) > _MAX_FILE_SIZE:
         raise HTTPException(422, "File too large (max 10 MB)")
@@ -959,21 +984,19 @@ async def upload_payment_receipt(
     stored_name = f"{uuid.uuid4()}{ext}"
     (dest_dir / stored_name).write_bytes(content)
 
-    if payment.file_url:
-        old = UPLOADS_DIR / payment.file_url
-        if old.exists():
-            old.unlink()
+    urls.append(f"payments/{payment_id}/{stored_name}")
+    _save_file_urls(payment, urls)
 
-    payment.file_url = f"payments/{payment_id}/{stored_name}"
     await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
-                      {"receipt_uploaded": file.filename})
+                      {"receipt_uploaded": file.filename, "total_files": len(urls)})
     await db.commit()
     return await _load_payment(db, payment.id)
 
 
-@router.delete("/{payment_id}/receipt", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_payment_receipt(
+@router.delete("/{payment_id}/receipt/{filename}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payment_receipt_file(
     payment_id: uuid.UUID,
+    filename: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
 ):
@@ -982,14 +1005,47 @@ async def delete_payment_receipt(
     )).scalar_one_or_none()
     if not payment:
         raise HTTPException(404, "Payment not found")
-    if not payment.file_url:
+
+    urls = _parse_file_urls(payment)
+    target = f"payments/{payment_id}/{filename}"
+    if target not in urls:
+        raise HTTPException(404, "File not found")
+
+    file_path = UPLOADS_DIR / target
+    if file_path.exists():
+        file_path.unlink()
+
+    urls.remove(target)
+    _save_file_urls(payment, urls)
+
+    await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
+                      {"receipt_deleted": filename, "remaining_files": len(urls)})
+    await db.commit()
+
+
+@router.delete("/{payment_id}/receipt", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payment_receipt(
+    payment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
+):
+    """Удалить все файлы платежа (backward-compat)."""
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+
+    urls = _parse_file_urls(payment)
+    if not urls:
         raise HTTPException(404, "No receipt")
 
-    old = UPLOADS_DIR / payment.file_url
-    if old.exists():
-        old.unlink()
+    for url in urls:
+        file_path = UPLOADS_DIR / url
+        if file_path.exists():
+            file_path.unlink()
 
-    payment.file_url = None
+    _save_file_urls(payment, [])
     await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
-                      {"receipt_deleted": True})
+                      {"receipt_deleted_all": True})
     await db.commit()

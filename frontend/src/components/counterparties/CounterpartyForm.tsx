@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Modal, Form, Input, Select, Checkbox, Divider } from "antd";
+import { Modal, Form, Input, Select, Checkbox, Divider, Alert, Tag } from "antd";
+import { WarningOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { Counterparty, CounterpartyFormData } from "../../types/counterparty";
-import { getCounterparties } from "../../api/counterparties";
+import { getCounterparties, getCounterparty } from "../../api/counterparties";
 
 export interface CounterpartyFormValues extends CounterpartyFormData {
   create_site_account?: boolean;
@@ -31,8 +32,13 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
   const [changeCredentials, setChangeCredentials] = useState(false);
 
   const watchedType = Form.useWatch("type", form);
+  const watchedPartnerId = Form.useWatch("partner_id", form);
   const isClient = watchedType === "client" || watchedType === "both";
   const isPartner = watchedType === "partner";
+
+  const oldPartnerId = editing?.partner_id ?? null;
+  const newPartnerId = watchedPartnerId ?? null;
+  const partnerChanged = !!editing && isClient && oldPartnerId !== newPartnerId;
 
   // Partners list for the client → partner link dropdown
   const { data: partnersData } = useQuery({
@@ -41,6 +47,18 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
     enabled: open,
   });
   const partnerOptions = (partnersData?.items ?? []).map((p) => ({ value: p.id, label: p.name }));
+
+  // Если текущий partner_id не в активном списке — партнёр удалён, подгружаем его имя
+  const currentPartnerInList = partnerOptions.some(p => p.value === oldPartnerId);
+  const { data: deletedPartnerData } = useQuery({
+    queryKey: ["counterparty-deleted", oldPartnerId],
+    queryFn: () => getCounterparty(oldPartnerId!).then(r => r.data),
+    enabled: !!oldPartnerId && !currentPartnerInList && open,
+  });
+  const deletedPartnerName = deletedPartnerData?.name ?? null;
+
+  // Имя нового партнёра из активного списка (для предупреждения)
+  const newPartnerName = partnerOptions.find(p => p.value === newPartnerId)?.label ?? null;
 
   useEffect(() => {
     if (open) {
@@ -122,15 +140,67 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         </Form.Item>
 
         {isClient && (
-          <Form.Item name="partner_id" label={t("counterparty.partner")}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder={t("counterparty.partner_select")}
-              options={partnerOptions}
-            />
-          </Form.Item>
+          <>
+            {/* Индикатор удалённого партнёра */}
+            {!!oldPartnerId && !currentPartnerInList && (
+              <div style={{ marginBottom: 8 }}>
+                <Tag icon={<WarningOutlined />} color="error">
+                  Партнёр удалён: {deletedPartnerName ?? oldPartnerId}
+                </Tag>
+              </div>
+            )}
+            <Form.Item name="partner_id" label={t("counterparty.partner")}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t("counterparty.partner_select")}
+                options={partnerOptions}
+              />
+            </Form.Item>
+            {partnerChanged && (() => {
+              // Сценарий 1: не было партнёра → назначаем нового
+              if (!oldPartnerId && newPartnerId) {
+                return (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Привязка партнёра"
+                    description={`Все существующие заказы клиента станут видны партнёру «${newPartnerName}».`}
+                  />
+                );
+              }
+              // Сценарий 2: был партнёр → снимаем
+              if (oldPartnerId && !newPartnerId) {
+                const oldName = currentPartnerInList
+                  ? (partnerOptions.find(p => p.value === oldPartnerId)?.label ?? "—")
+                  : (deletedPartnerName ?? "удалённый партнёр");
+                return (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="Отвязка партнёра"
+                    description={`Клиент будет отвязан от «${oldName}». Все его заказы потеряют партнёрскую привязку.`}
+                  />
+                );
+              }
+              // Сценарий 3: смена одного партнёра на другого (включая случай удалённого → нового)
+              const oldName = currentPartnerInList
+                ? (partnerOptions.find(p => p.value === oldPartnerId)?.label ?? "—")
+                : (deletedPartnerName ?? "удалённый партнёр");
+              return (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message="Смена партнёра"
+                  description={`Все заказы клиента перейдут от «${oldName}» к «${newPartnerName}». Партнёрские комиссии пересчитаются. Это действие нельзя отменить автоматически.`}
+                />
+              );
+            })()}
+          </>
         )}
 
         <Form.Item label={t("counterparty.contact_info")} style={{ marginBottom: 0 }}>

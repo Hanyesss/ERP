@@ -58,6 +58,9 @@ export const uploadPaymentReceipt = (id: string, file: File) => {
 export const deletePaymentReceipt = (id: string) =>
   apiClient.delete(`/api/payments/${id}/receipt`);
 
+export const deletePaymentReceiptFile = (id: string, filename: string) =>
+  apiClient.delete(`/api/payments/${id}/receipt/${encodeURIComponent(filename)}`);
+
 export interface DashboardBalances {
   total_receivable_cny: string;
   total_payable_cny: string;

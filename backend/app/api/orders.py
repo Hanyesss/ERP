@@ -865,6 +865,38 @@ async def cancel_order(
     order.status = OrderStatus.cancelled
     order.cancel_reason = body.reason
 
+    # Синхронизация отмены на irsway.com
+    if order.sync_status == "synced" and order.external_shipment_number:
+        import asyncio
+        import logging
+        _log = logging.getLogger(__name__)
+        try:
+            from app.integrations.irsway_site.service import get_active_client
+            site_client = await get_active_client(db)
+            if site_client:
+                loop = asyncio.get_event_loop()
+                bt = (await db.execute(
+                    select(BusinessType).where(BusinessType.id == order.business_type_id)
+                )).scalar_one_or_none()
+                is_trade = bt and bt.code == "trade"
+                ext_num = order.external_shipment_number
+                if is_trade:
+                    del_result = await loop.run_in_executor(
+                        None, lambda: site_client.delete_trade_order(ext_num)
+                    )
+                else:
+                    del_result = await loop.run_in_executor(
+                        None, lambda: site_client.delete_shipment(ext_num)
+                    )
+                if del_result.error:
+                    _log.warning("Irsway: could not delete order %s: %s", order.order_number, del_result.error)
+                else:
+                    order.sync_status = "cancelled"
+                    snapshot["irsway_deleted"] = ext_num
+        except Exception as _e:
+            import logging
+            logging.getLogger(__name__).warning("Irsway cancel sync error: %s", _e)
+
     # Bug Д: отвязываем аллокации платежей от этого заказа
     allocs = (await db.execute(
         select(PaymentAllocation).where(PaymentAllocation.order_id == order_id)

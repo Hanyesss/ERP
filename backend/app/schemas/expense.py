@@ -91,6 +91,7 @@ class ExpenseResponse(BaseModel):
     reject_reason: Optional[str] = None
     description: str
     receipt_url: Optional[str] = None
+    qr_url: Optional[str] = None
     cash_register_id: Optional[uuid.UUID] = None
     cash_register_name: Optional[str] = None
     created_by: uuid.UUID

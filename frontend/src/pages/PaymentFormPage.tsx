@@ -49,7 +49,7 @@ export default function PaymentFormPage() {
   const [amount, setAmount] = useState<number>(0);
   const [rateToCny, setRateToCny] = useState<number>(1);
   const [allocRows, setAllocRows] = useState<AllocRow[]>([]);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
 
   const paymentDate: dayjs.Dayjs | null = Form.useWatch("payment_date", form);
   const selectedCurrency: string = Form.useWatch("currency", form) || "CNY";
@@ -119,8 +119,8 @@ export default function PaymentFormPage() {
           id: o.id,
           label: `${o.order_number} — ${o.client_name}`,
           total_cny: Number(o.total_sale_cny),
-          paid_cny: 0,
-          remaining_cny: Number(o.total_sale_cny),
+          paid_cny: Number(o.paid_amount_cny ?? 0),
+          remaining_cny: Number(o.remaining_amount_cny ?? o.total_sale_cny),
           alloc_amount: 0,
         }));
       setAllocRows(rows);
@@ -131,8 +131,8 @@ export default function PaymentFormPage() {
           id: p.id,
           label: `${p.purchase_number}`,
           total_cny: Number(p.total_amount_cny),
-          paid_cny: 0,
-          remaining_cny: Number(p.total_amount_cny),
+          paid_cny: Number(p.paid_amount_cny ?? 0),
+          remaining_cny: Number(p.remaining_amount_cny ?? p.total_amount_cny),
           alloc_amount: 0,
         }));
       setAllocRows(rows);
@@ -169,11 +169,11 @@ export default function PaymentFormPage() {
     mutationFn: createPayment,
     onSuccess: async (res) => {
       const paymentId = res.data.id;
-      if (receiptFile) {
+      for (const file of receiptFiles) {
         try {
-          await uploadPaymentReceipt(paymentId, receiptFile);
+          await uploadPaymentReceipt(paymentId, file);
         } catch {
-          message.warning(t("payment.receipt_upload") + " — ошибка, загрузите вручную");
+          message.warning(`${file.name} — ошибка загрузки, добавьте вручную`);
         }
       }
       message.success("✓");
@@ -387,44 +387,55 @@ export default function PaymentFormPage() {
           </Form.Item>
 
           <Form.Item label={t("payment.receipt")}>
-            <Space direction="vertical">
-              <Upload
-                customRequest={async ({ file }: UploadRequestOption) => {
-                  const compressed = await compressImage(file as File);
-                  setReceiptFile(compressed);
-                }}
-                showUploadList={false}
-                maxCount={1}
-                accept=".jpg,.jpeg,.png,.webp,.pdf"
-              >
-                <Button icon={<UploadOutlined />}>
-                  {receiptFile ? t("payment.receipt_replace") : t("payment.receipt_upload")}
-                </Button>
-              </Upload>
-              {receiptFile && (() => {
-                const isPdf = receiptFile.type === "application/pdf";
-                return isPdf ? (
-                  <Space>
-                    <FileOutlined style={{ fontSize: 24, color: "#ff4d4f" }} />
-                    <span>{receiptFile.name}</span>
-                    <Button size="small" danger onClick={() => setReceiptFile(null)}>✕</Button>
-                  </Space>
-                ) : (
-                  <div style={{ position: "relative", display: "inline-block" }}>
-                    <img
-                      src={URL.createObjectURL(receiptFile)}
-                      alt="receipt preview"
-                      style={{ maxWidth: 300, maxHeight: 300, borderRadius: 6, border: "1px solid #f0f0f0" }}
-                    />
-                    <Button
-                      size="small"
-                      danger
-                      style={{ position: "absolute", top: 4, right: 4 }}
-                      onClick={() => setReceiptFile(null)}
-                    >✕</Button>
-                  </div>
-                );
-              })()}
+            <Space direction="vertical" style={{ width: "100%" }}>
+              {receiptFiles.length < 10 && (
+                <Upload
+                  customRequest={async ({ file }: UploadRequestOption) => {
+                    const compressed = await compressImage(file as File);
+                    setReceiptFiles(prev => [...prev, compressed]);
+                  }}
+                  showUploadList={false}
+                  accept=".jpg,.jpeg,.png,.webp,.pdf"
+                >
+                  <Button icon={<UploadOutlined />}>
+                    {t("payment.receipt_upload")}
+                  </Button>
+                </Upload>
+              )}
+              {receiptFiles.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                  {receiptFiles.map((file, idx) => {
+                    const isPdf = file.type === "application/pdf";
+                    return (
+                      <div key={idx} style={{ position: "relative", border: "1px solid #f0f0f0", borderRadius: 6, padding: 4 }}>
+                        {isPdf ? (
+                          <Space style={{ padding: "4px 8px" }}>
+                            <FileOutlined style={{ fontSize: 20, color: "#ff4d4f" }} />
+                            <span style={{ fontSize: 12, maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {file.name}
+                            </span>
+                          </Space>
+                        ) : (
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt="preview"
+                            style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 4, display: "block" }}
+                          />
+                        )}
+                        <Button
+                          size="small"
+                          danger
+                          style={{ position: "absolute", top: 2, right: 2, minWidth: 20, padding: "0 3px", fontSize: 10 }}
+                          onClick={() => setReceiptFiles(prev => prev.filter((_, i) => i !== idx))}
+                        >✕</Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {receiptFiles.length > 0 && (
+                <span style={{ color: "#999", fontSize: 12 }}>{receiptFiles.length} / 10</span>
+              )}
             </Space>
           </Form.Item>
         </Card>

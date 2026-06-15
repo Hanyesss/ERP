@@ -16,7 +16,7 @@ import type { UploadRequestOption } from "rc-upload/lib/interface";
 import {
   getExpense, deleteExpense,
   approveReimbursement, rejectReimbursement, markReimbursementPaid,
-  uploadReceipt, getExpenseHistory, getFileUrl,
+  uploadReceipt, uploadQrPhoto, deleteQrPhoto, getExpenseHistory, getFileUrl,
 } from "../api/expenses";
 import { getCashRegisters } from "../api/cashRegisters";
 import type { User } from "../types";
@@ -114,8 +114,24 @@ export default function ExpenseDetailPage({ user }: Props) {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
+  const qrMutation = useMutation({
+    mutationFn: (file: File) => uploadQrPhoto(id!, file),
+    onSuccess: () => { message.success("QR загружен"); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const deleteQrMutation = useMutation({
+    mutationFn: () => deleteQrPhoto(id!),
+    onSuccess: () => invalidate(),
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
   const handleReceiptUpload = ({ file }: UploadRequestOption) => {
     receiptMutation.mutate(file as File);
+  };
+
+  const handleQrUpload = ({ file }: UploadRequestOption) => {
+    qrMutation.mutate(file as File);
   };
 
   if (isLoading) return <Skeleton active />;
@@ -229,6 +245,44 @@ export default function ExpenseDetailPage({ user }: Props) {
               </Descriptions.Item>
             )}
           </Descriptions>
+
+          {/* QR для получения платежа */}
+          <Card
+            size="small"
+            title="QR для получения платежа"
+            style={{ marginBottom: 16 }}
+            extra={
+              <Space>
+                <Upload customRequest={handleQrUpload} showUploadList={false} accept=".jpg,.jpeg,.png,.webp">
+                  <Button icon={<UploadOutlined />} size="small" loading={qrMutation.isPending}>
+                    {expense.qr_url ? "Заменить" : "Загрузить"}
+                  </Button>
+                </Upload>
+                {expense.qr_url && (
+                  <Popconfirm
+                    title="Удалить QR?"
+                    onConfirm={() => deleteQrMutation.mutate()}
+                    okText={t("common.yes")}
+                    cancelText={t("common.no")}
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />} loading={deleteQrMutation.isPending} />
+                  </Popconfirm>
+                )}
+              </Space>
+            }
+          >
+            {expense.qr_url ? (
+              <a href={getFileUrl(expense.qr_url)} target="_blank" rel="noreferrer">
+                <img
+                  src={getFileUrl(expense.qr_url)}
+                  alt="QR"
+                  style={{ maxWidth: 220, maxHeight: 220, borderRadius: 4, border: "1px solid #f0f0f0" }}
+                />
+              </a>
+            ) : (
+              <Text type="secondary">QR не загружен</Text>
+            )}
+          </Card>
 
           {isAccountant && (
             <Space>

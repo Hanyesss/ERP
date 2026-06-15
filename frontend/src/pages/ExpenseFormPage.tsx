@@ -8,7 +8,7 @@ import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createExpense, updateExpense, getExpense, uploadReceipt } from "../api/expenses";
+import { createExpense, updateExpense, getExpense, uploadReceipt, uploadQrPhoto } from "../api/expenses";
 import { getExpenseCategories, getEmployees } from "../api/references";
 import { getOrders } from "../api/orders";
 import { getExchangeRates } from "../api/exchangeRates";
@@ -42,8 +42,10 @@ export default function ExpenseFormPage({ user }: Props) {
   const [isReimbursement, setIsReimbursement] = useState(!isAccountant);
   const [initialized, setInitialized] = useState(false);
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
+  const [pendingQrPhoto, setPendingQrPhoto] = useState<File | null>(null);
 
   const receiptInputRef = useRef<HTMLInputElement>(null);
+  const qrInputRef = useRef<HTMLInputElement>(null);
 
   const expenseDate: dayjs.Dayjs | null = Form.useWatch("expense_date", form);
   const dateStr = expenseDate?.format("YYYY-MM-DD");
@@ -160,6 +162,9 @@ export default function ExpenseFormPage({ user }: Props) {
     onSuccess: async (res) => {
       if (pendingReceipt) {
         try { await uploadReceipt(res.data.id, pendingReceipt); } catch {}
+      }
+      if (pendingQrPhoto) {
+        try { await uploadQrPhoto(res.data.id, pendingQrPhoto); } catch {}
       }
       message.success("✓");
       navigate(`/expenses/${res.data.id}?back=${encodeURIComponent(backUrl)}`);
@@ -438,15 +443,53 @@ export default function ExpenseFormPage({ user }: Props) {
               )}
 
               {isReimbursement && (
-                <Form.Item name="reimburse_to_user_id" label={t("expense.reimburse_to")}>
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={employeeOptions}
-                    placeholder={t("expense.select_employee_optional")}
-                    allowClear
-                  />
-                </Form.Item>
+                <>
+                  <Form.Item name="reimburse_to_user_id" label={t("expense.reimburse_to")}>
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      options={employeeOptions}
+                      placeholder={t("expense.select_employee_optional")}
+                      allowClear
+                    />
+                  </Form.Item>
+                  <Form.Item label="QR для получения платежа">
+                    <Space>
+                      <Button
+                        icon={<UploadOutlined />}
+                        size="small"
+                        onClick={() => qrInputRef.current?.click()}
+                      >
+                        {pendingQrPhoto ? "Заменить QR" : "Загрузить QR"}
+                      </Button>
+                      {pendingQrPhoto && (
+                        <>
+                          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => setPendingQrPhoto(null)} />
+                        </>
+                      )}
+                    </Space>
+                    {pendingQrPhoto && (
+                      <div style={{ marginTop: 8 }}>
+                        <img
+                          src={URL.createObjectURL(pendingQrPhoto)}
+                          alt="QR preview"
+                          style={{ maxWidth: 200, maxHeight: 200, borderRadius: 4, border: "1px solid #f0f0f0" }}
+                        />
+                      </div>
+                    )}
+                    <input
+                      ref={qrInputRef}
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) setPendingQrPhoto(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </Form.Item>
+                </>
               )}
             </>
           ) : (

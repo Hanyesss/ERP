@@ -24,6 +24,7 @@ export interface Payment {
   network_fee?: number;
   notes?: string;
   file_url?: string;
+  file_urls: string[];
   is_active: boolean;
   created_by_name: string;
   created_at: string;

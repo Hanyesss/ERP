@@ -39,6 +39,7 @@ export interface Expense extends ExpenseListItem {
   rate_to_cny: number;
   reimburse_paid_date?: string;
   reject_reason?: string;
+  qr_url?: string;
   cash_register_id?: string;
   cash_register_name?: string;
 }

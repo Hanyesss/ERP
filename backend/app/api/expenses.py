@@ -122,7 +122,8 @@ async def _load_expense(db: AsyncSession, expense_id: uuid.UUID) -> ExpenseRespo
         is_reimbursement=e.is_reimbursement,
         reimburse_to_user_id=e.reimburse_to_user_id, reimburse_to_name=row.reimburse_to_name,
         reimburse_status=e.reimburse_status, reimburse_paid_date=e.reimburse_paid_date,
-        reject_reason=e.reject_reason, description=e.description, receipt_url=e.receipt_url,
+        reject_reason=e.reject_reason, description=e.description,
+        receipt_url=e.receipt_url, qr_url=getattr(e, "qr_url", None),
         cash_register_id=e.cash_register_id, cash_register_name=row.cash_register_name,
         created_by=e.created_by, created_by_name=row.creator_name,
         created_at=e.created_at, is_active=e.is_active,
@@ -737,6 +738,72 @@ async def upload_receipt(
                       {"receipt_uploaded": file.filename})
     await db.commit()
     return await _load_expense(db, expense.id)
+
+
+# ── qr photo upload ──────────────────────────────────────────────────────────
+
+@router.post("/{expense_id}/qr", response_model=ExpenseResponse)
+async def upload_qr(
+    expense_id: uuid.UUID,
+    file: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id, Expense.is_active == True)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+
+    if not current_user.has_role(*_ACCOUNTANT_ROLES) and expense.created_by != current_user.id:
+        raise HTTPException(403, "Access denied")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(422, "File too large (max 10 MB)")
+
+    mime = file.content_type or ""
+    if mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(422, f"File type not allowed: {mime}")
+
+    dest_dir = UPLOADS_DIR / "expenses" / str(expense_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "file").suffix.lower() or ".bin"
+    stored_name = f"qr_{uuid.uuid4()}{ext}"
+    (dest_dir / stored_name).write_bytes(content)
+
+    if expense.qr_url:
+        old = UPLOADS_DIR / expense.qr_url
+        if old.exists():
+            old.unlink()
+
+    expense.qr_url = f"expenses/{expense_id}/{stored_name}"
+    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
+                      {"qr_uploaded": file.filename})
+    await db.commit()
+    return await _load_expense(db, expense.id)
+
+
+@router.delete("/{expense_id}/qr", status_code=204)
+async def delete_qr(
+    expense_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id, Expense.is_active == True)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+
+    if expense.qr_url:
+        old = UPLOADS_DIR / expense.qr_url
+        if old.exists():
+            old.unlink()
+        expense.qr_url = None
+        await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
+                          {"qr_deleted": True})
+        await db.commit()
 
 
 # ── history ────────────────────────────────────────────────────────────────────
