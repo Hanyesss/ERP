@@ -199,7 +199,14 @@
     "new_site_login": "新登录名（可选）",
     "new_site_password": "新密码（最少8位）",
     "site_credentials_updated": "网站登录名/密码已更新",
-    "site_account_error": "错误：{{error}}"
+    "site_account_error": "错误：{{error}}",
+    "partner_deleted": "合伙人已删除",
+    "partner_link_title": "绑定合伙人",
+    "partner_link_desc": "客户所有现有订单将对合伙人「{{name}}」可见。",
+    "partner_unlink_title": "解绑合伙人",
+    "partner_unlink_desc": "客户将与「{{name}}」解绑，所有订单将失去合伙人关联。",
+    "partner_change_title": "更换合伙人",
+    "partner_change_desc": "客户所有订单将从「{{from}}」转至「{{to}}」，合伙佣金将重新计算。此操作不可自动撤销。"
   },
   "order": {
     "title": "订单",
@@ -559,7 +566,9 @@
     "receipt_replace": "替换收据",
     "receipt_uploaded": "收据已上传",
     "receipt_delete": "删除收据",
-    "receipt_view": "查看收据"
+    "receipt_view": "查看收据",
+    "remaining_label": "余额",
+    "over_budget": "⚠ 超出金额"
   },
   "tab_payments": "付款",
   "expense": {
@@ -636,7 +645,14 @@
     "no_expenses": "该订单暂无费用",
     "total": "费用合计",
     "cash_register": "扣款账户",
-    "select_cash_register": "选择账户"
+    "select_cash_register": "选择账户",
+    "cash_deduction": "从账户扣除",
+    "qr_title": "收款QR码",
+    "qr_upload": "上传QR码",
+    "qr_replace": "替换QR码",
+    "qr_delete_confirm": "删除QR码？",
+    "qr_uploaded": "QR码已上传",
+    "qr_not_uploaded": "未上传QR码"
   },
   "warehouse": {
     "title": "仓库",

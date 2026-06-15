@@ -145,7 +145,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
             {!!oldPartnerId && !currentPartnerInList && (
               <div style={{ marginBottom: 8 }}>
                 <Tag icon={<WarningOutlined />} color="error">
-                  Партнёр удалён: {deletedPartnerName ?? oldPartnerId}
+                  {t("counterparty.partner_deleted")}: {deletedPartnerName ?? oldPartnerId}
                 </Tag>
               </div>
             )}
@@ -166,8 +166,8 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message="Привязка партнёра"
-                    description={`Все существующие заказы клиента станут видны партнёру «${newPartnerName}».`}
+                    message={t("counterparty.partner_link_title")}
+                    description={t("counterparty.partner_link_desc", { name: newPartnerName })}
                   />
                 );
               }
@@ -175,28 +175,28 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
               if (oldPartnerId && !newPartnerId) {
                 const oldName = currentPartnerInList
                   ? (partnerOptions.find(p => p.value === oldPartnerId)?.label ?? "—")
-                  : (deletedPartnerName ?? "удалённый партнёр");
+                  : (deletedPartnerName ?? t("counterparty.partner_deleted").toLowerCase());
                 return (
                   <Alert
                     type="warning"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message="Отвязка партнёра"
-                    description={`Клиент будет отвязан от «${oldName}». Все его заказы потеряют партнёрскую привязку.`}
+                    message={t("counterparty.partner_unlink_title")}
+                    description={t("counterparty.partner_unlink_desc", { name: oldName })}
                   />
                 );
               }
               // Сценарий 3: смена одного партнёра на другого (включая случай удалённого → нового)
               const oldName = currentPartnerInList
                 ? (partnerOptions.find(p => p.value === oldPartnerId)?.label ?? "—")
-                : (deletedPartnerName ?? "удалённый партнёр");
+                : (deletedPartnerName ?? t("counterparty.partner_deleted").toLowerCase());
               return (
                 <Alert
                   type="warning"
                   showIcon
                   style={{ marginBottom: 16 }}
-                  message="Смена партнёра"
-                  description={`Все заказы клиента перейдут от «${oldName}» к «${newPartnerName}». Партнёрские комиссии пересчитаются. Это действие нельзя отменить автоматически.`}
+                  message={t("counterparty.partner_change_title")}
+                  description={t("counterparty.partner_change_desc", { from: oldName, to: newPartnerName })}
                 />
               );
             })()}

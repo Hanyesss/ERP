@@ -453,14 +453,14 @@ export default function ExpenseFormPage({ user }: Props) {
                       allowClear
                     />
                   </Form.Item>
-                  <Form.Item label="QR для получения платежа">
+                  <Form.Item label={t("expense.qr_title")}>
                     <Space>
                       <Button
                         icon={<UploadOutlined />}
                         size="small"
                         onClick={() => qrInputRef.current?.click()}
                       >
-                        {pendingQrPhoto ? "Заменить QR" : "Загрузить QR"}
+                        {pendingQrPhoto ? t("expense.qr_replace") : t("expense.qr_upload")}
                       </Button>
                       {pendingQrPhoto && (
                         <>

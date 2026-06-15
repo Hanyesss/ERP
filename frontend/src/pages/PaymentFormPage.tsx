@@ -466,7 +466,7 @@ export default function PaymentFormPage() {
                     <strong
                       style={{ color: totalAllocated > amountCny ? "#cf1322" : "#389e0d" }}
                     >
-                      {totalAllocated > amountCny ? "⚠ превышение" : `остаток: ${fmtCny(amountCny - totalAllocated)}`}
+                      {totalAllocated > amountCny ? t("payment.over_budget") : `${t("payment.remaining_label")}: ${fmtCny(amountCny - totalAllocated)}`}
                     </strong>
                   </Table.Summary.Cell>
                 </Table.Summary.Row>

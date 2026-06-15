@@ -168,7 +168,14 @@
     "new_site_login": "Новый логин (необязательно)",
     "new_site_password": "Новый пароль (мин. 8 знаков)",
     "site_credentials_updated": "Логин/пароль на сайте обновлены",
-    "site_account_error": "Ошибка: {{error}}"
+    "site_account_error": "Ошибка: {{error}}",
+    "partner_deleted": "Партнёр удалён",
+    "partner_link_title": "Привязка партнёра",
+    "partner_link_desc": "Все существующие заказы клиента станут видны партнёру «{{name}}».",
+    "partner_unlink_title": "Отвязка партнёра",
+    "partner_unlink_desc": "Клиент будет отвязан от «{{name}}». Все его заказы потеряют партнёрскую привязку.",
+    "partner_change_title": "Смена партнёра",
+    "partner_change_desc": "Все заказы клиента перейдут от «{{from}}» к «{{to}}». Партнёрские комиссии пересчитаются. Это действие нельзя отменить автоматически."
   },
   "order": {
     "title": "Заказы",
@@ -528,7 +535,9 @@
     "receipt_replace": "Заменить чек",
     "receipt_uploaded": "Чек загружен",
     "receipt_delete": "Удалить чек",
-    "receipt_view": "Открыть чек"
+    "receipt_view": "Открыть чек",
+    "remaining_label": "остаток",
+    "over_budget": "⚠ превышение"
   },
   "tab_payments": "Платежи",
   "expense": {
@@ -605,7 +614,14 @@
     "no_expenses": "Нет расходов по этому заказу",
     "total": "Итого расходов",
     "cash_register": "Счёт списания",
-    "select_cash_register": "Выберите счёт"
+    "select_cash_register": "Выберите счёт",
+    "cash_deduction": "К списанию с кассы",
+    "qr_title": "QR для получения платежа",
+    "qr_upload": "Загрузить QR",
+    "qr_replace": "Заменить QR",
+    "qr_delete_confirm": "Удалить QR?",
+    "qr_uploaded": "QR загружен",
+    "qr_not_uploaded": "QR не загружен"
   },
   "warehouse": {
     "title": "Склады",

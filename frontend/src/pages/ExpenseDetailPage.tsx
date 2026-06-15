@@ -116,7 +116,7 @@ export default function ExpenseDetailPage({ user }: Props) {
 
   const qrMutation = useMutation({
     mutationFn: (file: File) => uploadQrPhoto(id!, file),
-    onSuccess: () => { message.success("QR загружен"); invalidate(); },
+    onSuccess: () => { message.success(t("expense.qr_uploaded")); invalidate(); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -249,18 +249,18 @@ export default function ExpenseDetailPage({ user }: Props) {
           {/* QR для получения платежа */}
           <Card
             size="small"
-            title="QR для получения платежа"
+            title={t("expense.qr_title")}
             style={{ marginBottom: 16 }}
             extra={
               <Space>
                 <Upload customRequest={handleQrUpload} showUploadList={false} accept=".jpg,.jpeg,.png,.webp">
                   <Button icon={<UploadOutlined />} size="small" loading={qrMutation.isPending}>
-                    {expense.qr_url ? "Заменить" : "Загрузить"}
+                    {expense.qr_url ? t("expense.qr_replace") : t("expense.qr_upload")}
                   </Button>
                 </Upload>
                 {expense.qr_url && (
                   <Popconfirm
-                    title="Удалить QR?"
+                    title={t("expense.qr_delete_confirm")}
                     onConfirm={() => deleteQrMutation.mutate()}
                     okText={t("common.yes")}
                     cancelText={t("common.no")}
@@ -280,7 +280,7 @@ export default function ExpenseDetailPage({ user }: Props) {
                 />
               </a>
             ) : (
-              <Text type="secondary">QR не загружен</Text>
+              <Text type="secondary">{t("expense.qr_not_uploaded")}</Text>
             )}
           </Card>
 
