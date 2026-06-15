@@ -544,6 +544,7 @@
     "filter_unallocated": "未关联",
     "alloc_order": "订单",
     "alloc_purchase": "采购单",
+    "alloc_order_num": "订单号",
     "alloc_amount": "人民币金额",
     "add_allocation": "添加关联",
     "no_payments": "暂无付款",

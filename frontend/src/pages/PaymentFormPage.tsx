@@ -28,6 +28,7 @@ const fmtCny = (v: number | string) =>
 interface AllocRow {
   id: string;
   label: string;
+  order_number?: string;
   total_cny: number;
   paid_cny: number;
   remaining_cny: number;
@@ -130,6 +131,7 @@ export default function PaymentFormPage() {
         .map((p: any) => ({
           id: p.id,
           label: `${p.purchase_number}`,
+          order_number: p.order_number || undefined,
           total_cny: Number(p.total_amount_cny),
           paid_cny: Number(p.paid_amount_cny ?? 0),
           remaining_cny: Number(p.remaining_amount_cny ?? p.total_amount_cny),
@@ -217,6 +219,12 @@ export default function PaymentFormPage() {
       dataIndex: "label",
       key: "label",
     },
+    ...(direction === "out" ? [{
+      title: t("payment.alloc_order_num"),
+      dataIndex: "order_number",
+      key: "order_num",
+      render: (v: string | undefined) => v || "—",
+    }] : []),
     {
       title: `${t("payment.total")} CNY`,
       dataIndex: "total_cny",
@@ -459,10 +467,10 @@ export default function PaymentFormPage() {
               columns={allocColumns}
               summary={() => (
                 <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={3} align="right">
+                  <Table.Summary.Cell index={0} colSpan={direction === "out" ? 4 : 3} align="right">
                     <strong>{t("payment.allocated")}: {fmtCny(totalAllocated)} / {fmtCny(amountCny)} CNY</strong>
                   </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right">
+                  <Table.Summary.Cell index={direction === "out" ? 4 : 3} align="right">
                     <strong
                       style={{ color: totalAllocated > amountCny ? "#cf1322" : "#389e0d" }}
                     >

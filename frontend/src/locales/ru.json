@@ -512,6 +512,7 @@
     "filter_unallocated": "Без привязки",
     "alloc_order": "Заказ",
     "alloc_purchase": "Закупка",
+    "alloc_order_num": "Номер заказа",
     "alloc_amount": "Сумма CNY",
     "add_allocation": "Добавить привязку",
     "no_payments": "Нет платежей",
