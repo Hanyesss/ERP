@@ -53,13 +53,14 @@ export default function ByClientReport() {
       (acc, row) => ({
         revenue: acc.revenue + Number(row.revenue),
         paid: acc.paid + Number(row.paid),
+        unallocated_cny: acc.unallocated_cny + Number(row.unallocated_cny ?? 0),
         cogs: acc.cogs + Number(row.cogs),
         direct_expenses: acc.direct_expenses + Number(row.direct_expenses),
         client_expenses: acc.client_expenses + Number(row.client_expenses),
         net_profit: acc.net_profit + Number(row.net_profit),
         balance: acc.balance + Number(row.balance),
       }),
-      { revenue: 0, paid: 0, cogs: 0, direct_expenses: 0, client_expenses: 0, net_profit: 0, balance: 0 }
+      { revenue: 0, paid: 0, unallocated_cny: 0, cogs: 0, direct_expenses: 0, client_expenses: 0, net_profit: 0, balance: 0 }
     );
   }, [data]);
 
@@ -96,6 +97,15 @@ export default function ByClientReport() {
       render: (v, r: any) => r.client_id === "__total__" ? <Text strong>{fmtCny(v)}</Text> : fmtCny(v),
     },
     { title: t("payment.paid"), dataIndex: "paid", key: "paid", align: "right", render: (v) => fmtCny(v) },
+    {
+      title: t("payment.unallocated"),
+      dataIndex: "unallocated_cny",
+      key: "unallocated_cny",
+      align: "right",
+      render: (v: number) => Number(v) > 0
+        ? <Text style={{ color: "#faad14" }}>{fmtCny(v)}</Text>
+        : <Text type="secondary">—</Text>,
+    },
     { title: t("report.cogs"), dataIndex: "cogs", key: "cogs", align: "right", render: (v) => fmtCny(v) },
     { title: t("report.direct_expenses"), dataIndex: "direct_expenses", key: "direct_expenses", align: "right", render: (v) => fmtCny(v) },
     { title: t("report.client_expenses"), dataIndex: "client_expenses", key: "client_expenses", align: "right", render: (v) => fmtCny(v) },

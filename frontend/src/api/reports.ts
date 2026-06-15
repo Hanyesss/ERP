@@ -27,6 +27,7 @@ export interface ByClientRow {
   client_name: string;
   revenue: number;
   paid: number;
+  unallocated_cny: number;
   cogs: number;
   direct_expenses: number;
   client_expenses: number;
@@ -56,6 +57,7 @@ export interface ClientDetailData {
   total_cogs: number;
   total_direct_expenses: number;
   total_paid: number;
+  unallocated_cny: number;
   total_profit: number;
   balance: number;
 }

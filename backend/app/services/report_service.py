@@ -171,6 +171,7 @@ async def get_by_client(
             "client_name": row[1],
             "revenue": row[2] or Decimal("0"),
             "paid": Decimal("0"),
+            "allocated": Decimal("0"),
             "cogs": Decimal("0"),
             "direct_expenses": Decimal("0"),
             "client_expenses": Decimal("0"),
@@ -201,6 +202,26 @@ async def get_by_client(
     for row in pay_rows.all():
         if row[0] in client_data:
             client_data[row[0]]["paid"] = row[1] or Decimal("0")
+
+    # Allocated per client (sum of PaymentAllocation for their orders)
+    alloc_rows = await db.execute(
+        select(
+            Order.client_id,
+            func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")).label("alloc_cny"),
+        )
+        .join(PaymentAllocation, PaymentAllocation.order_id == Order.id)
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(
+            Order.client_id.in_(client_ids),
+            Payment.is_active == True,
+            Payment.payment_date >= date_from,
+            Payment.payment_date <= date_to,
+        )
+        .group_by(Order.client_id)
+    )
+    for row in alloc_rows.all():
+        if row[0] in client_data:
+            client_data[row[0]]["allocated"] = row[1] or Decimal("0")
 
     # COGS per client
     orders_subq = (
@@ -274,6 +295,8 @@ async def get_by_client(
         direct_exp = cd["direct_expenses"]
         client_exp = cd["client_expenses"]
         paid = cd["paid"]
+        allocated = cd["allocated"]
+        unallocated = max(paid - allocated, Decimal("0"))
         net_profit = revenue - cogs - direct_exp - client_exp
         # positive = overpayment/credit, negative = debt
         balance = paid - revenue
@@ -282,6 +305,7 @@ async def get_by_client(
             "client_name": cd["client_name"],
             "revenue": revenue,
             "paid": paid,
+            "unallocated_cny": unallocated,
             "cogs": cogs,
             "direct_expenses": direct_exp,
             "client_expenses": client_exp,
@@ -571,6 +595,7 @@ async def get_client_detail(
         )
     )
     total_incoming = total_incoming_row.scalar_one() or Decimal("0")
+    unallocated_cny = max(total_incoming - total_paid, Decimal("0"))
 
     total_profit = (total_revenue - total_cogs - total_direct_exp) - client_expenses
     balance = total_incoming - total_revenue
@@ -584,6 +609,7 @@ async def get_client_detail(
         "total_cogs": total_cogs,
         "total_direct_expenses": total_direct_exp,
         "total_paid": total_incoming,
+        "unallocated_cny": unallocated_cny,
         "total_profit": total_profit,
         "balance": balance,
     }

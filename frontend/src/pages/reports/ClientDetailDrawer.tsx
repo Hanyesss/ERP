@@ -137,6 +137,13 @@ export default function ClientDetailDrawer({ clientId, clientName, dateFrom, dat
                 {fmtCny(Math.abs(balance))}
               </Text>
             </Descriptions.Item>
+            {Number(data?.unallocated_cny ?? 0) > 0 && (
+              <Descriptions.Item label={t("payment.unallocated")}>
+                <Text strong style={{ color: "#faad14" }}>
+                  {fmtCny(Number(data!.unallocated_cny))}
+                </Text>
+              </Descriptions.Item>
+            )}
           </Descriptions>
 
           <div style={{ overflowX: "auto" }}>
