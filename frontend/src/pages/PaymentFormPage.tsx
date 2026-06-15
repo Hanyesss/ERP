@@ -227,7 +227,7 @@ export default function PaymentFormPage() {
         try {
           await uploadPaymentReceipt(paymentId, file);
         } catch {
-          message.warning(`${file.name} — ошибка загрузки, добавьте вручную`);
+          message.warning(`${file.name} — ${t("payment.upload_error")}`);
         }
       }
       message.success("✓");
@@ -247,7 +247,7 @@ export default function PaymentFormPage() {
     // "Use client balance" mode: allocate from existing payment, don't create new one
     if (useClientBalance && direction === "in") {
       if (!selectedUnallocatedPay) {
-        message.error("Нет нераспределённого остатка");
+        message.error(t("payment.no_unallocated_balance"));
         return;
       }
       if (allocations.length === 0) {
@@ -409,7 +409,7 @@ export default function PaymentFormPage() {
                   <Select
                     options={cashOptions}
                     placeholder={t("cash.select_register")}
-                    notFoundContent={<span style={{ color: "#aaa" }}>Нет касс с валютой {selectedCurrency}</span>}
+                    notFoundContent={<span style={{ color: "#aaa" }}>{t("payment.no_register_for_currency", { currency: selectedCurrency })}</span>}
                   />
                 </Form.Item>
               </Col>
@@ -612,8 +612,8 @@ export default function PaymentFormPage() {
           <Card style={{ marginBottom: 16 }}>
             <Text type="secondary">
               {direction === "in"
-                ? "Нет неоплаченных заказов для этого клиента. Платёж будет сохранён как аванс."
-                : "Нет неоплаченных закупок для этого поставщика. Платёж будет сохранён как аванс."}
+                ? t("payment.no_unpaid_orders")
+                : t("payment.no_unpaid_purchases")}
             </Text>
           </Card>
         )}

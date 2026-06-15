@@ -79,8 +79,8 @@ async def _recalc_order_payment_status(db: AsyncSession, order_id: uuid.UUID) ->
 
     total = order.total_sale_cny or Decimal("0")
     remaining = total - paid_cny
-    # Допуск 5 CNY — курсовая погрешность при конвертации USDT/USD → CNY
-    TOLERANCE = Decimal("5")
+    # Tolerance = 0.5% of order total or 5 CNY minimum (covers FX rounding on RUB/USDT conversions)
+    TOLERANCE = max(total * Decimal("0.005"), Decimal("5"))
     if paid_cny <= 0:
         order.payment_status = PaymentStatus.unpaid
     elif remaining <= TOLERANCE:
@@ -250,6 +250,24 @@ async def _apply_allocations(
             if order.client_id != payment.counterparty_id:
                 raise HTTPException(
                     422, f"Order {order.order_number} does not belong to the selected client"
+                )
+            # Guard: total allocations from ALL payments must not exceed order amount
+            other_alloc = (await db.execute(
+                select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
+                .join(Payment, PaymentAllocation.payment_id == Payment.id)
+                .where(
+                    PaymentAllocation.order_id == alloc.order_id,
+                    PaymentAllocation.payment_id != payment.id,
+                    Payment.is_active == True,
+                )
+            )).scalar_one() or Decimal("0")
+            order_total = order.total_sale_cny or Decimal("0")
+            order_tolerance = max(order_total * Decimal("0.005"), Decimal("5"))
+            if other_alloc + alloc.amount_cny > order_total + order_tolerance:
+                raise HTTPException(
+                    422,
+                    f"Order {order.order_number}: allocation would exceed order amount "
+                    f"({other_alloc + alloc.amount_cny:.2f} > {order_total:.2f} CNY)"
                 )
             db.add(PaymentAllocation(
                 id=uuid.uuid4(),
@@ -849,8 +867,14 @@ async def delete_payment(
             "payment_id": str(payment_id),
         })
 
-    # Recalculate affected statuses
+    # Recalculate affected statuses (must happen before deleting allocations
+    # so _recalc_all_for_payment knows which orders/purchases to touch)
     await _recalc_all_for_payment(db, payment)
+
+    # Remove allocations that are now dead (payment is inactive)
+    await db.execute(delete(PaymentAllocation).where(PaymentAllocation.payment_id == payment_id))
+    await db.execute(delete(PurchasePaymentLink).where(PurchasePaymentLink.payment_id == payment_id))
+    await db.flush()
 
     await write_audit(
         db, current_user.id, "payment", payment.id, AuditActionEnum.delete,
@@ -869,6 +893,7 @@ async def add_allocations(
 ):
     payment = (await db.execute(
         select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+        .with_for_update()
     )).scalar_one_or_none()
     if not payment:
         raise HTTPException(404, "Payment not found")
