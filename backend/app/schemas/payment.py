@@ -123,6 +123,9 @@ class UnallocatedPaymentItem(BaseModel):
     currency: str
     amount_cny: Decimal
     unallocated_cny: Decimal
+    cash_register_id: Optional[uuid.UUID] = None
+    cash_register_name: Optional[str] = None
+    cash_register_currency: Optional[str] = None
 
 
 class CounterpartyBalance(BaseModel):

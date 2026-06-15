@@ -514,6 +514,8 @@
     "alloc_purchase": "Закупка",
     "alloc_order_num": "Номер заказа",
     "unallocated_balance_warning": "У клиента есть нераспределённый остаток {{amount}} CNY.",
+    "use_client_balance": "Использовать остаток клиента",
+    "debit_register": "Касса списания",
     "distribute_balance": "Распределить",
     "distribute_confirm": "Применить",
     "select_payment": "Платёж",

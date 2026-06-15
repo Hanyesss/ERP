@@ -48,6 +48,9 @@ export interface UnallocatedPaymentItem {
   currency: string;
   amount_cny: number;
   unallocated_cny: number;
+  cash_register_id: string | null;
+  cash_register_name: string | null;
+  cash_register_currency: string | null;
 }
 
 export interface CounterpartyBalanceData {

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Form, Input, Select, DatePicker, Button, Card, Typography,
   Space, Row, Col, InputNumber, Radio, Table, Alert, Divider,
-  Upload, message, Statistic, Modal,
+  Upload, message, Statistic, Modal, Checkbox,
 } from "antd";
 import { UploadOutlined, FileOutlined } from "@ant-design/icons";
 import type { UploadRequestOption } from "rc-upload/lib/interface";
@@ -56,6 +56,9 @@ export default function PaymentFormPage() {
   const [distributeOrderId, setDistributeOrderId] = useState<string | undefined>();
   const [distributeAmount, setDistributeAmount] = useState<number>(0);
   const [distributing, setDistributing] = useState(false);
+  const [useClientBalance, setUseClientBalance] = useState(false);
+  const [debitRegisterId, setDebitRegisterId] = useState<string | undefined>();
+  const [balanceRate, setBalanceRate] = useState<number>(1);
 
   const paymentDate: dayjs.Dayjs | null = Form.useWatch("payment_date", form);
   const selectedCurrency: string = Form.useWatch("currency", form) || "CNY";
@@ -163,6 +166,25 @@ export default function PaymentFormPage() {
     [allocRows]
   );
 
+  // When using client balance: pick the payment and derive debit register currency
+  const selectedUnallocatedPay = useMemo(() => {
+    if (!counterpartyBalance?.unallocated_payments) return null;
+    return counterpartyBalance.unallocated_payments[0] ?? null;
+  }, [counterpartyBalance]);
+
+  const debitRegCurrency = useMemo(() => {
+    if (!debitRegisterId) return null;
+    const cr = cashRegisters.find((r: any) => r.id === debitRegisterId);
+    return cr?.currency ?? null;
+  }, [debitRegisterId, cashRegisters]);
+
+  const debitRegOptions = useMemo(() => {
+    return (cashRegisters as any[]).filter(r => r.is_active).map((r: any) => ({
+      value: r.id,
+      label: `${r.name} (${r.currency})`,
+    }));
+  }, [cashRegisters]);
+
   const handleDistribute = async () => {
     if (!distributePaymentId || !distributeOrderId || distributeAmount <= 0) return;
     setDistributing(true);
@@ -214,13 +236,38 @@ export default function PaymentFormPage() {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = async (values: any) => {
     const allocations: AllocationInput[] = allocRows
       .filter(r => r.alloc_amount > 0)
       .map(r => ({
         [direction === "in" ? "order_id" : "purchase_id"]: r.id,
         amount_cny: r.alloc_amount,
       }));
+
+    // "Use client balance" mode: allocate from existing payment, don't create new one
+    if (useClientBalance && direction === "in") {
+      if (!selectedUnallocatedPay) {
+        message.error("Нет нераспределённого остатка");
+        return;
+      }
+      if (allocations.length === 0) {
+        message.error("Выберите заказ(ы) для распределения");
+        return;
+      }
+      const totalToAlloc = allocations.reduce((s, a) => s + Number(a.amount_cny), 0);
+      if (totalToAlloc > Number(selectedUnallocatedPay.unallocated_cny) + 0.01) {
+        message.error(`Сумма распределений (${fmtCny(totalToAlloc)}) превышает остаток (${fmtCny(Number(selectedUnallocatedPay.unallocated_cny))})`);
+        return;
+      }
+      try {
+        await addAllocations(selectedUnallocatedPay.payment_id, allocations);
+        message.success("✓");
+        navigate(backUrl);
+      } catch (e: any) {
+        message.error(e.response?.data?.detail || "Error");
+      }
+      return;
+    }
 
     if (totalAllocated > amountCny + 0.01) {
       message.error(`Сумма распределений (${fmtCny(totalAllocated)}) превышает сумму платежа (${fmtCny(amountCny)})`);
@@ -351,79 +398,120 @@ export default function PaymentFormPage() {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="cash_register_id"
-                label={t("cash.register")}
-                rules={[{ required: true, message: t("cash.select_register") }]}
-              >
-                <Select
-                  options={cashOptions}
-                  placeholder={t("cash.select_register")}
-                  notFoundContent={<span style={{ color: "#aaa" }}>Нет касс с валютой {selectedCurrency}</span>}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item name="amount" label={t("payment.amount")} rules={[{ required: true }]}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  min={0}
-                  step={0.01}
-                  onChange={v => setAmount(v ?? 0)}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="rate_to_cny" label={t("payment.rate_to_cny")} rules={[{ required: true }]}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  min={0}
-                  step={0.00001}
-                  precision={8}
-                  disabled={currency === "CNY"}
-                  onChange={v => setRateToCny(v ?? 1)}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label={`${t("payment.amount_cny")} (CNY)`}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  value={amountCny}
-                  disabled
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {currency === "USDT" && (
+          {!useClientBalance && (
             <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item name="network_fee" label={t("payment.network_fee")}>
-                  <InputNumber style={{ width: "100%" }} min={0} step={0.01} />
+              <Col span={12}>
+                <Form.Item
+                  name="cash_register_id"
+                  label={t("cash.register")}
+                  rules={[{ required: !useClientBalance, message: t("cash.select_register") }]}
+                >
+                  <Select
+                    options={cashOptions}
+                    placeholder={t("cash.select_register")}
+                    notFoundContent={<span style={{ color: "#aaa" }}>Нет касс с валютой {selectedCurrency}</span>}
+                  />
                 </Form.Item>
               </Col>
             </Row>
           )}
 
-          {missingRate && (
-            <Alert
-              type="warning"
-              showIcon
-              message={`Нет курса ${currency} на ${dateStr}. Введите курс вручную или добавьте в разделе «Курсы валют».`}
-              style={{ marginBottom: 16 }}
-            />
+          {!useClientBalance && (
+            <>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="amount" label={t("payment.amount")} rules={[{ required: !useClientBalance }]}>
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      step={0.01}
+                      onChange={v => setAmount(v ?? 0)}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="rate_to_cny" label={t("payment.rate_to_cny")} rules={[{ required: !useClientBalance }]}>
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      step={0.00001}
+                      precision={8}
+                      disabled={currency === "CNY"}
+                      onChange={v => setRateToCny(v ?? 1)}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label={`${t("payment.amount_cny")} (CNY)`}>
+                    <InputNumber style={{ width: "100%" }} value={amountCny} disabled />
+                  </Form.Item>
+                </Col>
+              </Row>
+              {currency === "USDT" && (
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <Form.Item name="network_fee" label={t("payment.network_fee")}>
+                      <InputNumber style={{ width: "100%" }} min={0} step={0.01} />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )}
+              {missingRate && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={`Нет курса ${currency} на ${dateStr}. Введите курс вручную или добавьте в разделе «Курсы валют».`}
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+            </>
+          )}
+
+          {/* Use client balance: debit register + optional rate */}
+          {useClientBalance && direction === "in" && (
+            <>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label={t("payment.debit_register")} required>
+                    <Select
+                      options={debitRegOptions}
+                      placeholder={t("cash.select_register")}
+                      value={debitRegisterId}
+                      onChange={v => { setDebitRegisterId(v); setBalanceRate(1); }}
+                    />
+                  </Form.Item>
+                </Col>
+                {debitRegCurrency && debitRegCurrency !== "CNY" && (
+                  <Col span={12}>
+                    <Form.Item label={`${t("payment.rate_to_cny")} (${debitRegCurrency} → CNY)`} required>
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        min={0}
+                        step={0.00001}
+                        precision={8}
+                        value={balanceRate}
+                        onChange={v => setBalanceRate(v ?? 1)}
+                      />
+                    </Form.Item>
+                  </Col>
+                )}
+              </Row>
+              {selectedUnallocatedPay && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message={`${t("payment.from_payment")}: ${selectedUnallocatedPay.payment_date} ${fmtCny(Number(selectedUnallocatedPay.unallocated_cny))} CNY`}
+                />
+              )}
+            </>
           )}
 
           <Form.Item name="notes" label={t("payment.notes")}>
             <Input.TextArea rows={2} />
           </Form.Item>
 
+          {!useClientBalance && (
           <Form.Item label={t("payment.receipt")}>
             <Space direction="vertical" style={{ width: "100%" }}>
               {receiptFiles.length < 10 && (
@@ -476,9 +564,10 @@ export default function PaymentFormPage() {
               )}
             </Space>
           </Form.Item>
+          )}
         </Card>
 
-        {/* Unallocated balance warning + distribute button */}
+        {/* Unallocated balance warning + distribute button + use-balance checkbox */}
         {direction === "in" && counterpartyBalance && Number(counterpartyBalance.unallocated_cny) > 0 && (
           <Alert
             type="warning"
@@ -487,24 +576,23 @@ export default function PaymentFormPage() {
             message={t("payment.unallocated_balance_warning", {
               amount: fmtCny(Number(counterpartyBalance.unallocated_cny)),
             })}
-            action={
-              <Button
-                size="small"
-                type="primary"
-                onClick={() => {
-                  const firstPay = counterpartyBalance.unallocated_payments[0];
-                  if (firstPay) {
-                    setDistributePaymentId(firstPay.payment_id);
-                    setDistributeAmount(0);
-                    setDistributeOrderId(undefined);
-                    setDistributeOpen(true);
-                  }
-                }}
-              >
-                {t("payment.distribute_balance")}
-              </Button>
-            }
           />
+        )}
+
+        {/* Use client balance checkbox */}
+        {direction === "in" && counterpartyBalance && Number(counterpartyBalance.unallocated_cny) > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <Checkbox
+              checked={useClientBalance}
+              onChange={e => {
+                setUseClientBalance(e.target.checked);
+                setDebitRegisterId(undefined);
+                setBalanceRate(1);
+              }}
+            >
+              {t("payment.use_client_balance")}
+            </Checkbox>
+          </div>
         )}
 
         {/* Allocations */}
@@ -527,13 +615,20 @@ export default function PaymentFormPage() {
               summary={() => (
                 <Table.Summary.Row>
                   <Table.Summary.Cell index={0} colSpan={direction === "out" ? 4 : 3} align="right">
-                    <strong>{t("payment.allocated")}: {fmtCny(totalAllocated)} / {fmtCny(amountCny)} CNY</strong>
+                    <strong>
+                      {t("payment.allocated")}: {fmtCny(totalAllocated)} / {fmtCny(useClientBalance ? Number(selectedUnallocatedPay?.unallocated_cny ?? 0) : amountCny)} CNY
+                    </strong>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={direction === "out" ? 4 : 3} align="right">
                     <strong
-                      style={{ color: totalAllocated > amountCny ? "#cf1322" : "#389e0d" }}
+                      style={{ color: totalAllocated > (useClientBalance ? Number(selectedUnallocatedPay?.unallocated_cny ?? 0) : amountCny) ? "#cf1322" : "#389e0d" }}
                     >
-                      {totalAllocated > amountCny ? t("payment.over_budget") : `${t("payment.remaining_label")}: ${fmtCny(amountCny - totalAllocated)}`}
+                      {(() => {
+                        const cap = useClientBalance ? Number(selectedUnallocatedPay?.unallocated_cny ?? 0) : amountCny;
+                        return totalAllocated > cap
+                          ? t("payment.over_budget")
+                          : `${t("payment.remaining_label")}: ${fmtCny(cap - totalAllocated)}`;
+                      })()}
                     </strong>
                   </Table.Summary.Cell>
                 </Table.Summary.Row>

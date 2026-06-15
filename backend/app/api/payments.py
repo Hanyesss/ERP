@@ -970,16 +970,19 @@ async def get_counterparty_payment_balance(
 ):
     from app.schemas.payment import UnallocatedPaymentItem
 
-    # All incoming payments for this client
-    payments = (await db.execute(
-        select(Payment)
+    # All incoming payments for this client with cash register info
+    pay_rows = (await db.execute(
+        select(Payment, CashRegister)
+        .outerjoin(CashRegister, Payment.cash_register_id == CashRegister.id)
         .where(
             Payment.counterparty_id == counterparty_id,
             Payment.is_active == True,
             Payment.direction == "in",
         )
         .order_by(Payment.payment_date.desc())
-    )).scalars().all()
+    )).all()
+    payments = [r[0] for r in pay_rows]
+    reg_map: dict = {r[0].id: r[1] for r in pay_rows}
 
     total_paid = sum(p.amount_cny for p in payments) or Decimal("0")
 
@@ -1006,6 +1009,7 @@ async def get_counterparty_payment_balance(
         alloc = alloc_map.get(p.id, Decimal("0"))
         unalloc = max(paid - alloc, Decimal("0"))
         if unalloc > Decimal("0.01"):
+            reg = reg_map.get(p.id)
             unallocated_payments.append(UnallocatedPaymentItem(
                 payment_id=p.id,
                 payment_date=str(p.payment_date),
@@ -1013,6 +1017,9 @@ async def get_counterparty_payment_balance(
                 currency=p.currency.value if hasattr(p.currency, 'value') else str(p.currency),
                 amount_cny=paid,
                 unallocated_cny=unalloc,
+                cash_register_id=reg.id if reg else None,
+                cash_register_name=reg.name if reg else None,
+                cash_register_currency=reg.currency if reg else None,
             ))
 
     return CounterpartyBalance(

@@ -546,6 +546,8 @@
     "alloc_purchase": "采购单",
     "alloc_order_num": "订单号",
     "unallocated_balance_warning": "该客户有未分配余额 {{amount}} CNY。",
+    "use_client_balance": "使用客户余额",
+    "debit_register": "支出收银台",
     "distribute_balance": "分配",
     "distribute_confirm": "确认",
     "select_payment": "付款",
