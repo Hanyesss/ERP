@@ -114,3 +114,10 @@ class PurchasePaymentBalance(BaseModel):
     paid_cny: Decimal
     remaining_cny: Decimal
     payment_status: str
+
+
+class CounterpartyBalance(BaseModel):
+    counterparty_id: uuid.UUID
+    total_paid_cny: Decimal
+    total_allocated_cny: Decimal
+    unallocated_cny: Decimal

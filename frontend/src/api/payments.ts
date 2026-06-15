@@ -41,6 +41,11 @@ export const getOrderPaymentBalance = (orderId: string) =>
 export const getPurchasePaymentBalance = (purchaseId: string) =>
   apiClient.get<PurchasePaymentBalance>(`/api/payments/balance/purchase/${purchaseId}`);
 
+export const getCounterpartyBalance = (counterpartyId: string) =>
+  apiClient.get<{ counterparty_id: string; total_paid_cny: number; total_allocated_cny: number; unallocated_cny: number }>(
+    `/api/payments/balance/counterparty/${counterpartyId}`
+  );
+
 export const getPaymentsForOrder = (orderId: string) =>
   apiClient.get<any[]>(`/api/payments/for-order/${orderId}`);
 

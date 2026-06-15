@@ -10,7 +10,7 @@ import type { UploadRequestOption } from "rc-upload/lib/interface";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { createPayment, uploadPaymentReceipt } from "../api/payments";
+import { createPayment, uploadPaymentReceipt, getCounterpartyBalance } from "../api/payments";
 import { compressImage } from "../utils/compressImage";
 import { getCashRegisters } from "../api/cashRegisters";
 import { getOrders } from "../api/orders";
@@ -109,6 +109,12 @@ export default function PaymentFormPage() {
     queryKey: ["purchases-for-payment", counterpartyId],
     queryFn: () => getPurchases({ supplier_id: counterpartyId, page_size: 100 }).then(r => r.data),
     enabled: direction === "out" && !!counterpartyId,
+  });
+
+  const { data: counterpartyBalance } = useQuery({
+    queryKey: ["counterparty-balance", counterpartyId],
+    queryFn: () => getCounterpartyBalance(counterpartyId!).then(r => r.data),
+    enabled: direction === "in" && !!counterpartyId,
   });
 
   // Build allocation rows when data changes
@@ -447,6 +453,18 @@ export default function PaymentFormPage() {
             </Space>
           </Form.Item>
         </Card>
+
+        {/* Unallocated balance warning */}
+        {direction === "in" && counterpartyBalance && Number(counterpartyBalance.unallocated_cny) > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t("payment.unallocated_balance_warning", {
+              amount: fmtCny(Number(counterpartyBalance.unallocated_cny)),
+            })}
+          />
+        )}
 
         {/* Allocations */}
         {counterpartyId && allocRows.length > 0 && (

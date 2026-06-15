@@ -545,6 +545,7 @@
     "alloc_order": "订单",
     "alloc_purchase": "采购单",
     "alloc_order_num": "订单号",
+    "unallocated_balance_warning": "该客户有未分配余额 {{amount}} CNY，建议编辑现有付款而非新建付款。",
     "alloc_amount": "人民币金额",
     "add_allocation": "添加关联",
     "no_payments": "暂无付款",
