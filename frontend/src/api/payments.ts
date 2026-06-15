@@ -70,3 +70,12 @@ export interface DashboardBalances {
 
 export const getDashboardBalances = () =>
   apiClient.get<DashboardBalances>("/api/dashboard/balances");
+
+export const requestPaymentChange = (id: string, data: { amount?: number; currency?: string; rate_to_cny?: number; reason?: string }) =>
+  apiClient.post(`/api/payments/${id}/request-change`, data);
+
+export const approvePaymentChange = (id: string) =>
+  apiClient.post<Payment>(`/api/payments/${id}/approve-change`);
+
+export const rejectPaymentChange = (id: string) =>
+  apiClient.post<Payment>(`/api/payments/${id}/reject-change`);

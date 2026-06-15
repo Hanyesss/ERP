@@ -217,6 +217,7 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
         notes=payment.notes,
         file_url=urls[0] if urls else None,
         file_urls=urls,
+        pending_change=getattr(payment, "pending_change", None),
         cash_register_id=payment.cash_register_id,
         cash_register_name=cash_reg.name if cash_reg else None,
         is_active=payment.is_active,
@@ -678,6 +679,14 @@ async def update_payment(
         raise HTTPException(404, "Payment not found")
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # Non-accountants cannot change financial fields directly
+    _ACCOUNTANT = ("accountant", "admin")
+    if not current_user.has_role(*_ACCOUNTANT):
+        blocked = {"amount", "currency", "rate_to_cny"} & set(update_data.keys())
+        if blocked:
+            raise HTTPException(403, "Изменение суммы требует подтверждения. Используйте запрос на изменение суммы.")
+
     for field, value in update_data.items():
         setattr(payment, field, value)
 
@@ -691,6 +700,90 @@ async def update_payment(
         db, current_user.id, "payment", payment.id, AuditActionEnum.update,
         {"updated_fields": list(update_data.keys())}
     )
+    await db.commit()
+    return await _load_payment(db, payment.id)
+
+
+# ── amount change request workflow ───────────────────────────────────────────
+
+import datetime as _pdatetime
+
+class PaymentChangeRequestBody(BaseModel):
+    amount: Optional[Decimal] = None
+    currency: Optional[str] = None
+    rate_to_cny: Optional[Decimal] = None
+    reason: str = ""
+
+
+@router.post("/{payment_id}/request-change", status_code=200)
+async def request_payment_change(
+    payment_id: uuid.UUID,
+    body: PaymentChangeRequestBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+
+    pending = {
+        "amount": str(body.amount) if body.amount is not None else str(payment.amount),
+        "currency": body.currency or str(payment.currency.value if hasattr(payment.currency, "value") else payment.currency),
+        "rate_to_cny": str(body.rate_to_cny) if body.rate_to_cny is not None else str(payment.rate_to_cny),
+        "reason": body.reason,
+        "requested_by": str(current_user.id),
+        "requested_by_name": current_user.full_name or "",
+        "requested_at": _pdatetime.datetime.utcnow().isoformat(),
+    }
+    payment.pending_change = json.dumps(pending, ensure_ascii=False)
+    await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
+                      {"change_requested": pending})
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/{payment_id}/approve-change", response_model=PaymentResponse)
+async def approve_payment_change(
+    payment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("accountant", "admin")),
+):
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+    if not getattr(payment, "pending_change", None):
+        raise HTTPException(404, "Нет активного запроса на изменение")
+
+    pending = json.loads(payment.pending_change)
+    payment.amount = Decimal(pending["amount"])
+    payment.rate_to_cny = Decimal(pending["rate_to_cny"])
+    payment.amount_cny = (payment.amount * payment.rate_to_cny).quantize(Decimal("0.01"))
+    payment.pending_change = None
+    await _recalc_all_for_payment(db, payment)
+    await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
+                      {"change_approved": pending})
+    await db.commit()
+    return await _load_payment(db, payment.id)
+
+
+@router.post("/{payment_id}/reject-change", response_model=PaymentResponse)
+async def reject_payment_change(
+    payment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("accountant", "admin")),
+):
+    payment = (await db.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
+    )).scalar_one_or_none()
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+    payment.pending_change = None
+    await write_audit(db, current_user.id, "payment", payment.id, AuditActionEnum.update,
+                      {"change_rejected": True})
     await db.commit()
     return await _load_payment(db, payment.id)
 
@@ -959,7 +1052,7 @@ async def upload_payment_receipt(
     payment_id: uuid.UUID,
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
+    current_user: User = Depends(get_current_user),
 ):
     payment = (await db.execute(
         select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
@@ -998,7 +1091,7 @@ async def delete_payment_receipt_file(
     payment_id: uuid.UUID,
     filename: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
+    current_user: User = Depends(get_current_user),
 ):
     payment = (await db.execute(
         select(Payment).where(Payment.id == payment_id, Payment.is_active == True)
@@ -1027,7 +1120,7 @@ async def delete_payment_receipt_file(
 async def delete_payment_receipt(
     payment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("purchaser", "accountant", "admin")),
+    current_user: User = Depends(get_current_user),
 ):
     """Удалить все файлы платежа (backward-compat)."""
     payment = (await db.execute(

@@ -174,7 +174,16 @@ export default function ExpenseFormPage({ user }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => updateExpense(id!, data),
-    onSuccess: () => { message.success("✓"); navigate(`/expenses/${id}`); },
+    onSuccess: async () => {
+      if (pendingReceipt) {
+        try { await uploadReceipt(id!, pendingReceipt); } catch {}
+      }
+      if (pendingQrPhoto) {
+        try { await uploadQrPhoto(id!, pendingQrPhoto); } catch {}
+      }
+      message.success("✓");
+      navigate(`/expenses/${id}`);
+    },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
@@ -266,12 +275,23 @@ export default function ExpenseFormPage({ user }: Props) {
             </Col>
           </Row>
 
+          {isEdit && !isAccountant && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t("expense.pending_change_title")}
+              description={t("expense.request_change_hint") || "Чтобы изменить сумму — обратитесь к бухгалтеру или используйте кнопку «Запросить изменение суммы» на странице расхода."}
+            />
+          )}
+
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="currency" label={t("expense.currency")} rules={[{ required: true }]}>
                 <Select
                   options={CURRENCIES.map(c => ({ value: c, label: c }))}
                   onChange={v => { setCurrency(v); }}
+                  disabled={isEdit && !isAccountant}
                 />
               </Form.Item>
             </Col>
@@ -282,6 +302,7 @@ export default function ExpenseFormPage({ user }: Props) {
                   min={0}
                   step={0.01}
                   onChange={v => setAmount(v ?? 0)}
+                  disabled={isEdit && !isAccountant}
                 />
               </Form.Item>
             </Col>
@@ -292,7 +313,7 @@ export default function ExpenseFormPage({ user }: Props) {
                   min={0}
                   step={0.00001}
                   precision={8}
-                  disabled={currency === "CNY"}
+                  disabled={currency === "CNY" || (isEdit && !isAccountant)}
                   onChange={v => setRateToCny(v ?? 1)}
                 />
               </Form.Item>

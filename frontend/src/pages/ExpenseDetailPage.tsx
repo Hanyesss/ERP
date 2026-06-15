@@ -2,8 +2,8 @@ import { useRef, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Descriptions, Button, Tag, Typography, Space, Popconfirm,
-  Row, Col, Card, Modal, Form, Input, DatePicker, Select, message,
-  Skeleton, Timeline, Upload, Tabs,
+  Row, Col, Card, Modal, Form, Input, InputNumber, DatePicker, Select, message,
+  Skeleton, Timeline, Upload, Tabs, Alert,
 } from "antd";
 import {
   EditOutlined, DeleteOutlined, CheckOutlined,
@@ -17,6 +17,7 @@ import {
   getExpense, deleteExpense,
   approveReimbursement, rejectReimbursement, markReimbursementPaid,
   uploadReceipt, uploadQrPhoto, deleteQrPhoto, getExpenseHistory, getFileUrl,
+  requestExpenseChange, approveExpenseChange, rejectExpenseChange,
 } from "../api/expenses";
 import { getCashRegisters } from "../api/cashRegisters";
 import type { User } from "../types";
@@ -52,6 +53,8 @@ export default function ExpenseDetailPage({ user }: Props) {
   const isAccountant = user.roles?.some(r => ["accountant", "admin"].includes(r));
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [changeRequestForm] = Form.useForm();
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [paidOpen, setPaidOpen] = useState(false);
@@ -126,6 +129,24 @@ export default function ExpenseDetailPage({ user }: Props) {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
+  const approveChangeMutation = useMutation({
+    mutationFn: () => approveExpenseChange(id!),
+    onSuccess: () => { message.success(t("expense.change_approved")); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const rejectChangeMutation = useMutation({
+    mutationFn: () => rejectExpenseChange(id!),
+    onSuccess: () => { message.success(t("expense.change_rejected")); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const requestChangeMutation = useMutation({
+    mutationFn: (data: any) => requestExpenseChange(id!, data),
+    onSuccess: () => { message.success(t("expense.change_request_sent")); setChangeRequestOpen(false); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
   const handleReceiptUpload = ({ file }: UploadRequestOption) => {
     receiptMutation.mutate(file as File);
   };
@@ -139,6 +160,7 @@ export default function ExpenseDetailPage({ user }: Props) {
 
   const isOwner = expense.created_by === user.id;
   const canEdit = isAccountant || (isOwner && expense.reimburse_status !== "paid");
+  const pendingChange = expense.pending_change ? (() => { try { return JSON.parse(expense.pending_change!); } catch { return null; } })() : null;
   const canDelete = isAccountant || (isOwner && expense.reimburse_status !== "paid");
 
   const tabs = [
@@ -364,6 +386,11 @@ export default function ExpenseDetailPage({ user }: Props) {
                 {t("common.edit")}
               </Button>
             )}
+            {!isAccountant && isOwner && !pendingChange && expense.reimburse_status !== "paid" && (
+              <Button onClick={() => { changeRequestForm.resetFields(); setChangeRequestOpen(true); }}>
+                {t("expense.request_change")}
+              </Button>
+            )}
             {canDelete && (
               <>
                 <Modal open={deleteModal} title={t("expense.delete_modal_title")}
@@ -384,7 +411,58 @@ export default function ExpenseDetailPage({ user }: Props) {
         </Col>
       </Row>
 
+      {/* Pending amount change block */}
+      {pendingChange && (
+        <Alert
+          type={isAccountant ? "warning" : "info"}
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("expense.pending_change_title")}
+          description={
+            <Space direction="vertical" size={4}>
+              <span>{t("expense.new_amount")}: <strong>{pendingChange.amount} {pendingChange.currency}</strong>{pendingChange.rate_to_cny && pendingChange.currency !== "CNY" ? ` (курс: ${pendingChange.rate_to_cny})` : ""}</span>
+              {pendingChange.reason && <span>{t("expense.change_reason")}: {pendingChange.reason}</span>}
+              <span style={{ color: "#888", fontSize: 12 }}>{pendingChange.requested_by_name} · {new Date(pendingChange.requested_at).toLocaleString("ru-RU")}</span>
+              {isAccountant && (
+                <Space style={{ marginTop: 8 }}>
+                  <Button type="primary" size="small" loading={approveChangeMutation.isPending} onClick={() => approveChangeMutation.mutate()}>{t("expense.approve_change")}</Button>
+                  <Button danger size="small" loading={rejectChangeMutation.isPending} onClick={() => rejectChangeMutation.mutate()}>{t("expense.reject_change")}</Button>
+                </Space>
+              )}
+              {!isAccountant && <Tag color="gold">{t("expense.pending_change_waiting")}</Tag>}
+            </Space>
+          }
+        />
+      )}
+
       <Tabs items={tabs} />
+
+      {/* Change request modal for non-accountants */}
+      <Modal
+        open={changeRequestOpen}
+        title={t("expense.request_change")}
+        onCancel={() => setChangeRequestOpen(false)}
+        onOk={() => changeRequestForm.submit()}
+        confirmLoading={requestChangeMutation.isPending}
+        okText={t("common.send")}
+        cancelText={t("common.cancel")}
+        destroyOnClose
+      >
+        <Form form={changeRequestForm} layout="vertical" onFinish={v => requestChangeMutation.mutate({ amount: v.amount, currency: v.currency, rate_to_cny: v.rate_to_cny, reason: v.reason })}>
+          <Form.Item name="amount" label={t("expense.amount")} rules={[{ required: true }]} initialValue={Number(expense?.amount)}>
+            <InputNumber style={{ width: "100%" }} min={0} step={0.01} />
+          </Form.Item>
+          <Form.Item name="currency" label={t("expense.currency")} rules={[{ required: true }]} initialValue={expense?.currency}>
+            <Select options={["CNY","RUB","USDT","USD"].map(c => ({ value: c, label: c }))} />
+          </Form.Item>
+          <Form.Item name="rate_to_cny" label={t("expense.rate_to_cny")} initialValue={Number(expense?.rate_to_cny)}>
+            <InputNumber style={{ width: "100%" }} min={0} step={0.00001} precision={8} />
+          </Form.Item>
+          <Form.Item name="reason" label={t("expense.change_reason")}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         open={rejectOpen}

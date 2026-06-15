@@ -78,7 +78,7 @@ function Inner() {
             <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/payments/new" element={<PaymentFormPage />} />
-            <Route path="/payments/:id" element={<PaymentDetailPage />} />
+            <Route path="/payments/:id" element={<PaymentDetailPage user={user!} />} />
             <Route path="/expenses" element={<ExpensesPage user={user!} />} />
             <Route path="/expenses/new" element={<ExpenseFormPage user={user!} />} />
             <Route path="/expenses/:id" element={<ExpenseDetailPage user={user!} />} />

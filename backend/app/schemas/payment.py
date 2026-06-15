@@ -63,6 +63,7 @@ class PaymentResponse(BaseModel):
     notes: Optional[str] = None
     file_url: Optional[str] = None
     file_urls: List[str] = []
+    pending_change: Optional[str] = None
     cash_register_id: Optional[uuid.UUID] = None
     cash_register_name: Optional[str] = None
     is_active: bool

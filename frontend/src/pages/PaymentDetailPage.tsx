@@ -3,23 +3,26 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Button, Card, Col, Descriptions, Divider, Form, Input, InputNumber,
   Modal, Popconfirm, Row, Select, DatePicker, Space, Statistic,
-  Table, Tag, Typography, Upload, message,
+  Table, Tag, Typography, Upload, message, Alert,
 } from "antd";
 import { DeleteOutlined, ArrowLeftOutlined, EditOutlined, UploadOutlined, FileOutlined } from "@ant-design/icons";
 import type { UploadRequestOption } from "rc-upload/lib/interface";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
-import { getPayment, deletePayment, updatePayment, uploadPaymentReceipt, deletePaymentReceipt, deletePaymentReceiptFile } from "../api/payments";
+import { getPayment, deletePayment, updatePayment, uploadPaymentReceipt, deletePaymentReceipt, deletePaymentReceiptFile, requestPaymentChange, approvePaymentChange, rejectPaymentChange } from "../api/payments";
 import apiClient from "../api/client";
 import { compressImage } from "../utils/compressImage";
+import type { User } from "../types";
 
 const { Title, Text } = Typography;
 
 const fmtCny = (v: number | string | null | undefined) =>
   v != null ? Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2 }) : "—";
 
-export default function PaymentDetailPage() {
+interface Props { user?: User }
+
+export default function PaymentDetailPage({ user }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -27,10 +30,14 @@ export default function PaymentDetailPage() {
   const backUrl = searchParams.get("back") || "/payments";
   const qc = useQueryClient();
 
+  const isAccountant = user?.roles?.some(r => ["accountant", "admin"].includes(r)) ?? false;
+
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [changeRequestForm] = Form.useForm();
 
   const { data: payment, isLoading } = useQuery({
     queryKey: ["payment", id],
@@ -83,12 +90,38 @@ export default function PaymentDetailPage() {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["payment", id] });
+    qc.invalidateQueries({ queryKey: ["payments"] });
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
+  const approveChangeMutation = useMutation({
+    mutationFn: () => approvePaymentChange(id!),
+    onSuccess: () => { message.success(t("payment.change_approved")); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const rejectChangeMutation = useMutation({
+    mutationFn: () => rejectPaymentChange(id!),
+    onSuccess: () => { message.success(t("payment.change_rejected")); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
+  const requestChangeMutation = useMutation({
+    mutationFn: (data: any) => requestPaymentChange(id!, data),
+    onSuccess: () => { message.success(t("payment.change_request_sent")); setChangeRequestOpen(false); invalidate(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
+
   const handleReceiptUpload = async ({ file }: UploadRequestOption) => {
     const compressed = await compressImage(file as File);
     receiptMutation.mutate(compressed);
   };
 
   if (isLoading || !payment) return null;
+
+  const pendingChange = payment.pending_change ? (() => { try { return JSON.parse(payment.pending_change!); } catch { return null; } })() : null;
 
   const allocColumns = [
     {
@@ -140,22 +173,29 @@ export default function PaymentDetailPage() {
         </Col>
         <Col>
           <Space>
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => {
-                editForm.setFieldsValue({
-                  payment_date: dayjs(payment.payment_date),
-                  currency: payment.currency,
-                  amount: Number(payment.amount),
-                  rate_to_cny: Number(payment.rate_to_cny),
-                  network_fee: payment.network_fee != null ? Number(payment.network_fee) : undefined,
-                  notes: payment.notes,
-                });
-                setEditOpen(true);
-              }}
-            >
-              {t("common.edit")}
-            </Button>
+            {isAccountant && (
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  editForm.setFieldsValue({
+                    payment_date: dayjs(payment.payment_date),
+                    currency: payment.currency,
+                    amount: Number(payment.amount),
+                    rate_to_cny: Number(payment.rate_to_cny),
+                    network_fee: payment.network_fee != null ? Number(payment.network_fee) : undefined,
+                    notes: payment.notes,
+                  });
+                  setEditOpen(true);
+                }}
+              >
+                {t("common.edit")}
+              </Button>
+            )}
+            {!isAccountant && !pendingChange && (
+              <Button onClick={() => { changeRequestForm.resetFields(); setChangeRequestOpen(true); }}>
+                {t("payment.request_change")}
+              </Button>
+            )}
             <>
               <Modal open={deleteModal} title={t("payment.delete_modal_title")}
                 onOk={() => { if (deleteReason.trim()) deleteMutation.mutate(deleteReason.trim()); }}
@@ -207,6 +247,30 @@ export default function PaymentDetailPage() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      {/* Pending amount change */}
+      {pendingChange && (
+        <Alert
+          type={isAccountant ? "warning" : "info"}
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("payment.pending_change_title")}
+          description={
+            <Space direction="vertical" size={4}>
+              <span>{t("payment.new_amount")}: <strong>{pendingChange.amount} {pendingChange.currency}</strong>{pendingChange.rate_to_cny ? ` (курс: ${pendingChange.rate_to_cny})` : ""}</span>
+              {pendingChange.reason && <span>{t("payment.change_reason")}: {pendingChange.reason}</span>}
+              <span style={{ color: "#888", fontSize: 12 }}>{pendingChange.requested_by_name} · {new Date(pendingChange.requested_at).toLocaleString("ru-RU")}</span>
+              {isAccountant && (
+                <Space style={{ marginTop: 8 }}>
+                  <Button type="primary" size="small" loading={approveChangeMutation.isPending} onClick={() => approveChangeMutation.mutate()}>{t("payment.approve_change")}</Button>
+                  <Button danger size="small" loading={rejectChangeMutation.isPending} onClick={() => rejectChangeMutation.mutate()}>{t("payment.reject_change")}</Button>
+                </Space>
+              )}
+              {!isAccountant && <Tag color="gold">{t("payment.pending_change_waiting")}</Tag>}
+            </Space>
+          }
+        />
+      )}
 
       <Card title={t("payment.allocations")} style={{ marginBottom: 16 }}>
         <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -368,6 +432,30 @@ export default function PaymentDetailPage() {
             </Form.Item>
           )}
           <Form.Item name="notes" label={t("payment.notes")}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Change request modal for non-accountants */}
+      <Modal
+        open={changeRequestOpen}
+        title={t("payment.request_change")}
+        onCancel={() => setChangeRequestOpen(false)}
+        onOk={() => changeRequestForm.submit()}
+        confirmLoading={requestChangeMutation.isPending}
+        okText={t("common.send")}
+        cancelText={t("common.cancel")}
+        destroyOnClose
+      >
+        <Form form={changeRequestForm} layout="vertical" onFinish={v => requestChangeMutation.mutate({ amount: v.amount, rate_to_cny: v.rate_to_cny, reason: v.reason })}>
+          <Form.Item name="amount" label={t("payment.amount")} rules={[{ required: true }]} initialValue={Number(payment?.amount)}>
+            <InputNumber style={{ width: "100%" }} min={0} step={0.01} precision={2} />
+          </Form.Item>
+          <Form.Item name="rate_to_cny" label={t("payment.rate_to_cny")} initialValue={Number(payment?.rate_to_cny)}>
+            <InputNumber style={{ width: "100%" }} min={0} step={0.0001} precision={8} />
+          </Form.Item>
+          <Form.Item name="reason" label={t("payment.change_reason")}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>

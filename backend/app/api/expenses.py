@@ -124,6 +124,7 @@ async def _load_expense(db: AsyncSession, expense_id: uuid.UUID) -> ExpenseRespo
         reimburse_status=e.reimburse_status, reimburse_paid_date=e.reimburse_paid_date,
         reject_reason=e.reject_reason, description=e.description,
         receipt_url=e.receipt_url, qr_url=getattr(e, "qr_url", None),
+        pending_change=getattr(e, "pending_change", None),
         cash_register_id=e.cash_register_id, cash_register_name=row.cash_register_name,
         created_by=e.created_by, created_by_name=row.creator_name,
         created_at=e.created_at, is_active=e.is_active,
@@ -482,10 +483,17 @@ async def update_expense(
     if expense.reimburse_status == ReimburseStatusEnum.paid and not current_user.has_role("admin"):
         raise HTTPException(422, "Cannot edit a paid reimbursement")
 
+    data = body.model_dump(exclude_unset=True)
+
+    # Non-accountants cannot change financial fields directly
+    if not current_user.has_role(*_ACCOUNTANT_ROLES):
+        blocked = {"amount", "currency", "rate_to_cny"} & set(data.keys())
+        if blocked:
+            raise HTTPException(403, "Изменение суммы требует подтверждения. Используйте запрос на изменение суммы.")
+
     old_cash_register_id = expense.cash_register_id
     old_cash_amount = expense.cash_amount_in_register
 
-    data = body.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(expense, field, value)
 
@@ -514,6 +522,93 @@ async def update_expense(
 
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"updated": list(data.keys())})
+    await db.commit()
+    return await _load_expense(db, expense.id)
+
+
+# ── amount change request workflow ───────────────────────────────────────────
+
+import json as _json
+import datetime as _datetime
+
+class ChangeRequestBody(BaseModel):
+    amount: Optional[Decimal] = None
+    currency: Optional[str] = None
+    rate_to_cny: Optional[Decimal] = None
+    reason: str = ""
+
+
+@router.post("/{expense_id}/request-change", status_code=200)
+async def request_expense_change(
+    expense_id: uuid.UUID,
+    body: ChangeRequestBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id, Expense.is_active == True)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+    if not current_user.has_role(*_ACCOUNTANT_ROLES) and expense.created_by != current_user.id:
+        raise HTTPException(403, "Access denied")
+
+    pending = {
+        "amount": str(body.amount) if body.amount is not None else str(expense.amount),
+        "currency": body.currency or expense.currency,
+        "rate_to_cny": str(body.rate_to_cny) if body.rate_to_cny is not None else str(expense.rate_to_cny),
+        "reason": body.reason,
+        "requested_by": str(current_user.id),
+        "requested_by_name": current_user.full_name or "",
+        "requested_at": _datetime.datetime.utcnow().isoformat(),
+    }
+    expense.pending_change = _json.dumps(pending, ensure_ascii=False)
+    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
+                      {"change_requested": pending})
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/{expense_id}/approve-change", response_model=ExpenseResponse)
+async def approve_expense_change(
+    expense_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(*_ACCOUNTANT_ROLES)),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id, Expense.is_active == True)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+    if not getattr(expense, "pending_change", None):
+        raise HTTPException(404, "Нет активного запроса на изменение")
+
+    pending = _json.loads(expense.pending_change)
+    expense.amount = Decimal(pending["amount"])
+    expense.currency = pending["currency"]
+    expense.rate_to_cny = Decimal(pending["rate_to_cny"])
+    expense.amount_cny = (expense.amount * expense.rate_to_cny).quantize(Decimal("0.01"))
+    expense.pending_change = None
+    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
+                      {"change_approved": pending})
+    await db.commit()
+    return await _load_expense(db, expense.id)
+
+
+@router.post("/{expense_id}/reject-change", response_model=ExpenseResponse)
+async def reject_expense_change(
+    expense_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(*_ACCOUNTANT_ROLES)),
+):
+    expense = (await db.execute(
+        select(Expense).where(Expense.id == expense_id, Expense.is_active == True)
+    )).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(404, "Expense not found")
+    expense.pending_change = None
+    await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
+                      {"change_rejected": True})
     await db.commit()
     return await _load_expense(db, expense.id)
 

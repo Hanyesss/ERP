@@ -40,6 +40,7 @@ export interface Expense extends ExpenseListItem {
   reimburse_paid_date?: string;
   reject_reason?: string;
   qr_url?: string;
+  pending_change?: string;
   cash_register_id?: string;
   cash_register_name?: string;
 }

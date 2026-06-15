@@ -25,6 +25,7 @@ export interface Payment {
   notes?: string;
   file_url?: string;
   file_urls: string[];
+  pending_change?: string;
   is_active: boolean;
   created_by_name: string;
   created_at: string;

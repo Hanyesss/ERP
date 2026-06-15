@@ -73,5 +73,14 @@ export const deleteQrPhoto = (id: string) =>
 export const getExpenseHistory = (id: string) =>
   apiClient.get<any[]>(`/api/expenses/${id}/history`);
 
+export const requestExpenseChange = (id: string, data: { amount?: number; currency?: string; rate_to_cny?: number; reason?: string }) =>
+  apiClient.post(`/api/expenses/${id}/request-change`, data);
+
+export const approveExpenseChange = (id: string) =>
+  apiClient.post<import("../types/expense").Expense>(`/api/expenses/${id}/approve-change`);
+
+export const rejectExpenseChange = (id: string) =>
+  apiClient.post<import("../types/expense").Expense>(`/api/expenses/${id}/reject-change`);
+
 export const getFileUrl = (filePath: string) =>
   `${apiClient.defaults.baseURL}/files/${filePath}`;

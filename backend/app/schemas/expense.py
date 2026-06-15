@@ -98,6 +98,7 @@ class ExpenseResponse(BaseModel):
     created_by_name: str
     created_at: datetime
     is_active: bool
+    pending_change: Optional[str] = None
 
 
 class ExpenseListResponse(BaseModel):
