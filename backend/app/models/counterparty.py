@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 from enum import Enum as PyEnum
-from sqlalchemy import String, Boolean, Enum, Text, ForeignKey
+from sqlalchemy import String, Boolean, Enum, Text, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
@@ -38,3 +39,5 @@ class Counterparty(Base, TimestampMixin):
     partner_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("counterparties.id"), nullable=True
     )
+    trontok_linked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    trontok_provisioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

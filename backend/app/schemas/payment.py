@@ -72,6 +72,8 @@ class PaymentResponse(BaseModel):
     allocations: List[AllocationResponse] = []
     allocated_cny: Decimal = Decimal("0")
     unallocated_cny: Decimal = Decimal("0")
+    payment_source: Optional[str] = None
+    external_tx_id: Optional[str] = None
 
 
 class PaymentListItem(BaseModel):
@@ -88,6 +90,7 @@ class PaymentListItem(BaseModel):
     allocated_cny: Decimal = Decimal("0")
     is_active: bool
     created_by_name: str
+    payment_source: Optional[str] = None
 
 
 class PaymentListResponse(BaseModel):

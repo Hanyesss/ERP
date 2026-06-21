@@ -2,6 +2,7 @@
 import asyncio
 import uuid
 import bcrypt
+from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
@@ -78,6 +79,8 @@ async def run_seed() -> None:
     from app.models.business_type import BusinessType
     from app.models.expense_category import ExpenseCategory
     from app.models.warehouse import Warehouse
+    from app.models.cash_register import CashRegister
+    from app.models.integration_settings import IntegrationSettings
 
     async with Session() as session:
         # Company
@@ -158,6 +161,40 @@ async def run_seed() -> None:
                     print(f"    + Role '{role_name}' added to '{u_data['login']}'")
                 else:
                     print(f"    = Role '{role_name}' already on '{u_data['login']}'")
+
+        await session.commit()
+
+        # USDT TronTok cash register
+        reg = (await session.execute(
+            select(CashRegister).where(CashRegister.name == "USDT TronTok")
+        )).scalar_one_or_none()
+        if not reg:
+            session.add(CashRegister(
+                id=uuid.uuid4(),
+                name="USDT TronTok",
+                currency="USDT",
+                initial_balance=Decimal("0"),
+                is_active=True,
+            ))
+            print("  + CashRegister 'USDT TronTok' created")
+        else:
+            print("  = CashRegister 'USDT TronTok' already exists")
+
+        # TronTok integration settings placeholder (disabled until credentials set)
+        tt_settings = (await session.execute(
+            select(IntegrationSettings).where(IntegrationSettings.integration_name == "trontok")
+        )).scalar_one_or_none()
+        if not tt_settings:
+            session.add(IntegrationSettings(
+                id=uuid.uuid4(),
+                integration_name="trontok",
+                base_url="https://api.trontok.com",
+                api_token=None,
+                is_enabled=False,
+            ))
+            print("  + IntegrationSettings 'trontok' created (disabled — set api_token to enable)")
+        else:
+            print("  = IntegrationSettings 'trontok' already exists")
 
         await session.commit()
 

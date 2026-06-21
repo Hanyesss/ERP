@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Table, Button, Input, Select, Tag, Space, Popconfirm, Row, Col, message, Tooltip } from "antd";
-import { EditOutlined, DeleteOutlined, LinkOutlined } from "@ant-design/icons";
+import { Table, Button, Input, Select, Tag, Space, Popconfirm, Row, Col, message, Tooltip, Spin, Typography } from "antd";
+import { EditOutlined, DeleteOutlined, LinkOutlined, WalletOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import type { Counterparty, CounterpartyFormData } from "../../types/counterparty";
 import { getCounterparties, createCounterparty, updateCounterparty, deleteCounterparty, createSiteAccount, linkSiteAccount, updateSiteCredentials } from "../../api/counterparties";
 import CounterpartyForm, { type CounterpartyFormValues } from "./CounterpartyForm";
+import { getCounterpartyTronTokBalance } from "../../api/trontok";
+
+const { Text } = Typography;
 
 const TYPE_COLORS: Record<string, string> = {
   client: "blue",
@@ -14,6 +17,34 @@ const TYPE_COLORS: Record<string, string> = {
   both: "purple",
   partner: "magenta",
 };
+
+function TronTokBalanceRow({ counterpartyId }: { counterpartyId: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["trontok-balance", counterpartyId],
+    queryFn: () => getCounterpartyTronTokBalance(counterpartyId).then(r => r.data),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) return <Spin size="small" />;
+  if (isError) return <Text type="danger">Ошибка загрузки баланса</Text>;
+  if (!data?.trontok_linked) return <Text type="secondary">TronTok не привязан</Text>;
+  if (!data.balance) return <Text type="secondary">Баланс недоступен</Text>;
+
+  const bal = data.balance;
+  return (
+    <Space direction="vertical" size={2}>
+      <div>
+        <Text strong>Доступно: </Text>
+        <Text>{Number(bal.available).toFixed(2)} USDT</Text>
+      </div>
+      {bal.frozen && Number(bal.frozen) > 0 && (
+        <div>
+          <Text type="secondary">Заморожено: {Number(bal.frozen).toFixed(2)} USDT</Text>
+        </div>
+      )}
+    </Space>
+  );
+}
 
 interface Props {
   forcedType?: "client" | "supplier";
@@ -106,7 +137,16 @@ export default function CounterpartyTable({ forcedType }: Props) {
       key: "name",
       render: (name: string, row: Counterparty) => (
         <div>
-          <div>{name}</div>
+          <Space size={4}>
+            <span>{name}</span>
+            {(row as any).trontok_linked && (
+              <Tooltip title="TronTok кошелёк привязан">
+                <Tag icon={<WalletOutlined />} color="geekblue" style={{ marginLeft: 4, fontSize: 11 }}>
+                  TronTok
+                </Tag>
+              </Tooltip>
+            )}
+          </Space>
           {row.name_cn && <div style={{ color: "#888", fontSize: 12 }}>{row.name_cn}</div>}
         </div>
       ),
@@ -209,6 +249,20 @@ export default function CounterpartyTable({ forcedType }: Props) {
         dataSource={data?.items ?? []}
         rowKey="id"
         loading={isLoading}
+        expandable={{
+          rowExpandable: (row) => !!(row as any).trontok_linked,
+          expandedRowRender: (row) => (
+            <div style={{ padding: "8px 16px" }}>
+              <Space>
+                <WalletOutlined style={{ color: "#1677ff" }} />
+                <Text strong style={{ color: "#1677ff" }}>TronTok баланс</Text>
+              </Space>
+              <div style={{ marginTop: 6 }}>
+                <TronTokBalanceRow counterpartyId={row.id} />
+              </div>
+            </div>
+          ),
+        }}
         pagination={{
           current: page,
           total: data?.total ?? 0,

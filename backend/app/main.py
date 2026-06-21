@@ -24,6 +24,7 @@ from app.api.purchase_files import router as purchase_files_router
 from app.api.warehouse_boxes import router as warehouse_boxes_router
 from app.api.assets import router as assets_router
 from app.api.partner import router as partner_router
+from app.api.trontok import router as trontok_router
 
 app = FastAPI(title="ERP API", version="1.0.0")
 
@@ -60,6 +61,7 @@ app.include_router(purchase_files_router)
 app.include_router(warehouse_boxes_router)
 app.include_router(assets_router)
 app.include_router(partner_router)
+app.include_router(trontok_router)
 
 
 @app.get("/health")

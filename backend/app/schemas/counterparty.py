@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional, Any
 from pydantic import BaseModel
 from app.models.counterparty import CounterpartyType, CurrencyEnum
@@ -45,6 +46,8 @@ class CounterpartyResponse(BaseModel):
     is_active: bool
     partner_id: Optional[uuid.UUID] = None
     partner_name: Optional[str] = None
+    trontok_linked: bool = False
+    trontok_provisioned_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -60,6 +63,8 @@ class CounterpartyResponse(BaseModel):
             contact_info=obj.contact_info, phone=phone,
             notes=obj.notes, is_active=obj.is_active,
             partner_id=obj.partner_id, partner_name=partner_name,
+            trontok_linked=getattr(obj, "trontok_linked", False) or False,
+            trontok_provisioned_at=getattr(obj, "trontok_provisioned_at", None),
         )
 
 

@@ -226,6 +226,8 @@ async def _load_payment(db: AsyncSession, payment_id: uuid.UUID) -> PaymentRespo
         allocations=allocations,
         allocated_cny=allocated,
         unallocated_cny=max(payment.amount_cny - allocated, Decimal("0")),
+        payment_source=getattr(payment, "payment_source", None),
+        external_tx_id=getattr(payment, "external_tx_id", None),
     )
 
 
@@ -499,6 +501,7 @@ async def list_payments(
             allocated_cny=r.order_alloc + r.pur_alloc,
             is_active=r[0].is_active,
             created_by_name=r.creator_name,
+            payment_source=getattr(r[0], "payment_source", None),
         )
         for r in rows
     ]

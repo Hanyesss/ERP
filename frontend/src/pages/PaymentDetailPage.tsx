@@ -241,6 +241,16 @@ export default function PaymentDetailPage({ user }: Props) {
           {payment.notes && (
             <Descriptions.Item label={t("payment.notes")} span={2}>{payment.notes}</Descriptions.Item>
           )}
+          {(payment as any).payment_source === "trontok" && (
+            <Descriptions.Item label="Источник" span={2}>
+              <Tag color="geekblue">TronTok USDT</Tag>
+              {(payment as any).external_tx_id && (
+                <span style={{ marginLeft: 8, fontFamily: "monospace", fontSize: 12, color: "#888" }}>
+                  ref: {(payment as any).external_tx_id}
+                </span>
+              )}
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label={t("common.created_by")}>{payment.created_by_name}</Descriptions.Item>
           <Descriptions.Item label={t("common.created_at")}>
             {new Date(payment.created_at).toLocaleString("ru-RU")}
