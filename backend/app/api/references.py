@@ -20,7 +20,7 @@ async def get_managers(
     result = await db.execute(
         select(User)
         .join(UserRoleEntry, UserRoleEntry.user_id == User.id)
-        .where(User.is_active == True, UserRoleEntry.role.in_(["manager", "admin"]))
+        .where(User.is_active == True, UserRoleEntry.role.in_(["seller", "manager", "purchaser", "accountant", "admin"]))
         .distinct()
         .order_by(User.full_name)
     )
