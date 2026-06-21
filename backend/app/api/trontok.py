@@ -494,14 +494,63 @@ async def erp_get_counterparty_balance(
     )).scalar_one_or_none()
     if not cp:
         raise HTTPException(404, "Counterparty not found")
-    if not cp.trontok_linked:
-        return {"trontok_linked": False, "balance": None}
     if not cp.code:
-        raise HTTPException(422, "Counterparty has no code")
+        return {"trontok_linked": False, "balance": None, "reason": "no_code"}
 
     tt_client = await _get_tt_client(db)
     try:
         bal = await tt_client.get_balance(external_id=cp.code.upper())
+        # Auto-mark as linked if TronTok returned a balance
+        if not cp.trontok_linked:
+            cp.trontok_linked = True
+            cp.trontok_provisioned_at = datetime.now(timezone.utc)
+            await db.commit()
         return {"trontok_linked": True, "balance": bal}
+    except TronTokNotFound:
+        return {"trontok_linked": False, "balance": None, "reason": "not_provisioned"}
     except TronTokError as exc:
         raise HTTPException(502, f"TronTok error: {exc}")
+
+
+@router.post("/sync-status")
+async def sync_trontok_status(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles("admin")),
+):
+    """Check all client counterparties against TronTok and update trontok_linked. Admin only."""
+    from sqlalchemy import or_
+
+    tt_client = await _get_tt_client(db)
+
+    clients = (await db.execute(
+        select(Counterparty).where(
+            Counterparty.is_active == True,
+            Counterparty.code.isnot(None),
+            or_(
+                Counterparty.type == "client",
+                Counterparty.type == "both",
+            ),
+        )
+    )).scalars().all()
+
+    linked = 0
+    checked = 0
+    errors = 0
+
+    for cp in clients:
+        if not cp.code:
+            continue
+        checked += 1
+        try:
+            await tt_client.user_status(external_id=cp.code.upper())
+            if not cp.trontok_linked:
+                cp.trontok_linked = True
+                cp.trontok_provisioned_at = datetime.now(timezone.utc)
+                linked += 1
+        except TronTokNotFound:
+            pass
+        except TronTokError:
+            errors += 1
+
+    await db.commit()
+    return {"checked": checked, "newly_linked": linked, "errors": errors}

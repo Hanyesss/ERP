@@ -22,24 +22,28 @@ function TronTokBalanceRow({ counterpartyId }: { counterpartyId: string }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["trontok-balance", counterpartyId],
     queryFn: () => getCounterpartyTronTokBalance(counterpartyId).then(r => r.data),
-    staleTime: 30_000,
+    staleTime: 60_000,
+    retry: 1,
   });
 
   if (isLoading) return <Spin size="small" />;
-  if (isError) return <Text type="danger">Ошибка загрузки баланса</Text>;
-  if (!data?.trontok_linked) return <Text type="secondary">TronTok не привязан</Text>;
+  if (isError) return <Text type="danger">Ошибка загрузки (TronTok недоступен)</Text>;
+  if (!data?.trontok_linked) return <Text type="secondary">Кошелёк TronTok не зарегистрирован</Text>;
   if (!data.balance) return <Text type="secondary">Баланс недоступен</Text>;
 
   const bal = data.balance;
+  const available = Number(bal.available ?? 0);
+  const frozen = Number(bal.frozen ?? 0);
   return (
-    <Space direction="vertical" size={2}>
+    <Space size={24}>
       <div>
-        <Text strong>Доступно: </Text>
-        <Text>{Number(bal.available).toFixed(2)} USDT</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>Доступно</Text>
+        <div><Text strong style={{ fontSize: 16 }}>{available.toFixed(2)}</Text> <Text type="secondary">USDT</Text></div>
       </div>
-      {bal.frozen && Number(bal.frozen) > 0 && (
+      {frozen > 0 && (
         <div>
-          <Text type="secondary">Заморожено: {Number(bal.frozen).toFixed(2)} USDT</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>Заморожено</Text>
+          <div><Text>{frozen.toFixed(2)}</Text> <Text type="secondary">USDT</Text></div>
         </div>
       )}
     </Space>
@@ -250,7 +254,7 @@ export default function CounterpartyTable({ forcedType }: Props) {
         rowKey="id"
         loading={isLoading}
         expandable={{
-          rowExpandable: (row) => !!(row as any).trontok_linked,
+          rowExpandable: (row) => !!(row.code) && (row.type === "client" || row.type === "both"),
           expandedRowRender: (row) => (
             <div style={{ padding: "8px 16px" }}>
               <Space>

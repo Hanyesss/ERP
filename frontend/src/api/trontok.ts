@@ -28,6 +28,11 @@ export const testTronTokConnection = (data: { api_token?: string; base_url?: str
   apiClient.post<{ ok: boolean; message?: string }>("/api/trontok/erp-test", data);
 
 export const getCounterpartyTronTokBalance = (counterpartyId: string) =>
-  apiClient.get<{ trontok_linked: boolean; balance: TronTokBalance | null }>(
+  apiClient.get<{ trontok_linked: boolean; balance: TronTokBalance | null; reason?: string }>(
     `/api/trontok/erp-balance?counterparty_id=${counterpartyId}`
+  );
+
+export const syncTronTokStatus = () =>
+  apiClient.post<{ checked: number; newly_linked: number; errors: number }>(
+    "/api/trontok/sync-status"
   );

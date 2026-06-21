@@ -9,7 +9,7 @@ import {
   getIntegrationSettings, updateIntegrationSettings, testIntegrationConnection, bulkSyncToSite,
 } from "../api/integration";
 import {
-  getTronTokSettings, updateTronTokSettings, testTronTokConnection,
+  getTronTokSettings, updateTronTokSettings, testTronTokConnection, syncTronTokStatus,
 } from "../api/trontok";
 
 const { Title, Text } = Typography;
@@ -64,6 +64,16 @@ export default function IntegrationSettingsPage() {
       setTtTestLoading(false);
     }
   };
+
+  const [syncResult, setSyncResult] = useState<{ checked: number; newly_linked: number; errors: number } | null>(null);
+  const syncStatusMutation = useMutation({
+    mutationFn: syncTronTokStatus,
+    onSuccess: (r) => {
+      setSyncResult(r.data);
+      qc.invalidateQueries({ queryKey: ["counterparties"] });
+    },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Ошибка синхронизации"),
+  });
 
   const bulkSyncMutation = useMutation({
     mutationFn: bulkSyncToSite,
@@ -284,6 +294,29 @@ export default function IntegrationSettingsPage() {
           {t("common.save")}
         </Button>
       </Space>
+
+      <Divider />
+
+      <div>
+        <Text strong>Синхронизировать статус TronTok у клиентов</Text>
+        <div style={{ color: "#888", fontSize: 12, marginBottom: 10 }}>
+          Проверяет каждого клиента (по коду) — если кошелёк есть в TronTok, ставит отметку в ERP
+        </div>
+        {syncResult && (
+          <Alert
+            type="success"
+            style={{ marginBottom: 10 }}
+            message={`Проверено: ${syncResult.checked} | Найдено новых: ${syncResult.newly_linked} | Ошибок: ${syncResult.errors}`}
+          />
+        )}
+        <Button
+          icon={<SyncOutlined />}
+          loading={syncStatusMutation.isPending}
+          onClick={() => { setSyncResult(null); syncStatusMutation.mutate(); }}
+        >
+          Синхронизировать статусы
+        </Button>
+      </div>
     </Form>
   );
 
