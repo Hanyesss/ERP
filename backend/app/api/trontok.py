@@ -468,7 +468,7 @@ async def erp_test_trontok(
 
     client = TronTokClient(api_key=api_key, base_url=base_url)
     try:
-        account = await client._get("/me/account")
+        account = await client._get("/partner/account")
         name = account.get("name", "?")
         status_val = account.get("status", "?")
         users = account.get("users_total", "?")
