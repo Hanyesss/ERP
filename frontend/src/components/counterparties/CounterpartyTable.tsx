@@ -18,36 +18,19 @@ const TYPE_COLORS: Record<string, string> = {
   partner: "magenta",
 };
 
-function TronTokBalanceRow({ counterpartyId }: { counterpartyId: string }) {
-  const { data, isLoading, isError } = useQuery({
+function TronTokBalanceCell({ counterpartyId }: { counterpartyId: string }) {
+  const { data, isLoading } = useQuery({
     queryKey: ["trontok-balance", counterpartyId],
     queryFn: () => getCounterpartyTronTokBalance(counterpartyId).then(r => r.data),
     staleTime: 60_000,
-    retry: 1,
+    retry: false,
   });
 
   if (isLoading) return <Spin size="small" />;
-  if (isError) return <Text type="danger">Ошибка загрузки (TronTok недоступен)</Text>;
-  if (!data?.trontok_linked) return <Text type="secondary">Кошелёк TronTok не зарегистрирован</Text>;
-  if (!data.balance) return <Text type="secondary">Баланс недоступен</Text>;
+  if (!data?.trontok_linked || !data.balance) return <Text type="secondary">—</Text>;
 
-  const bal = data.balance;
-  const available = Number(bal.available ?? 0);
-  const frozen = Number(bal.frozen ?? 0);
-  return (
-    <Space size={24}>
-      <div>
-        <Text type="secondary" style={{ fontSize: 12 }}>Доступно</Text>
-        <div><Text strong style={{ fontSize: 16 }}>{available.toFixed(2)}</Text> <Text type="secondary">USDT</Text></div>
-      </div>
-      {frozen > 0 && (
-        <div>
-          <Text type="secondary" style={{ fontSize: 12 }}>Заморожено</Text>
-          <div><Text>{frozen.toFixed(2)}</Text> <Text type="secondary">USDT</Text></div>
-        </div>
-      )}
-    </Space>
-  );
+  const available = Number(data.balance.available ?? 0);
+  return <Text strong>{available.toFixed(2)} USDT</Text>;
 }
 
 interface Props {
@@ -134,6 +117,8 @@ export default function CounterpartyTable({ forcedType }: Props) {
   const openCreate = () => { setEditing(null); setFormOpen(true); };
   const openEdit = (cp: Counterparty) => { setEditing(cp); setFormOpen(true); };
 
+  const isClientType = (type: string) => type === "client" || type === "both";
+
   const columns: ColumnsType<Counterparty> = [
     {
       title: t("counterparty.name"),
@@ -167,6 +152,15 @@ export default function CounterpartyTable({ forcedType }: Props) {
       title: t("counterparty.default_currency"),
       dataIndex: "default_currency",
       key: "default_currency",
+    },
+    {
+      title: "TronTok USDT",
+      key: "trontok_balance",
+      align: "right" as const,
+      render: (_: unknown, row: Counterparty) => {
+        if (!row.code || !isClientType(row.type)) return <Text type="secondary">—</Text>;
+        return <TronTokBalanceCell counterpartyId={row.id} />;
+      },
     },
     {
       title: t("common.actions"),
@@ -253,20 +247,6 @@ export default function CounterpartyTable({ forcedType }: Props) {
         dataSource={data?.items ?? []}
         rowKey="id"
         loading={isLoading}
-        expandable={{
-          rowExpandable: (row) => !!(row.code) && (row.type === "client" || row.type === "both"),
-          expandedRowRender: (row) => (
-            <div style={{ padding: "8px 16px" }}>
-              <Space>
-                <WalletOutlined style={{ color: "#1677ff" }} />
-                <Text strong style={{ color: "#1677ff" }}>TronTok баланс</Text>
-              </Space>
-              <div style={{ marginTop: 6 }}>
-                <TronTokBalanceRow counterpartyId={row.id} />
-              </div>
-            </div>
-          ),
-        }}
         pagination={{
           current: page,
           total: data?.total ?? 0,
