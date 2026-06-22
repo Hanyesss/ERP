@@ -271,7 +271,14 @@ async def verify_payment(
         )
     )).scalar_one_or_none()
     if existing:
-        return {"ok": True, "idempotent": True, "payment_id": str(existing.id)}
+        return {
+            "ok": True,
+            "idempotent": True,
+            "payment_id": str(existing.id),
+            "amount_usdt": str(existing.amount),
+            "amount_cny": str(existing.amount_cny),
+            "usdt_cny_rate": str(existing.rate_to_cny),
+        }
 
     # 2. Counterparty lookup
     cp = await _get_counterparty(db, client_code)
@@ -374,10 +381,17 @@ async def verify_payment(
         cp.trontok_provisioned_at = datetime.now(timezone.utc)
 
     await db.commit()
-    logger.info("TronTok payment verified and recorded: ref=%s amount=%s USDT payment_id=%s",
-                ref, amount_usdt, payment.id)
+    logger.info("TronTok payment verified and recorded: ref=%s amount=%s USDT amount_cny=%s payment_id=%s",
+                ref, amount_usdt, amount_cny, payment.id)
 
-    return {"ok": True, "idempotent": False, "payment_id": str(payment.id), "amount_usdt": str(amount_usdt)}
+    return {
+        "ok": True,
+        "idempotent": False,
+        "payment_id": str(payment.id),
+        "amount_usdt": str(amount_usdt),
+        "amount_cny": str(amount_cny),
+        "usdt_cny_rate": str(rate),
+    }
 
 
 # ── ERP-frontend endpoints (JWT auth) ─────────────────────────────────────────

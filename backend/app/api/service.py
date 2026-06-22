@@ -209,6 +209,21 @@ async def sync_trade_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool
     status_map = {"unpaid": "unpaid", "partial": "partial", "paid": "paid"}
     payment_status = status_map.get(str(ps), "unpaid")
 
+    # Реальная сумма оплаты из PaymentAllocation (remaining_amount_cny нет в ORM-модели)
+    from app.models.payment_allocation import PaymentAllocation
+    from app.models.payment import Payment as PaymentModel
+    from sqlalchemy import func
+    from decimal import Decimal
+    paid_cny_result = (await db.execute(
+        select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
+        .join(PaymentModel, PaymentAllocation.payment_id == PaymentModel.id)
+        .where(
+            PaymentAllocation.order_id == order.id,
+            PaymentModel.is_active == True,
+        )
+    )).scalar_one()
+    paid_amount_cny_val = float(paid_cny_result)
+
     payload = TradeOrderPayload(
         erp_order_id=str(order.id),
         number=order.order_number,
@@ -218,8 +233,7 @@ async def sync_trade_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool
         order_date=order.order_date.isoformat() if order.order_date else None,
         currency=str(order.client_currency.value if hasattr(order.client_currency, 'value') else order.client_currency),
         total_amount_cny=float(order.total_sale_cny) if order.total_sale_cny else None,
-        paid_amount_cny=float(order.total_sale_cny - order.remaining_amount_cny)
-            if order.total_sale_cny and hasattr(order, 'remaining_amount_cny') else 0.0,
+        paid_amount_cny=paid_amount_cny_val,
         payment_status=payment_status,
         notes=order.notes,
     )

@@ -14,3 +14,13 @@ export const checkExchangeRates = (date: string, currencies: string[]) =>
   apiClient.get<RateCheckResponse>("/api/exchange-rates/check", {
     params: { date, currencies: currencies.join(",") },
   });
+
+export const autoFetchRates = () =>
+  apiClient.post<{
+    ok: boolean;
+    fetch_source: string;
+    rate_date: string;
+    rates: { RUB: number; USD: number; USDT: number };
+    saved: string[];
+    skipped_manual: string[];
+  }>("/api/exchange-rates/auto-fetch");

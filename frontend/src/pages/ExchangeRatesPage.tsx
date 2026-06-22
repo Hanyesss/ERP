@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Button, Col, DatePicker, Row, Table, Typography } from "antd";
-import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Col, DatePicker, Row, Table, Tag, Tooltip, Typography, message } from "antd";
+import { EditOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { getExchangeRates } from "../api/exchangeRates";
+import { getExchangeRates, autoFetchRates } from "../api/exchangeRates";
 import ExchangeRateForm from "../components/exchange-rates/ExchangeRateForm";
 import type { ExchangeRate } from "../types/exchangeRate";
 
@@ -27,8 +27,24 @@ export default function ExchangeRatesPage() {
   const [editDate, setEditDate] = useState<string | undefined>();
   const [editInitial, setEditInitial] = useState<any>(undefined);
   const [dateRange, setDateRange] = useState<[string, string] | null>(null);
+  const qc = useQueryClient();
 
   const params = { date_from: dateRange?.[0], date_to: dateRange?.[1] };
+
+  const autoFetch = useMutation({
+    mutationFn: autoFetchRates,
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["exchange-rates"] });
+      qc.invalidateQueries({ queryKey: ["exchange-rates-check"] });
+      const d = res.data;
+      const src = d.fetch_source === "moex" ? "MOEX" : "ЦБ РФ";
+      const skipped = d.skipped_manual.length
+        ? ` (пропущено с ручным курсом: ${d.skipped_manual.join(", ")})`
+        : "";
+      message.success(`Курсы обновлены с ${src}${skipped}`);
+    },
+    onError: () => message.error("Не удалось загрузить курсы с биржи"),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["exchange-rates", params],
@@ -67,12 +83,25 @@ export default function ExchangeRatesPage() {
     setModalOpen(true);
   };
 
+  const sourceTag = (row: RatesByDate) => {
+    const isManual = [row.rub, row.usd, row.usdt].some(r => r?.source === "manual");
+    return isManual
+      ? <Tooltip title="Курс задан вручную — авто-обновление пропускает этот день"><Tag color="gold">ручной</Tag></Tooltip>
+      : <Tag color="green">авто</Tag>;
+  };
+
   const columns = [
     {
       title: t("exchange_rate.date"),
       dataIndex: "date",
       key: "date",
       width: 120,
+    },
+    {
+      title: "Источник",
+      key: "source",
+      width: 100,
+      render: (_: any, row: RatesByDate) => sourceTag(row),
     },
     {
       title: "1 CNY = ? RUB",
@@ -131,7 +160,14 @@ export default function ExchangeRatesPage() {
         <Col>
           <Title level={4} style={{ margin: 0 }}>{t("nav.exchange_rates")}</Title>
         </Col>
-        <Col>
+        <Col style={{ display: "flex", gap: 8 }}>
+          <Button
+            icon={<SyncOutlined />}
+            loading={autoFetch.isPending}
+            onClick={() => autoFetch.mutate()}
+          >
+            Обновить с биржи
+          </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t("exchange_rate.add_new")}
           </Button>

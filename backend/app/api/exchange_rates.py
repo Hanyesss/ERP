@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.models.user import User
-from app.models.exchange_rate import ExchangeRate
+from app.models.exchange_rate import ExchangeRate, RateSourceEnum
 from app.schemas.exchange_rate import (
     ExchangeRateCreate, ExchangeRateResponse,
     ExchangeRateListResponse, RateCheckResponse,
@@ -65,7 +65,6 @@ async def list_rates(
     q = q.offset((page - 1) * page_size).limit(page_size)
     rates = (await db.execute(q)).scalars().all()
 
-    # Load creator names
     user_ids = list({r.created_by for r in rates})
     users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
     users_map = {u.id: u.full_name for u in users_result.scalars().all()}
@@ -92,7 +91,7 @@ async def upsert_rate(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Создать или обновить курс за дату."""
+    """Создать или обновить курс вручную. Всегда сохраняет с source=manual."""
     result = await db.execute(
         select(ExchangeRate)
         .where(ExchangeRate.currency == body.currency, ExchangeRate.rate_date == body.rate_date)
@@ -100,7 +99,7 @@ async def upsert_rate(
     rate = result.scalar_one_or_none()
     if rate:
         rate.rate_to_cny = body.rate_to_cny
-        rate.source = body.source
+        rate.source = RateSourceEnum.manual
     else:
         rate = ExchangeRate(
             id=uuid.uuid4(),
@@ -108,7 +107,7 @@ async def upsert_rate(
             rate_to_cny=body.rate_to_cny,
             rate_date=body.rate_date,
             created_by=current_user.id,
-            source=body.source,
+            source=RateSourceEnum.manual,
         )
         db.add(rate)
     await db.commit()
@@ -118,6 +117,77 @@ async def upsert_rate(
         rate_date=rate.rate_date, created_by=rate.created_by,
         created_by_name=current_user.full_name, source=rate.source, created_at=rate.created_at,
     )
+
+
+@router.post("/auto-fetch")
+async def auto_fetch_rates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "accountant")),
+):
+    """
+    Загрузить курсы с MOEX (fallback: ЦБ РФ) и сохранить с source=auto.
+    Если за сегодня уже стоит source=manual — этот курс НЕ перезаписывается.
+    Возвращает итог: что сохранено, что пропущено.
+    """
+    import asyncio
+    from app.utils.moex_rates import fetch_rates
+
+    loop = asyncio.get_event_loop()
+    try:
+        fetched = await loop.run_in_executor(None, fetch_rates)
+    except Exception as exc:
+        raise HTTPException(502, f"Не удалось получить курсы: {exc}")
+
+    today = date.today()
+    to_save = {
+        "RUB":  fetched["rub_to_cny"],
+        "USD":  fetched["usd_to_cny"],
+        "USDT": fetched["usdt_to_cny"],
+    }
+
+    saved: list[str] = []
+    skipped: list[str] = []
+
+    for currency, rate_value in to_save.items():
+        existing = (await db.execute(
+            select(ExchangeRate).where(
+                ExchangeRate.currency == currency,
+                ExchangeRate.rate_date == today,
+            )
+        )).scalar_one_or_none()
+
+        if existing and existing.source == RateSourceEnum.manual:
+            skipped.append(currency)
+            continue
+
+        if existing:
+            existing.rate_to_cny = rate_value
+            existing.source = RateSourceEnum.auto
+        else:
+            db.add(ExchangeRate(
+                id=uuid.uuid4(),
+                currency=currency,
+                rate_to_cny=rate_value,
+                rate_date=today,
+                created_by=current_user.id,
+                source=RateSourceEnum.auto,
+            ))
+        saved.append(currency)
+
+    await db.commit()
+
+    return {
+        "ok": True,
+        "fetch_source": fetched["source"],
+        "rate_date": str(today),
+        "rates": {
+            "RUB":  float(fetched["rub_to_cny"]),
+            "USD":  float(fetched["usd_to_cny"]),
+            "USDT": float(fetched["usdt_to_cny"]),
+        },
+        "saved": saved,
+        "skipped_manual": skipped,
+    }
 
 
 @router.post("", response_model=ExchangeRateResponse, status_code=status.HTTP_201_CREATED)
@@ -142,7 +212,7 @@ async def create_rate(
         rate_to_cny=body.rate_to_cny,
         rate_date=body.rate_date,
         created_by=current_user.id,
-        source=body.source,
+        source=RateSourceEnum.manual,
     )
     db.add(rate)
     await db.commit()
