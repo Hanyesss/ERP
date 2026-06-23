@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, or_
 from sqlalchemy.orm import aliased
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.core.deps import require_roles
@@ -330,7 +331,8 @@ async def create_purchase(
 
     # Auto-generate purchase number if not provided
     purchase_number = body.purchase_number
-    if not purchase_number:
+    _auto_number = not purchase_number
+    if _auto_number:
         prefix = f"PUR-{body.purchase_date.strftime('%Y%m%d')}-"
         count = (await db.execute(
             select(func.count(Purchase.id)).where(Purchase.purchase_number.like(f"{prefix}%"))
@@ -448,7 +450,22 @@ async def create_purchase(
             order_obj = (await db.execute(select(Order).where(Order.id == oid))).scalar_one_or_none()
             if order_obj:
                 await on_purchase_created(db, purchase.id, purchase_number, order_obj.manager_id)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        if _auto_number and "purchase_number" in str(exc):
+            # Race condition: regenerate number and retry once
+            await db.rollback()
+            prefix = f"PUR-{body.purchase_date.strftime('%Y%m%d')}-"
+            count = (await db.execute(
+                select(func.count(Purchase.id)).where(Purchase.purchase_number.like(f"{prefix}%"))
+            )).scalar_one()
+            purchase_number = f"{prefix}{count + 1:04d}"
+            purchase.purchase_number = purchase_number
+            db.add(purchase)
+            await db.commit()
+        else:
+            raise
     return await _load_purchase(db, purchase.id)
 
 
