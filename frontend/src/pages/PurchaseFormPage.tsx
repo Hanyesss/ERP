@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { createPurchase, updatePurchase, getPurchase, getAvailableForPurchase, getNextPurchaseNumber } from "../api/purchases";
-import { getOrders } from "../api/orders";
+import { getOrders, getOrder } from "../api/orders";
 import { getExchangeRates } from "../api/exchangeRates";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 import apiClient from "../api/client";
@@ -172,9 +172,18 @@ export default function PurchaseFormPage() {
     }
   }, [currency, ratesData]); // ratesData (не ratesByCurrency) чтобы не было лишних ре-рендеров
 
+  const [orderSearch, setOrderSearch] = useState("");
+
   const { data: orders } = useQuery({
-    queryKey: ["orders-list-brief"],
-    queryFn: () => getOrders({ page_size: 100 }).then(r => r.data),
+    queryKey: ["orders-list-brief", orderSearch],
+    queryFn: () => getOrders({ page_size: 50, search: orderSearch || undefined }).then(r => r.data),
+  });
+
+  // Если выбранный заказ не попал в текущий поиск — подгружаем его отдельно
+  const { data: selectedOrderFull } = useQuery({
+    queryKey: ["order-by-id", selectedOrderId],
+    queryFn: () => getOrder(selectedOrderId!).then(r => r.data),
+    enabled: !!selectedOrderId,
   });
 
   const { data: availableItems } = useQuery({
@@ -194,7 +203,13 @@ export default function PurchaseFormPage() {
     }
   }, [availableItems]);
 
-  const selectedOrder = (orders?.items || []).find(o => o.id === selectedOrderId);
+  const orderItems = orders?.items || [];
+  // Добавляем выбранный заказ в опции если его нет в текущем поиске
+  const allOrderItems = selectedOrderFull && !orderItems.find(o => o.id === selectedOrderId)
+    ? [selectedOrderFull, ...orderItems]
+    : orderItems;
+
+  const selectedOrder = allOrderItems.find(o => o.id === selectedOrderId);
   const isLogistics = selectedOrder?.business_type_code === "logistics";
 
   const createMutation = useMutation({
@@ -269,7 +284,7 @@ export default function PurchaseFormPage() {
     setItemRows(rows => rows.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
-  const orderOptions = (orders?.items || []).map(o => ({ value: o.id, label: `${o.order_number} — ${o.client_name}` }));
+  const orderOptions = allOrderItems.map(o => ({ value: o.id, label: `${o.order_number} — ${o.client_name}` }));
 
   const totalAmount = itemRows
     .filter(r => r.selected)
@@ -360,9 +375,10 @@ export default function PurchaseFormPage() {
                 <Select
                   options={orderOptions}
                   value={selectedOrderId}
-                  onChange={v => { setSelectedOrderId(v); setItemRows([]); }}
+                  onChange={v => { setSelectedOrderId(v); setItemRows([]); setOrderSearch(""); }}
                   showSearch
-                  filterOption={(i, o) => (o?.label ?? "").toLowerCase().includes(i.toLowerCase())}
+                  filterOption={false}
+                  onSearch={setOrderSearch}
                   placeholder={t("purchase.select_order")}
                   allowClear
                 />
