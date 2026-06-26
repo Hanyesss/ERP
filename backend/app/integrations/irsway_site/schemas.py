@@ -35,6 +35,8 @@ class ShipmentCreatePayload(BaseModel):
     destination: Optional[str] = None
     tracking_number: Optional[str] = None
     total_amount_cny: float
+    paid_amount_cny: float = 0.0
+    payment_status: str = "unpaid"
     currency: str
     notes: Optional[str] = None
     items: list[ShipmentItemPayload] = []

@@ -75,6 +75,7 @@ class IrswayClient:
             cargo_currency = next((i.cargo_value_currency for i in items if i.cargo_value and i.cargo_value_currency), None)
             if cargo_currency:
                 body["cargo_value_currency"] = cargo_currency
+        body["total_amount_cny"] = payload.total_amount_cny
         body["generate_invoice"] = payload.generate_invoice
         if payload.insurance_percent is not None:
             body["insurance_percent"] = payload.insurance_percent

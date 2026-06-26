@@ -14,7 +14,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_roles
@@ -72,7 +72,7 @@ async def _get_tt_client(db: AsyncSession) -> TronTokClient:
 async def _get_counterparty(db: AsyncSession, client_code: str) -> Counterparty:
     cp = (await db.execute(
         select(Counterparty).where(
-            Counterparty.code == client_code.upper(),
+            func.lower(Counterparty.code) == client_code.lower(),
             Counterparty.is_active == True,
         )
     )).scalar_one_or_none()
@@ -532,7 +532,7 @@ async def sync_trontok_status(
     _: User = Depends(require_roles("admin")),
 ):
     """Check all client counterparties against TronTok and update trontok_linked. Admin only."""
-    from sqlalchemy import or_
+    from sqlalchemy import func, or_
 
     tt_client = await _get_tt_client(db)
 
