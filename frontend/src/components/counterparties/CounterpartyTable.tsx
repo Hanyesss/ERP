@@ -246,9 +246,9 @@ export default function CounterpartyTable({ forcedType }: Props) {
               onChange={val => { setTrontokFilter(val); setPage(1); }}
               style={{ width: 160 }}
               options={[
-                { value: "all", label: "TronTok: все" },
-                { value: "yes", label: "TronTok: есть" },
-                { value: "no", label: "TronTok: нет" },
+                { value: "all", label: t("counterparty.trontok_filter_all") },
+                { value: "yes", label: t("counterparty.trontok_filter_yes") },
+                { value: "no", label: t("counterparty.trontok_filter_no") },
               ]}
             />
           </Space>
