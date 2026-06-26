@@ -6,6 +6,7 @@ export interface ListParams {
   type?: string;
   page?: number;
   page_size?: number;
+  trontok_linked?: boolean;
 }
 
 export const getCounterparties = (params: ListParams = {}) =>

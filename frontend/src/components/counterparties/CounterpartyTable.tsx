@@ -43,15 +43,23 @@ export default function CounterpartyTable({ forcedType }: Props) {
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState(forcedType ?? "all");
+  const [trontokFilter, setTrontokFilter] = useState<"all" | "yes" | "no">("all");
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Counterparty | null>(null);
 
   const effectiveType = forcedType ?? typeFilter;
+  const trontokLinkedParam = trontokFilter === "yes" ? true : trontokFilter === "no" ? false : undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["counterparties", search, effectiveType, page],
-    queryFn: () => getCounterparties({ search: search || undefined, type: effectiveType, page, page_size: 20 }).then(r => r.data),
+    queryKey: ["counterparties", search, effectiveType, trontokFilter, page],
+    queryFn: () => getCounterparties({
+      search: search || undefined,
+      type: effectiveType,
+      page,
+      page_size: 20,
+      trontok_linked: trontokLinkedParam,
+    }).then(r => r.data),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["counterparties"] });
@@ -233,6 +241,16 @@ export default function CounterpartyTable({ forcedType }: Props) {
                 style={{ width: 180 }}
               />
             )}
+            <Select
+              value={trontokFilter}
+              onChange={val => { setTrontokFilter(val); setPage(1); }}
+              style={{ width: 160 }}
+              options={[
+                { value: "all", label: "TronTok: все" },
+                { value: "yes", label: "TronTok: есть" },
+                { value: "no", label: "TronTok: нет" },
+              ]}
+            />
           </Space>
         </Col>
         <Col>
