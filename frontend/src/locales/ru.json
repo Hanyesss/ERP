@@ -617,6 +617,7 @@
     "total_client_cny": "По клиентам (CNY)",
     "total_none_cny": "Прочие (CNY)",
     "search_placeholder": "Поиск по описанию...",
+    "filter_category": "Категория",
     "filter_link_type": "Привязка",
     "filter_reimbursement": "Тип",
     "only_reimbursements": "Только возмещения",

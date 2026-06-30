@@ -649,6 +649,7 @@
     "total_client_cny": "客户费用(CNY)",
     "total_none_cny": "其他费用(CNY)",
     "search_placeholder": "按描述搜索...",
+    "filter_category": "类别",
     "filter_link_type": "关联类型",
     "filter_reimbursement": "类型",
     "only_reimbursements": "仅报销",

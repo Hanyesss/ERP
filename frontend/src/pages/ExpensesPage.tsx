@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import { getExpenses, deleteExpense } from "../api/expenses";
+import { getExpenseCategories } from "../api/references";
 import { fetchUsers } from "../api/users";
 import type { ExpenseListItem } from "../types/expense";
 import type { User } from "../types";
@@ -40,6 +41,7 @@ export default function ExpensesPage({ user }: Props) {
   const [deleteReason, setDeleteReason] = useState("");
 
   const [search, setSearch] = useState("");
+  const [categoryId, setCategoryId] = useState<string | undefined>();
   const [linkType, setLinkType] = useState<string | undefined>();
   const [currency, setCurrency] = useState<string | undefined>();
   const [isReimbursement, setIsReimbursement] = useState<boolean | undefined>();
@@ -57,8 +59,14 @@ export default function ExpensesPage({ user }: Props) {
     label: u.full_name || u.username,
   }));
 
+  const { data: categoriesData } = useQuery({
+    queryKey: ["expense-categories"],
+    queryFn: () => getExpenseCategories().then(r => r.data),
+  });
+
   const params = {
     search: search || undefined,
+    category_id: categoryId,
     link_type: linkType,
     currency,
     is_reimbursement: isReimbursement,
@@ -246,6 +254,20 @@ export default function ExpensesPage({ user }: Props) {
             style={{ width: 200 }}
             onSearch={v => { setSearch(v); setPage(1); }}
             onChange={e => { if (!e.target.value) { setSearch(""); setPage(1); } }}
+          />
+        </Col>
+        <Col>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t("expense.filter_category")}
+            style={{ width: 200 }}
+            options={(categoriesData ?? []).map(c => ({
+              value: c.id,
+              label: c.name_cn ? `${c.name} / ${c.name_cn}` : c.name,
+            }))}
+            onChange={v => { setCategoryId(v); setPage(1); }}
           />
         </Col>
         <Col>
