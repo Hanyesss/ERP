@@ -207,7 +207,7 @@ export default function PurchaseDetailPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
+            accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             style={{ display: "none" }}
             onChange={async e => {
               const file = e.target.files?.[0];

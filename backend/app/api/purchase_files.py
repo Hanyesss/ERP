@@ -17,7 +17,13 @@ router = APIRouter(prefix="/api/purchases", tags=["purchase-files"])
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+ALLOWED_MIME_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+    "application/vnd.ms-excel",  # .xls
+}
+# Некоторые браузеры/ОС шлют octet-stream для Excel — разрешаем по расширению
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".xlsx", ".xls"}
 
 
 def _purchase_dir(purchase_id: uuid.UUID) -> Path:
@@ -44,10 +50,10 @@ async def upload_purchase_file(
         raise HTTPException(422, "File too large (max 10 MB)")
 
     mime = file.content_type or ""
-    if mime not in ALLOWED_MIME_TYPES:
-        raise HTTPException(422, f"Allowed: jpg, png, webp, pdf")
-
     ext = Path(file.filename or "file").suffix.lower() or ".bin"
+    if mime not in ALLOWED_MIME_TYPES and ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(422, "Allowed: jpg, png, webp, pdf, xlsx, xls")
+
     stored_name = f"{uuid.uuid4()}{ext}"
     dest = _purchase_dir(purchase_id) / stored_name
     dest.write_bytes(content)

@@ -426,7 +426,7 @@ export default function PurchaseFormPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   style={{ display: "none" }}
                   onChange={e => { setPendingFile(e.target.files?.[0] || null); }}
                 />
