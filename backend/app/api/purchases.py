@@ -40,6 +40,50 @@ async def _get_default_company(db: AsyncSession) -> Company:
     return company
 
 
+async def _max_purchase_seq(db: AsyncSession, prefix: str) -> int:
+    """Наибольший порядковый номер среди уже существующих закупок с данным префиксом.
+
+    Считаем по МАКСИМУМУ суффикса, а не по COUNT: при пропусках в нумерации
+    (например, закупка была удалена) count давал бы уже занятый номер и приводил
+    к нарушению уникального ключа purchase_number.
+    """
+    numbers = (await db.execute(
+        select(Purchase.purchase_number).where(Purchase.purchase_number.like(f"{prefix}%"))
+    )).scalars().all()
+    max_seq = 0
+    for n in numbers:
+        try:
+            max_seq = max(max_seq, int(n.rsplit("-", 1)[-1]))
+        except (ValueError, IndexError):
+            continue
+    return max_seq
+
+
+async def _flush_purchase_with_retry(
+    db: AsyncSession, purchase: Purchase, auto_number: bool, prefix: str
+) -> None:
+    """Флашит INSERT закупки, перегенерируя номер при гонке за purchase_number.
+
+    Нарушение уникального ключа возникает именно на flush (INSERT), поэтому
+    retry нужен здесь, а не вокруг commit. Каждая попытка — в savepoint, чтобы
+    после отката сессия оставалась пригодной.
+    """
+    for _ in range(20):
+        try:
+            async with db.begin_nested():
+                db.add(purchase)
+                await db.flush()
+            return
+        except IntegrityError as exc:
+            if not auto_number or "purchase_number" not in str(exc):
+                raise
+            purchase.purchase_number = f"{prefix}{await _max_purchase_seq(db, prefix) + 1:04d}"
+    # Последняя попытка без перехвата — пусть ошибка всплывёт, если так и не удалось
+    async with db.begin_nested():
+        db.add(purchase)
+        await db.flush()
+
+
 async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseResponse:
     pur = (await db.execute(
         select(Purchase).where(Purchase.id == purchase_id, Purchase.is_deleted == False)
@@ -332,12 +376,9 @@ async def create_purchase(
     # Auto-generate purchase number if not provided
     purchase_number = body.purchase_number
     _auto_number = not purchase_number
+    prefix = f"PUR-{body.purchase_date.strftime('%Y%m%d')}-"
     if _auto_number:
-        prefix = f"PUR-{body.purchase_date.strftime('%Y%m%d')}-"
-        count = (await db.execute(
-            select(func.count(Purchase.id)).where(Purchase.purchase_number.like(f"{prefix}%"))
-        )).scalar_one()
-        purchase_number = f"{prefix}{count + 1:04d}"
+        purchase_number = f"{prefix}{await _max_purchase_seq(db, prefix) + 1:04d}"
 
     rate = body.rate_to_cny
     affected_order_ids: set[uuid.UUID] = set()
@@ -371,8 +412,8 @@ async def create_purchase(
             created_by=current_user.id,
             excluded_from_accounting=body.excluded_from_accounting,
         )
-        db.add(purchase)
-        await db.flush()
+        await _flush_purchase_with_retry(db, purchase, _auto_number, prefix)
+        purchase_number = purchase.purchase_number
         affected_order_ids.add(body.order_id)
 
     else:
@@ -422,8 +463,8 @@ async def create_purchase(
             created_by=current_user.id,
             excluded_from_accounting=body.excluded_from_accounting,
         )
-        db.add(purchase)
-        await db.flush()
+        await _flush_purchase_with_retry(db, purchase, _auto_number, prefix)
+        purchase_number = purchase.purchase_number
 
         for oi, item_data in validated_items:
             cost_amount_cny = (item_data.quantity * item_data.cost_price * rate).quantize(Decimal("0.01"))
@@ -450,22 +491,9 @@ async def create_purchase(
             order_obj = (await db.execute(select(Order).where(Order.id == oid))).scalar_one_or_none()
             if order_obj:
                 await on_purchase_created(db, purchase.id, purchase_number, order_obj.manager_id)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        if _auto_number and "purchase_number" in str(exc):
-            # Race condition: regenerate number and retry once
-            await db.rollback()
-            prefix = f"PUR-{body.purchase_date.strftime('%Y%m%d')}-"
-            count = (await db.execute(
-                select(func.count(Purchase.id)).where(Purchase.purchase_number.like(f"{prefix}%"))
-            )).scalar_one()
-            purchase_number = f"{prefix}{count + 1:04d}"
-            purchase.purchase_number = purchase_number
-            db.add(purchase)
-            await db.commit()
-        else:
-            raise
+    # Уникальность purchase_number уже гарантирована на flush (savepoint-retry выше):
+    # успешный INSERT держит блокировку индекса, поэтому commit коллизий не даёт.
+    await db.commit()
     return await _load_purchase(db, purchase.id)
 
 
