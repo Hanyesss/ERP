@@ -115,11 +115,13 @@ async def get_widgets(
                 func.coalesce(func.sum(OrderItem.weight_kg), D0).label("total_kg"),
             )
             .join(Order, Order.warehouse_id == Warehouse.id)
+            .join(BusinessType, Order.business_type_id == BusinessType.id)
             .join(OrderItem, OrderItem.order_id == Order.id)
             .where(
                 Order.order_date >= date_from,
                 Order.order_date <= date_to,
                 Order.status != OrderStatus.cancelled,
+                BusinessType.code == "logistics",  # тоннаж считается только по логистике
                 OrderItem.weight_kg.isnot(None),
             )
             .group_by(Warehouse.name)

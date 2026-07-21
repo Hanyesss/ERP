@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services import report_service
 from app.services.excel_export import (
     export_pnl, export_by_client, export_by_supplier,
-    export_expenses, export_tonnage,
+    export_expenses, export_tonnage, export_tonnage_detail,
 )
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -195,3 +195,18 @@ async def export_tonnage_report(
     data = await report_service.get_tonnage(db, date_from, date_to, warehouse_id, client_id)
     data_bytes = export_tonnage(data, lang)
     return _excel_response(data_bytes, f"tonnage_{date_from}_{date_to}.xlsx")
+
+
+@router.get("/tonnage/detail/export")
+async def export_tonnage_detail_report(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    warehouse_id: Optional[uuid.UUID] = Query(None),
+    client_id: Optional[uuid.UUID] = Query(None),
+    lang: str = Query("ru"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_TONNAGE_ROLES)),
+):
+    rows = await report_service.get_tonnage_detail(db, date_from, date_to, warehouse_id, client_id)
+    data_bytes = export_tonnage_detail(rows, lang)
+    return _excel_response(data_bytes, f"tonnage_detail_{date_from}_{date_to}.xlsx")

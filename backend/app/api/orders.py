@@ -606,6 +606,10 @@ async def create_order(
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == body.business_type_id))).scalar_one_or_none()
     is_logistics = bt and bt.code == "logistics"
 
+    # Склад обязателен для логистики: иначе заказ выпадает из разбивки по складам в отчёте тоннажа
+    if is_logistics and not body.warehouse_id:
+        raise HTTPException(422, "Для логистического заказа необходимо указать склад")
+
     order = Order(
         id=uuid.uuid4(),
         order_number=body.order_number,
@@ -710,6 +714,10 @@ async def update_order(
     bt_id = update_data.get("business_type_id", order.business_type_id)
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == bt_id))).scalar_one_or_none()
     is_logistics = bt and bt.code == "logistics"
+
+    # Склад обязателен для логистики — в т.ч. нельзя очистить его при редактировании
+    if is_logistics and not update_data.get("warehouse_id", order.warehouse_id):
+        raise HTTPException(422, "Для логистического заказа необходимо указать склад")
 
     items_data = update_data.pop("items", None)
     charges_data = update_data.pop("charges", None)

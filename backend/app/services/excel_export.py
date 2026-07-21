@@ -24,6 +24,7 @@ HEADERS = {
             "summary": ["Вес (кг)", "Объём (м³)", "Кол-во заказов"],
             "by_warehouse": ["Склад", "Заказов", "Вес (кг)", "Объём (м³)"],
             "by_month": ["Год", "Месяц", "Вес (кг)", "Объём (м³)"],
+            "detail": ["Номер заказа", "Дата", "Клиент", "Склад", "Вес (кг)", "Объём (м³)", "Создал"],
         },
     },
     "zh": {
@@ -44,6 +45,7 @@ HEADERS = {
             "summary": ["重量(kg)", "体积(m³)", "订单数"],
             "by_warehouse": ["仓库", "订单数", "重量(kg)", "体积(m³)"],
             "by_month": ["年", "月", "重量(kg)", "体积(m³)"],
+            "detail": ["订单号", "日期", "客户", "仓库", "重量(kg)", "体积(m³)", "创建人"],
         },
     },
 }
@@ -297,6 +299,44 @@ def export_tonnage(data: dict, lang: str = "ru") -> bytes:
         ws_mo.append([row.get("year"), row.get("month"), _fmt(row.get("total_weight_kg")), _fmt(row.get("total_volume_m3"))])
     _auto_width(ws_mo)
 
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def export_tonnage_detail(rows: list, lang: str = "ru") -> bytes:
+    """Построчная детализация тоннажа с итоговой строкой."""
+    th = HEADERS.get(lang, HEADERS["ru"])["tonnage"]
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Детализация" if lang == "ru" else "明细"
+    _header_row(ws, th["detail"])
+
+    total_w = Decimal("0")
+    total_v = Decimal("0")
+    for r in rows:
+        wh = r.get("warehouse_name_cn") if lang == "zh" else r.get("warehouse_name")
+        if not wh:
+            wh = "仓库未指定" if lang == "zh" else "Склад не указан"
+        weight = Decimal(str(r.get("total_weight_kg") or 0))
+        volume = Decimal(str(r.get("total_volume_m3") or 0))
+        total_w += weight
+        total_v += volume
+        ws.append([
+            r.get("order_number"),
+            str(r.get("order_date") or ""),
+            r.get("client_name") or "",
+            wh,
+            _fmt(weight),
+            _fmt(volume),
+            r.get("created_by_name") or "",
+        ])
+
+    ws.append(["", "", "", "总计" if lang == "zh" else "Итого", _fmt(total_w), _fmt(total_v), ""])
+    for cell in ws[ws.max_row]:
+        cell.font = BOLD_FONT
+
+    _auto_width(ws)
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()

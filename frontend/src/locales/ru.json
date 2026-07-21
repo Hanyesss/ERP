@@ -46,15 +46,15 @@
     "transactions": "Транзакции",
     "transfers": "Переводы",
     "op": {
-      "payment_in":     "Входящий платёж",
-      "payment_out":    "Исходящий платёж",
+      "payment_in": "Входящий платёж",
+      "payment_out": "Исходящий платёж",
       "payment_cancel": "Отмена платежа",
-      "expense":        "Расход",
-      "reimbursement":  "Выплата возмещения",
+      "expense": "Расход",
+      "reimbursement": "Выплата возмещения",
       "expense_cancel": "Отмена расхода",
-      "transfer_out":   "Перевод →",
-      "transfer_in":    "Перевод ←",
-      "data_fix":       "Корректировка данных"
+      "transfer_out": "Перевод →",
+      "transfer_in": "Перевод ←",
+      "data_fix": "Корректировка данных"
     }
   },
   "dashboard": {
@@ -737,7 +737,6 @@
     "stream_stop": "Стоп стрим",
     "scan_not_found": "QR не найден на фото — попробуйте ещё раз",
     "scan_already_added": "Уже добавлено",
-    "boxes_count": "Мест",
     "photo_upload_warning": "Фото не загружено, но место принято",
     "add_one_more": "Ещё место",
     "no_packing_lists": "Пакинг-листы ещё не создавались",
@@ -768,7 +767,8 @@
     "tracking_code": "Код отслеживания",
     "tracking_code_placeholder": "Сканируйте или введите код...",
     "warehouse_col": "Склад",
-    "item_scan_tracking": "Сканировать код"
+    "item_scan_tracking": "Сканировать код",
+    "required_for_logistics": "Для логистического заказа склад обязателен"
   },
   "report": {
     "title": "Отчёты",
@@ -812,7 +812,9 @@
     "overpayment": "Переплата (аванс)",
     "debt_to_supplier": "Долг поставщику",
     "order_sale": "Сумма заказа",
-    "purchase_amount": "Сумма закупа"
+    "purchase_amount": "Сумма закупа",
+    "download_excel": "Скачать эксель",
+    "export_detail_excel": "Детализация Excel"
   },
   "common": {
     "save": "Сохранить",

@@ -193,3 +193,13 @@ export const exportExpenses = (params: { date_from: string; date_to: string; lan
 
 export const exportTonnage = (params: { date_from: string; date_to: string; lang: string }) =>
   downloadExcel(`${BASE}/tonnage/export`, params, `tonnage_${params.date_from}_${params.date_to}.xlsx`);
+
+export const exportTonnageDetail = (
+  params: { date_from: string; date_to: string; lang: string; warehouse_id?: string; client_id?: string },
+  filenameSuffix = "",
+) =>
+  downloadExcel(
+    `${BASE}/tonnage/detail/export`,
+    params,
+    `tonnage_detail${filenameSuffix}_${params.date_from}_${params.date_to}.xlsx`,
+  );

@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { getTonnage, exportTonnage } from "../../api/reports";
+import { getTonnage, exportTonnage, exportTonnageDetail } from "../../api/reports";
 import { getWarehouses } from "../../api/warehouses";
 import { getCounterparties } from "../../api/counterparties";
 
@@ -27,6 +27,7 @@ export default function TonnageReport() {
   ]);
   const [warehouseId, setWarehouseId] = useState<string | undefined>();
   const [clientId, setClientId] = useState<string | undefined>();
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
 
   const params = {
     date_from: dateRange[0].format("YYYY-MM-DD"),
@@ -60,6 +61,19 @@ export default function TonnageReport() {
     ...(clients?.items || []).map((c: any) => ({ value: c.id, label: c.name })),
   ];
 
+  // Детализация всегда берёт текущий выбранный период, поэтому работает на любом промежутке
+  const handleDetailExport = async (whId?: string, whName?: string) => {
+    setDetailLoading(whId ?? "all");
+    try {
+      await exportTonnageDetail(
+        { ...params, warehouse_id: whId ?? params.warehouse_id, lang },
+        whName ? `_${whName}` : "",
+      );
+    } finally {
+      setDetailLoading(null);
+    }
+  };
+
   const warehouseColumns = [
     {
       title: lang === "zh" ? "仓库" : "Склад",
@@ -69,6 +83,22 @@ export default function TonnageReport() {
     { title: t("report.order_count"), dataIndex: "order_count", key: "order_count", align: "center" as const },
     { title: t("report.total_weight"), dataIndex: "total_weight_kg", key: "total_weight_kg", align: "right" as const, render: (v: number) => fmtNum(v) },
     { title: t("report.total_volume"), dataIndex: "total_volume_m3", key: "total_volume_m3", align: "right" as const, render: (v: number) => fmtNum(v) },
+    {
+      title: t("report.download_excel"),
+      key: "detail_export",
+      align: "center" as const,
+      width: 160,
+      render: (r: any) => (
+        <Button
+          size="small"
+          icon={<DownloadOutlined />}
+          loading={detailLoading === r.warehouse_id}
+          onClick={() => handleDetailExport(r.warehouse_id, r.warehouse_name)}
+        >
+          {t("report.download_excel")}
+        </Button>
+      ),
+    },
   ];
 
   const monthChartData = (data?.by_month || []).map(m => ({
@@ -82,9 +112,18 @@ export default function TonnageReport() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col><Title level={5} style={{ margin: 0 }}>{t("report.tonnage")}</Title></Col>
         <Col>
-          <Button icon={<DownloadOutlined />} onClick={() => exportTonnage({ ...params, lang })}>
-            {t("report.export_excel")}
-          </Button>
+          <Space>
+            <Button
+              icon={<DownloadOutlined />}
+              loading={detailLoading === "all"}
+              onClick={() => handleDetailExport()}
+            >
+              {t("report.export_detail_excel")}
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={() => exportTonnage({ ...params, lang })}>
+              {t("report.export_excel")}
+            </Button>
+          </Space>
         </Col>
       </Row>
 

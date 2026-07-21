@@ -19,6 +19,7 @@ from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
 from app.models.business_type import BusinessType
 from app.models.warehouse import Warehouse
+from app.models.user import User
 
 
 def _prev_period(date_from: date, date_to: date):
@@ -1109,3 +1110,65 @@ async def get_tonnage(
         "by_warehouse": by_warehouse,
         "by_month": by_month,
     }
+
+
+async def get_tonnage_detail(
+    db: AsyncSession,
+    date_from: date,
+    date_to: date,
+    warehouse_id: Optional[uuid.UUID] = None,
+    client_id: Optional[uuid.UUID] = None,
+):
+    """Построчная детализация тоннажа: заказ, вес, объём, склад, автор заказа.
+
+    Только логистика — как и в сводном отчёте. Склад присоединяем через
+    LEFT JOIN, чтобы заказы без склада не пропадали из выгрузки.
+    """
+    filters = [
+        Order.order_date >= date_from,
+        Order.order_date <= date_to,
+        Order.status != OrderStatus.cancelled,
+        BusinessType.code == "logistics",
+    ]
+    if warehouse_id:
+        filters.append(Order.warehouse_id == warehouse_id)
+    if client_id:
+        filters.append(Order.client_id == client_id)
+
+    rows = (await db.execute(
+        select(
+            Order.order_number,
+            Order.order_date,
+            Counterparty.name.label("client_name"),
+            Warehouse.name.label("warehouse_name"),
+            Warehouse.name_cn.label("warehouse_name_cn"),
+            func.coalesce(func.sum(OrderItem.weight_kg), Decimal("0")).label("total_weight_kg"),
+            func.coalesce(func.sum(OrderItem.volume_m3), Decimal("0")).label("total_volume_m3"),
+            User.full_name.label("created_by_name"),
+        )
+        .join(BusinessType, Order.business_type_id == BusinessType.id)
+        .outerjoin(Warehouse, Order.warehouse_id == Warehouse.id)
+        .outerjoin(Counterparty, Order.client_id == Counterparty.id)
+        .outerjoin(User, Order.created_by == User.id)
+        .outerjoin(OrderItem, OrderItem.order_id == Order.id)
+        .where(*filters)
+        .group_by(
+            Order.id, Order.order_number, Order.order_date,
+            Counterparty.name, Warehouse.name, Warehouse.name_cn, User.full_name,
+        )
+        .order_by(Order.order_date, Order.order_number)
+    )).all()
+
+    return [
+        {
+            "order_number": r.order_number,
+            "order_date": r.order_date,
+            "client_name": r.client_name,
+            "warehouse_name": r.warehouse_name,
+            "warehouse_name_cn": r.warehouse_name_cn,
+            "total_weight_kg": r.total_weight_kg or Decimal("0"),
+            "total_volume_m3": r.total_volume_m3 or Decimal("0"),
+            "created_by_name": r.created_by_name,
+        }
+        for r in rows
+    ]

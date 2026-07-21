@@ -695,9 +695,12 @@ export default function OrderFormPage({ user }: Props) {
                 </Form.Item>
               </Col>
               <Col span={4}>
-                <Form.Item name="warehouse_id" label={t("warehouse.shipping_warehouse")}>
+                <Form.Item
+                  name="warehouse_id"
+                  label={t("warehouse.shipping_warehouse")}
+                  rules={[{ required: true, message: t("warehouse.required_for_logistics") }]}
+                >
                   <Select
-                    allowClear
                     options={(warehouses || []).map((wh: any) => ({ value: wh.id, label: wh.name }))}
                     placeholder={t("warehouse.shipping_warehouse")}
                   />

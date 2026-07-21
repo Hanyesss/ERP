@@ -78,15 +78,15 @@
     "transactions": "交易记录",
     "transfers": "转账记录",
     "op": {
-      "payment_in":     "收款",
-      "payment_out":    "付款",
+      "payment_in": "收款",
+      "payment_out": "付款",
       "payment_cancel": "取消付款",
-      "expense":        "支出",
-      "reimbursement":  "报销支出",
+      "expense": "支出",
+      "reimbursement": "报销支出",
       "expense_cancel": "取消费用",
-      "transfer_out":   "转出 →",
-      "transfer_in":    "转入 ←",
-      "data_fix":       "数据校正"
+      "transfer_out": "转出 →",
+      "transfer_in": "转入 ←",
+      "data_fix": "数据校正"
     }
   },
   "dashboard": {
@@ -769,7 +769,6 @@
     "stream_stop": "停止扫描",
     "scan_not_found": "照片中未找到二维码，请重试",
     "scan_already_added": "已添加",
-    "boxes_count": "件数",
     "photo_upload_warning": "照片未上传，但货件已入库",
     "add_one_more": "再添一件",
     "no_packing_lists": "暂无装箱单",
@@ -800,7 +799,8 @@
     "tracking_code": "追踪码",
     "tracking_code_placeholder": "扫描或输入追踪码...",
     "warehouse_col": "仓库",
-    "item_scan_tracking": "扫描追踪码"
+    "item_scan_tracking": "扫描追踪码",
+    "required_for_logistics": "物流订单必须指定仓库"
   },
   "report": {
     "title": "报表",
@@ -844,7 +844,9 @@
     "overpayment": "预付款（多付）",
     "debt_to_supplier": "欠供应商款",
     "order_sale": "订单金额",
-    "purchase_amount": "采购金额"
+    "purchase_amount": "采购金额",
+    "download_excel": "下载Excel",
+    "export_detail_excel": "明细Excel"
   },
   "validation": {
     "required": "必填项",
