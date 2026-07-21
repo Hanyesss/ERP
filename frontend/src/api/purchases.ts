@@ -9,6 +9,7 @@ export interface PurchaseListParams {
   date_from?: string;
   date_to?: string;
   order_id?: string;
+  business_type_id?: string;
   page?: number;
   page_size?: number;
 }

@@ -197,6 +197,7 @@ async def list_purchases(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     order_id: Optional[uuid.UUID] = Query(None),
+    business_type_id: Optional[uuid.UUID] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -270,6 +271,16 @@ async def list_purchases(
             .where(OrderItem.order_id == order_id)
         )
         stmt = stmt.where(or_(Purchase.order_id == order_id, Purchase.id.in_(trade_items_sq)))
+    if business_type_id:
+        # Направление берётся у связанного заказа: напрямую (логистика) или через items (торговля)
+        bt_orders_sq = select(Order.id).where(Order.business_type_id == business_type_id)
+        bt_items_sq = (
+            select(PurchaseItem.purchase_id)
+            .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(Order.business_type_id == business_type_id)
+        )
+        stmt = stmt.where(or_(Purchase.order_id.in_(bt_orders_sq), Purchase.id.in_(bt_items_sq)))
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     stmt = stmt.order_by(Purchase.purchase_date.desc(), Purchase.purchase_number.desc())

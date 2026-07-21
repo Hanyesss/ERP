@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import { getPurchases } from "../api/purchases";
+import { getBusinessTypes } from "../api/references";
 import type { PurchaseListItem } from "../types/purchase";
 import CounterpartySelect from "../components/common/CounterpartySelect";
 
@@ -21,13 +22,14 @@ const fmtCny = (v: number) =>
   v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PurchasesPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const search = searchParams.get("q") ?? "";
   const supplierId = searchParams.get("supplier") ?? undefined;
   const paymentStatus = searchParams.get("status") ?? undefined;
+  const btId = searchParams.get("bt") ?? undefined;
   const page = Number(searchParams.get("page") ?? "1");
 
   const setFilter = (updates: Record<string, string | undefined | null>) => {
@@ -50,14 +52,25 @@ export default function PurchasesPage() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["purchases", search, supplierId, paymentStatus, page],
+    queryKey: ["purchases", search, supplierId, paymentStatus, btId, page],
     queryFn: () => getPurchases({
       search: search || undefined,
       supplier_id: supplierId,
       payment_status: paymentStatus,
+      business_type_id: btId,
       page, page_size: 20,
     }).then(r => r.data),
   });
+
+  const { data: businessTypes } = useQuery({
+    queryKey: ["business-types"],
+    queryFn: () => getBusinessTypes().then(r => r.data),
+  });
+
+  const btOptions = (businessTypes || []).map(bt => ({
+    value: bt.id,
+    label: i18n.language === "zh" && bt.name_cn ? bt.name_cn : bt.name,
+  }));
 
   const columns: ColumnsType<PurchaseListItem> = [
     {
@@ -180,6 +193,16 @@ export default function PurchasesPage() {
             style={{ width: 220 }}
             onSearch={val => setFilter({ q: val || null })}
             onChange={e => { if (!e.target.value) setFilter({ q: null }); }}
+          />
+        </Col>
+        <Col>
+          <Select
+            allowClear
+            placeholder={t("order.business_type")}
+            style={{ width: 140 }}
+            value={btId}
+            options={btOptions}
+            onChange={v => setFilter({ bt: v ?? null })}
           />
         </Col>
         <Col>
