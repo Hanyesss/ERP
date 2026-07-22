@@ -1,9 +1,10 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Table, Button, Input, Select, Tag, Row, Col, Typography, Space, Tooltip } from "antd";
+import { Table, Button, Input, Select, Tag, Row, Col, Typography, Space, Tooltip, DatePicker } from "antd";
 import TopScrollTable from "../components/common/TopScrollTable";
 import { PlusOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import dayjs from "dayjs";
 import type { ColumnsType } from "antd/es/table";
 import { getPurchases } from "../api/purchases";
 import { getBusinessTypes } from "../api/references";
@@ -30,6 +31,9 @@ export default function PurchasesPage() {
   const supplierId = searchParams.get("supplier") ?? undefined;
   const paymentStatus = searchParams.get("status") ?? undefined;
   const btId = searchParams.get("bt") ?? undefined;
+  const dateFrom = searchParams.get("from");
+  const dateTo = searchParams.get("to");
+  const dateRange: [string, string] | null = dateFrom && dateTo ? [dateFrom, dateTo] : null;
   const page = Number(searchParams.get("page") ?? "1");
 
   const setFilter = (updates: Record<string, string | undefined | null>) => {
@@ -52,12 +56,14 @@ export default function PurchasesPage() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["purchases", search, supplierId, paymentStatus, btId, page],
+    queryKey: ["purchases", search, supplierId, paymentStatus, btId, dateFrom, dateTo, page],
     queryFn: () => getPurchases({
       search: search || undefined,
       supplier_id: supplierId,
       payment_status: paymentStatus,
       business_type_id: btId,
+      date_from: dateRange?.[0],
+      date_to: dateRange?.[1],
       page, page_size: 20,
     }).then(r => r.data),
   });
@@ -227,6 +233,13 @@ export default function PurchasesPage() {
               { value: "paid", label: t("purchase.status_paid") },
             ]}
             onChange={v => setFilter({ status: v ?? null })}
+          />
+        </Col>
+        <Col>
+          <DatePicker.RangePicker
+            style={{ width: 240 }}
+            value={dateRange ? [dayjs(dateRange[0]), dayjs(dateRange[1])] : undefined}
+            onChange={(_, strs) => setFilter({ from: strs[0] || null, to: strs[1] || null })}
           />
         </Col>
       </Row>

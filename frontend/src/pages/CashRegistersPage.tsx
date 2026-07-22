@@ -140,11 +140,12 @@ export default function CashRegistersPage() {
           </Space>
         );
       }},
-    { title: t("cash.amount"), dataIndex: "amount", key: "a", align: "right" as const,
+    { title: t("cash.amount"), dataIndex: "amount", key: "a", align: "right" as const, width: 150,
       render: (v: number, row: CashTransaction) => {
         const isCancel = row.operation_type ? CANCEL_OPS.has(row.operation_type) : false;
         return (
           <Text strong style={{
+            whiteSpace: "nowrap",
             color: !row.is_active ? "#bfbfbf" : isCancel ? "#ff4d4f" : row.direction === "in" ? "#389e0d" : "#cf1322",
             textDecoration: !row.is_active ? "line-through" : undefined,
           }}>
@@ -152,9 +153,9 @@ export default function CashRegistersPage() {
           </Text>
         );
       }},
-    { title: t("cash.balance_after"), dataIndex: "balance_after", key: "b", align: "right" as const,
+    { title: t("cash.balance_after"), dataIndex: "balance_after", key: "b", align: "right" as const, width: 150,
       render: (v: number, row: CashTransaction) => (
-        <Text style={{ color: row.is_active ? undefined : "#bfbfbf" }}>{fmt(v, selectedReg?.currency || "")}</Text>
+        <Text style={{ whiteSpace: "nowrap", color: row.is_active ? undefined : "#bfbfbf" }}>{fmt(v, selectedReg?.currency || "")}</Text>
       )},
     { title: t("payment.notes"), key: "n",
       render: (_: any, row: CashTransaction) => row.notes || "—" },
@@ -353,14 +354,14 @@ export default function CashRegistersPage() {
               key: "transactions",
               label: t("cash.transactions") || "Транзакции",
               children: (
-                <Table columns={txColumns} dataSource={transactions} rowKey="id" size="small" pagination={{ pageSize: 50 }} />
+                <Table columns={txColumns} dataSource={transactions} rowKey="id" size="small" pagination={{ pageSize: 50 }} scroll={{ x: "max-content" }} />
               ),
             },
             {
               key: "transfers",
               label: t("cash.transfers") || "Переводы",
               children: (
-                <Table columns={trColumns} dataSource={transfers} rowKey="id" size="small" pagination={{ pageSize: 50 }} />
+                <Table columns={trColumns} dataSource={transfers} rowKey="id" size="small" pagination={{ pageSize: 50 }} scroll={{ x: "max-content" }} />
               ),
             },
           ]}
