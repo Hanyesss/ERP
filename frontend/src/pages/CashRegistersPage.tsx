@@ -2,18 +2,20 @@ import { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Form, Input, Select, Space, Tag, Typography,
   Drawer, Popconfirm, message, Row, Col, Tabs, InputNumber, DatePicker, Tooltip,
-  theme,
+  theme, Checkbox,
 } from "antd";
-import { PlusOutlined, HistoryOutlined, EditOutlined, SwapOutlined, LockOutlined } from "@ant-design/icons";
+import { PlusOutlined, HistoryOutlined, EditOutlined, SwapOutlined, LockOutlined, DownloadOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import {
   getCashRegisters, createCashRegister, updateCashRegister,
-  getCashTransactions, getTransfers, createTransfer,
+  getCashTransactions, getTransfers, createTransfer, exportCashMovements,
   type CashRegister, type CashTransaction, type CashTransfer,
 } from "../api/cashRegisters";
 import { useHasAnyRole } from "../hooks/useRole";
+
+const { RangePicker } = DatePicker;
 
 const { Title, Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
@@ -22,7 +24,7 @@ const fmt = (v: number | string, cur: string) =>
   `${Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
 
 export default function CashRegistersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const isAdmin = useHasAnyRole("admin");
 
@@ -34,6 +36,12 @@ export default function CashRegistersPage() {
   // Drawer истории кассы
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<CashRegister | null>(null);
+
+  // Экспорт движения средств
+  const [exportRange, setExportRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportIds, setExportIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   // Модал перевода
   const [transferOpen, setTransferOpen] = useState(false);
@@ -223,6 +231,35 @@ export default function CashRegistersPage() {
   const toOptions = registers.filter(r => r.id !== transferFrom?.id && r.is_active)
     .map(r => ({ value: r.id, label: `${r.name} (${r.currency})` }));
 
+  // Шаг 1: даты выбраны → открыть выбор кошельков (по умолчанию все активные)
+  const openExportModal = () => {
+    if (!exportRange?.[0] || !exportRange?.[1]) {
+      message.warning(t("cash.export_pick_dates"));
+      return;
+    }
+    setExportIds(registers.filter(r => r.is_active).map(r => r.id));
+    setExportModalOpen(true);
+  };
+
+  // Шаг 2: кошельки выбраны → скачать Excel
+  const doExport = async () => {
+    if (!exportIds.length) { message.warning(t("cash.export_pick_wallets")); return; }
+    setExporting(true);
+    try {
+      await exportCashMovements({
+        date_from: exportRange![0].format("YYYY-MM-DD"),
+        date_to: exportRange![1].format("YYYY-MM-DD"),
+        register_ids: exportIds,
+        lang: i18n.language,
+      });
+      setExportModalOpen(false);
+    } catch {
+      message.error(t("common.error") || "Error");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
@@ -234,7 +271,46 @@ export default function CashRegistersPage() {
         </Col>
       </Row>
 
+      {/* Панель экспорта движения средств */}
+      <Space wrap style={{ marginBottom: 16 }}>
+        <RangePicker value={exportRange} onChange={v => setExportRange(v as any)} />
+        <Button icon={<DownloadOutlined />} onClick={openExportModal}>
+          {t("cash.export_movements")}
+        </Button>
+      </Space>
+
       <Table columns={regColumns} dataSource={registers} rowKey="id" scroll={{ x: "max-content" }} loading={isLoading} size="small" pagination={false} />
+
+      {/* Модал выбора кошельков для экспорта */}
+      <Modal
+        open={exportModalOpen}
+        title={t("cash.export_select_wallets")}
+        onOk={doExport}
+        onCancel={() => setExportModalOpen(false)}
+        okText={t("common.confirm")}
+        cancelText={t("common.cancel")}
+        confirmLoading={exporting}
+      >
+        <Checkbox
+          indeterminate={exportIds.length > 0 && exportIds.length < registers.length}
+          checked={exportIds.length === registers.length && registers.length > 0}
+          onChange={e => setExportIds(e.target.checked ? registers.map(r => r.id) : [])}
+          style={{ marginBottom: 8 }}
+        >
+          {t("common.all")}
+        </Checkbox>
+        <div style={{ maxHeight: 320, overflowY: "auto", borderTop: "1px solid #f0f0f0", paddingTop: 8 }}>
+          <Checkbox.Group
+            value={exportIds}
+            onChange={vals => setExportIds(vals as string[])}
+            style={{ display: "flex", flexDirection: "column", gap: 8 }}
+            options={registers.map(r => ({
+              value: r.id,
+              label: `${r.name} (${r.currency})${r.is_active ? "" : " — " + t("cash.inactive")}`,
+            }))}
+          />
+        </div>
+      </Modal>
 
       {/* Create / Edit modal */}
       <Modal open={modalOpen} title={editing ? t("cash.edit") : t("cash.add_new")}

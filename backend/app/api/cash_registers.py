@@ -1,10 +1,12 @@
 import uuid
+import tempfile
 from datetime import datetime, timezone, date as date_type
 from decimal import Decimal
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, or_
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -14,6 +16,7 @@ from app.models.cash_register import CashRegister, CashTransaction
 from app.models.cash_transfer import CashTransfer
 from app.models.audit_log import AuditActionEnum
 from app.utils.audit import write_audit
+from app.services.excel_export import export_cash_movements
 
 router = APIRouter(prefix="/api/cash-registers", tags=["cash-registers"])
 
@@ -260,6 +263,131 @@ async def get_transactions(
         )
         for t in txs
     ]
+
+
+async def _reason_map_for(db: AsyncSession, payment_ids: list) -> dict:
+    """Номера заказов/закупок по payment_id (для колонки «Основание»)."""
+    from app.models.payment_allocation import PaymentAllocation
+    from app.models.purchase_payment_link import PurchasePaymentLink
+    from app.models.order import Order
+    from app.models.purchase import Purchase
+
+    reason_map: dict = {}
+    if not payment_ids:
+        return reason_map
+    order_rows = (await db.execute(
+        select(PaymentAllocation.payment_id, Order.order_number)
+        .join(Order, PaymentAllocation.order_id == Order.id)
+        .where(PaymentAllocation.payment_id.in_(payment_ids))
+    )).all()
+    for pid, num in order_rows:
+        reason_map.setdefault(pid, []).append(num)
+    purchase_rows = (await db.execute(
+        select(PurchasePaymentLink.payment_id, Purchase.purchase_number)
+        .join(Purchase, PurchasePaymentLink.purchase_id == Purchase.id)
+        .where(PurchasePaymentLink.payment_id.in_(payment_ids))
+    )).all()
+    for pid, num in purchase_rows:
+        reason_map.setdefault(pid, []).append(num)
+    return {pid: ", ".join(nums) for pid, nums in reason_map.items()}
+
+
+@router.get("/export/movements")
+async def export_movements(
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    register_ids: List[uuid.UUID] = Query(...),
+    lang: str = Query("ru"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles("accountant", "admin")),
+):
+    """Движение средств по выбранным кошелькам за период — каждый кошелёк отдельным листом."""
+    from app.models.user import User as UserModel
+
+    registers_data = []
+    for rid in register_ids:
+        reg = (await db.execute(select(CashRegister).where(CashRegister.id == rid))).scalar_one_or_none()
+        if not reg:
+            continue
+
+        signed = case(
+            (CashTransaction.direction == "in", CashTransaction.amount),
+            else_=-CashTransaction.amount,
+        )
+        # Входящий остаток = initial + сумма активных транзакций ДО начала периода
+        prior = (await db.execute(
+            select(func.coalesce(func.sum(signed), Decimal("0")))
+            .where(
+                CashTransaction.cash_register_id == rid,
+                CashTransaction.is_active == True,
+                func.date(CashTransaction.created_at) < date_from,
+            )
+        )).scalar_one()
+        opening = reg.initial_balance + prior
+
+        txs = (await db.execute(
+            select(CashTransaction)
+            .where(
+                CashTransaction.cash_register_id == rid,
+                CashTransaction.is_active == True,
+                func.date(CashTransaction.created_at) >= date_from,
+                func.date(CashTransaction.created_at) <= date_to,
+            )
+            .order_by(CashTransaction.created_at)
+        )).scalars().all()
+
+        user_ids = list({t.created_by for t in txs})
+        users_map = {}
+        if user_ids:
+            users_map = {
+                u.id: u.full_name
+                for u in (await db.execute(select(UserModel).where(UserModel.id.in_(user_ids)))).scalars().all()
+            }
+        reason_map = await _reason_map_for(db, [t.payment_id for t in txs if t.payment_id])
+
+        rows = []
+        total_in = Decimal("0")
+        total_out = Decimal("0")
+        running = opening
+        for t in txs:
+            is_in = t.direction == "in"
+            running += t.amount if is_in else -t.amount
+            if is_in:
+                total_in += t.amount
+            else:
+                total_out += t.amount
+            rows.append({
+                "date": t.created_at.strftime("%Y-%m-%d %H:%M"),
+                "operation_type": t.operation_type,
+                "direction": t.direction,
+                "amount": t.amount,
+                "balance_after": running,
+                "reason": reason_map.get(t.payment_id) if t.payment_id else (t.notes or ""),
+                "created_by": users_map.get(t.created_by, ""),
+            })
+
+        registers_data.append({
+            "name": reg.name,
+            "currency": reg.currency,
+            "opening_balance": opening,
+            "closing_balance": running,
+            "total_in": total_in,
+            "total_out": total_out,
+            "rows": rows,
+        })
+
+    period = f"{date_from} — {date_to}"
+    data_bytes = export_cash_movements(registers_data, lang, period)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    tmp.write(data_bytes)
+    tmp.flush()
+    tmp.close()
+    return FileResponse(
+        path=tmp.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"cash_movements_{date_from}_{date_to}.xlsx",
+    )
 
 
 # ── Transfers ────────────────────────────────────────────────────────────────

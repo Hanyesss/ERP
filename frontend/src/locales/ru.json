@@ -55,7 +55,12 @@
       "transfer_out": "Перевод →",
       "transfer_in": "Перевод ←",
       "data_fix": "Корректировка данных"
-    }
+    },
+    "export_movements": "Сформировать Excel",
+    "export_select_wallets": "Выберите кошельки",
+    "export_pick_dates": "Сначала выберите период",
+    "export_pick_wallets": "Выберите хотя бы один кошелёк",
+    "inactive": "неактивна"
   },
   "dashboard": {
     "welcome": "Добро пожаловать",
@@ -846,7 +851,8 @@
     "choose_file": "Выбрать файл",
     "file_uploaded": "Файл успешно загружен",
     "files": "Документы и файлы",
-    "type": "Тип"
+    "type": "Тип",
+    "error": "Ошибка"
   },
   "validation": {
     "required": "Обязательное поле",

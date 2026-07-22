@@ -29,7 +29,8 @@
     "choose_file": "选择文件",
     "file_uploaded": "文件上传成功",
     "files": "文件与单据",
-    "type": "类型"
+    "type": "类型",
+    "error": "错误"
   },
   "nav": {
     "dashboard": "主页",
@@ -87,7 +88,12 @@
       "transfer_out": "转出 →",
       "transfer_in": "转入 ←",
       "data_fix": "数据校正"
-    }
+    },
+    "export_movements": "生成Excel",
+    "export_select_wallets": "选择钱包",
+    "export_pick_dates": "请先选择日期区间",
+    "export_pick_wallets": "请至少选择一个钱包",
+    "inactive": "已停用"
   },
   "dashboard": {
     "welcome": "欢迎",

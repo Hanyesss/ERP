@@ -65,3 +65,23 @@ export const createTransfer = (data: {
 
 export const getTransfers = (params?: { register_id?: string; page?: number }) =>
   apiClient.get<CashTransfer[]>("/api/cash-registers/transfers", { params });
+
+export const exportCashMovements = async (params: {
+  date_from: string;
+  date_to: string;
+  register_ids: string[];
+  lang: string;
+}) => {
+  const response = await apiClient.get("/api/cash-registers/export/movements", {
+    params,
+    responseType: "blob",
+    // register_ids как повторяющиеся query-параметры (?register_ids=a&register_ids=b)
+    paramsSerializer: { indexes: null },
+  });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cash_movements_${params.date_from}_${params.date_to}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};

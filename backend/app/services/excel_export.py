@@ -340,3 +340,110 @@ def export_tonnage_detail(rows: list, lang: str = "ru") -> bytes:
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+# Названия типов операций кассы (совпадают с cash.op.* в локалях)
+_CASH_OP_LABELS = {
+    "ru": {
+        "payment_in": "Входящий платёж", "payment_out": "Исходящий платёж",
+        "payment_cancel": "Отмена платежа", "expense": "Расход",
+        "reimbursement": "Выплата возмещения", "expense_cancel": "Отмена расхода",
+        "transfer_out": "Перевод →", "transfer_in": "Перевод ←",
+        "data_fix": "Корректировка данных",
+    },
+    "zh": {
+        "payment_in": "收款", "payment_out": "付款", "payment_cancel": "取消付款",
+        "expense": "支出", "reimbursement": "报销支出", "expense_cancel": "取消费用",
+        "transfer_out": "转出 →", "transfer_in": "转入 ←", "data_fix": "数据校正",
+    },
+}
+
+_CASH_HEADERS = {
+    "ru": ["Дата", "Операция", "Приход", "Расход", "Баланс после", "Основание", "Создал"],
+    "zh": ["日期", "操作", "收入", "支出", "余额", "事由", "创建人"],
+}
+
+_INVALID_SHEET = set(r'[]:*?/\\')
+
+
+def _safe_sheet_title(name: str, used: set) -> str:
+    """Корректное уникальное имя листа: <=31 симв., без недопустимых символов."""
+    clean = "".join("_" if c in _INVALID_SHEET else c for c in (name or "Лист"))[:31] or "Лист"
+    title = clean
+    i = 2
+    while title.lower() in used:
+        suffix = f"_{i}"
+        title = clean[:31 - len(suffix)] + suffix
+        i += 1
+    used.add(title.lower())
+    return title
+
+
+def export_cash_movements(registers: list, lang: str = "ru", period: str = "") -> bytes:
+    """Движение средств: каждый кошелёк — отдельный лист.
+
+    registers: список dict с ключами name, currency, opening_balance,
+    closing_balance, total_in, total_out, rows[]. Каждая строка rows:
+    date, operation_type, direction ('in'/'out'), amount, balance_after,
+    reason, created_by.
+    """
+    ru = lang != "zh"
+    headers = _CASH_HEADERS.get(lang, _CASH_HEADERS["ru"])
+    op_labels = _CASH_OP_LABELS.get(lang, _CASH_OP_LABELS["ru"])
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)  # убираем пустой лист по умолчанию
+    used_titles: set = set()
+
+    if not registers:
+        ws = wb.create_sheet("Пусто" if ru else "空")
+        ws.append(["Нет данных" if ru else "无数据"])
+
+    for reg in registers:
+        ws = wb.create_sheet(_safe_sheet_title(reg.get("name", ""), used_titles))
+        cur = reg.get("currency", "")
+
+        # Шапка: название кошелька, валюта, период, входящий остаток
+        ws.append([f"{reg.get('name', '')} ({cur})"])
+        ws["A1"].font = Font(bold=True, size=13)
+        if period:
+            ws.append([("Период: " if ru else "期间：") + period])
+        ws.append([
+            ("Входящий остаток: " if ru else "期初余额：")
+            + f"{_fmt(reg.get('opening_balance')):,.2f} {cur}"
+        ])
+        ws.append([])
+
+        _header_row(ws, headers)
+        for row in reg.get("rows", []):
+            is_in = row.get("direction") == "in"
+            amount = Decimal(str(row.get("amount") or 0))
+            op = op_labels.get(row.get("operation_type") or "", row.get("operation_type") or "")
+            ws.append([
+                row.get("date") or "",
+                op,
+                _fmt(amount) if is_in else "",
+                _fmt(amount) if not is_in else "",
+                _fmt(row.get("balance_after")),
+                row.get("reason") or "",
+                row.get("created_by") or "",
+            ])
+
+        # Итоги: приход, расход, исходящий остаток
+        ws.append([])
+        total_in = reg.get("total_in") or Decimal("0")
+        total_out = reg.get("total_out") or Decimal("0")
+        ws.append([("Итого приход" if ru else "收入合计"), "", _fmt(total_in)])
+        ws.append([("Итого расход" if ru else "支出合计"), "", "", _fmt(total_out)])
+        ws.append([
+            ("Исходящий остаток" if ru else "期末余额"), "", "", "",
+            _fmt(reg.get("closing_balance")),
+        ])
+        for r_off in range(3):
+            for cell in ws[ws.max_row - r_off]:
+                cell.font = BOLD_FONT
+
+        _auto_width(ws)
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
