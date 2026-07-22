@@ -42,7 +42,7 @@ export const rejectReimbursement = (id: string, reject_reason: string) =>
 
 export const markReimbursementPaid = (
   id: string,
-  data: { paid_date: string; cash_register_id?: string }
+  data: { paid_date: string; cash_register_id?: string; cash_rate?: number }
 ) => apiClient.post(`/api/expenses/${id}/mark-paid`, data);
 
 export const getMyBalance = () =>

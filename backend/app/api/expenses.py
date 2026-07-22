@@ -65,6 +65,40 @@ async def _record_cash_outflow(
         "reason": reason,
     })
 
+# Порядок «крупности» валют: USD > USDT > CNY > RUB.
+# cash_rate всегда выражается как «1 {крупная} = X {мелкая}».
+_CURRENCY_RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
+
+
+def _compute_cash_outflow(
+    reg_currency: str,
+    exp_currency: str,
+    amount: Decimal,
+    amount_cny: Decimal,
+    cash_rate: Optional[Decimal],
+) -> Decimal:
+    """Сколько списать с кассы В ВАЛЮТЕ КАССЫ для расхода/возмещения.
+
+    - валюта расхода == валюта кассы → списываем сумму как есть;
+    - касса в CNY → списываем amount_cny (курс к CNY уже известен);
+    - иначе (касса в другой валюте, отличной от расхода) → нужен cash_rate,
+      конвертируем по принципу «1 крупная = X мелкая».
+    """
+    if exp_currency == reg_currency:
+        return amount
+    if reg_currency == "CNY":
+        return amount_cny
+    if not cash_rate or cash_rate <= 0:
+        raise HTTPException(422, f"cross_currency_rate_required:{exp_currency}:{reg_currency}")
+    exp_rank = _CURRENCY_RANK.get(exp_currency, 1)
+    reg_rank = _CURRENCY_RANK.get(reg_currency, 1)
+    if exp_rank > reg_rank:
+        # Расход в крупной валюте (напр. USD→CNY): 1 USD = X CNY → amount * rate
+        return (amount * cash_rate).quantize(Decimal("0.000001"))
+    # Расход в мелкой валюте (напр. CNY→USDT): 1 USDT = X CNY → amount / rate
+    return (amount / cash_rate).quantize(Decimal("0.000001"))
+
+
 _ACCOUNTANT_ROLES = ("accountant", "admin")
 _ALL_ROLES = ("employee", "manager", "purchaser", "accountant", "admin")
 
@@ -419,37 +453,9 @@ async def create_expense(
         )).scalar_one_or_none()
         reg_currency = reg.currency if reg else "CNY"
 
-        # Порядок «крупности» валют: USD > USDT > CNY > RUB
-        # cash_rate всегда: 1 {крупная} = X {мелкая}
-        _RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
-        exp_rank = _RANK.get(body.currency, 1)
-        reg_rank = _RANK.get(reg_currency, 1)
-
-        if body.currency == reg_currency:
-            cash_amount = body.amount
-        elif reg_currency == "CNY":
-            # Касса CNY → списываем amount_cny (правильно всегда)
-            cash_amount = amount_cny
-        else:
-            if not body.cash_rate or body.cash_rate <= 0:
-                # Формулируем подсказку по принципу «1 крупная = X мелкая»
-                if reg_rank > exp_rank:
-                    hint = f"1 {reg_currency} = X {body.currency}"
-                else:
-                    hint = f"1 {body.currency} = X {reg_currency}"
-                raise HTTPException(
-                    422,
-                    f"cross_currency_rate_required:{body.currency}:{reg_currency}"
-                )
-            # Определяем что крупнее и считаем cash_amount
-            if exp_rank > reg_rank:
-                # Расход в крупной валюте (напр. USD→CNY): cash_rate = 1 USD = X CNY
-                # Списываем: body.amount * cash_rate единиц кассы
-                cash_amount = (body.amount * body.cash_rate).quantize(Decimal("0.000001"))
-            else:
-                # Расход в мелкой валюте (напр. CNY→USDT): cash_rate = 1 USDT = X CNY
-                # Списываем: body.amount / cash_rate единиц кассы
-                cash_amount = (body.amount / body.cash_rate).quantize(Decimal("0.000001"))
+        cash_amount = _compute_cash_outflow(
+            reg_currency, body.currency, body.amount, amount_cny, body.cash_rate,
+        )
 
         # Сохраняем сколько реально списали с кассы
         expense.cash_amount_in_register = cash_amount
@@ -773,10 +779,9 @@ async def mark_reimbursement_paid(
             select(CashRegister).where(CashRegister.id == body.cash_register_id)
         )).scalar_one_or_none()
         reg_currency = reg.currency if reg else "CNY"
-        if reg_currency == expense.currency:
-            outflow_amount = expense.amount
-        else:
-            outflow_amount = expense.amount_cny  # CNY-касса или fallback
+        outflow_amount = _compute_cash_outflow(
+            reg_currency, expense.currency, expense.amount, expense.amount_cny, body.cash_rate,
+        )
         expense.cash_amount_in_register = outflow_amount
         await _record_cash_outflow(
             db, body.cash_register_id, outflow_amount,

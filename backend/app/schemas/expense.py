@@ -123,6 +123,9 @@ class RejectBody(BaseModel):
 class MarkPaidBody(BaseModel):
     paid_date: date
     cash_register_id: Optional[uuid.UUID] = None
+    # Кросс-валютный курс, если валюта кассы отличается и от валюты расхода, и от CNY.
+    # Как в ExpenseCreate: «1 {крупная} = X {мелкая}».
+    cash_rate: Optional[Decimal] = None
 
 
 class ReimbursementBalance(BaseModel):

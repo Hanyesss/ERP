@@ -80,6 +80,23 @@ export default function ExpenseDetailPage({ user }: Props) {
     enabled: isAccountant,
   });
 
+  // Кросс-валютный курс в модалке выплаты: нужен, если валюта кассы
+  // отличается и от валюты расхода, и от CNY (как в форме создания расхода).
+  const CURRENCY_RANK: Record<string, number> = { USD: 3, USDT: 2, CNY: 1, RUB: 0 };
+  const paidRegisterId = Form.useWatch("cash_register_id", paidForm);
+  const paidCashRate = Form.useWatch("cash_rate", paidForm);
+  const paidRegister = (cashRegisters as any[]).find((r: any) => r.id === paidRegisterId);
+  const paidRegCurrency: string = paidRegister?.currency ?? "CNY";
+  const expCurrency: string = expense?.currency ?? "CNY";
+  const paidNeedRate = !!paidRegisterId && expCurrency !== paidRegCurrency && paidRegCurrency !== "CNY";
+  const paidExpRank = CURRENCY_RANK[expCurrency] ?? 1;
+  const paidRegRank = CURRENCY_RANK[paidRegCurrency] ?? 1;
+  const paidLarger = paidExpRank >= paidRegRank ? expCurrency : paidRegCurrency;
+  const paidSmaller = paidExpRank >= paidRegRank ? paidRegCurrency : expCurrency;
+  const paidDeduction = paidNeedRate && paidCashRate > 0
+    ? (paidExpRank > paidRegRank ? Number(expense?.amount) * paidCashRate : Number(expense?.amount) / paidCashRate)
+    : null;
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["expense", id] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
@@ -105,7 +122,7 @@ export default function ExpenseDetailPage({ user }: Props) {
   });
 
   const paidMutation = useMutation({
-    mutationFn: (data: { paid_date: string; cash_register_id?: string }) =>
+    mutationFn: (data: { paid_date: string; cash_register_id?: string; cash_rate?: number }) =>
       markReimbursementPaid(id!, data),
     onSuccess: () => { message.success("✓"); invalidate(); setPaidOpen(false); },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
@@ -491,10 +508,17 @@ export default function ExpenseDetailPage({ user }: Props) {
         <Form
           form={paidForm}
           layout="vertical"
-          onFinish={v => paidMutation.mutate({
-            paid_date: v.paid_date.format("YYYY-MM-DD"),
-            cash_register_id: v.cash_register_id || undefined,
-          })}
+          onFinish={v => {
+            if (paidNeedRate && (!v.cash_rate || v.cash_rate <= 0)) {
+              message.error(t("expense.cross_currency_error"));
+              return;
+            }
+            paidMutation.mutate({
+              paid_date: v.paid_date.format("YYYY-MM-DD"),
+              cash_register_id: v.cash_register_id || undefined,
+              cash_rate: paidNeedRate ? v.cash_rate : undefined,
+            });
+          }}
         >
           <Form.Item name="paid_date" label={t("expense.reimburse_paid_date")} rules={[{ required: true }]}>
             <DatePicker style={{ width: "100%" }} />
@@ -508,6 +532,31 @@ export default function ExpenseDetailPage({ user }: Props) {
               }))}
             />
           </Form.Item>
+          {paidNeedRate && (
+            <>
+              <Form.Item
+                name="cash_rate"
+                label={t("expense.cash_rate_label", { larger: paidLarger, smaller: paidSmaller })}
+                rules={[{ required: true, message: t("expense.cash_rate_hint") }]}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  min={0.000001}
+                  step={0.01}
+                  precision={6}
+                  placeholder={`1 ${paidLarger} = ? ${paidSmaller}`}
+                />
+              </Form.Item>
+              {paidDeduction !== null && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`${t("expense.cash_deduction")}: ${paidDeduction.toFixed(6)} ${paidRegCurrency}`}
+                  style={{ marginBottom: 8 }}
+                />
+              )}
+            </>
+          )}
         </Form>
       </Modal>
     </div>
