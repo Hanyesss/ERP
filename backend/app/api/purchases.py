@@ -594,6 +594,10 @@ async def update_purchase(
 
         await db.flush()
 
+    # Логистическая закупка привязана к заказу напрямую — тоже пересчитываем
+    if pur.order_id:
+        affected_order_ids.add(pur.order_id)
+
     for order_id in affected_order_ids:
         await _recalc_order_cost(db, order_id)
 
@@ -624,6 +628,10 @@ async def delete_purchase(
         .where(PurchaseItem.purchase_id == purchase_id)
     )).all()
     affected_order_ids = {row[1] for row in existing_pi}
+    # Логистическая закупка связана с заказом напрямую (без items) — иначе
+    # стоимость заказа не пересчитается и удалённая закупка останется в марже
+    if pur.order_id:
+        affected_order_ids.add(pur.order_id)
 
     pur.is_deleted = True
     # Физически удаляем purchase_items: иначе FK constraint блокирует
