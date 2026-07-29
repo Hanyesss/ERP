@@ -536,6 +536,10 @@ export default function OrderDetailPage() {
               pagination={false}
               columns={[
                 { title: t("payment.date"), dataIndex: "payment_date", key: "date", width: 110 },
+                { title: t("plan.kind"), dataIndex: "installment_kind", key: "kind", width: 130,
+                  render: (k: string) => k
+                    ? <Tag color={k === "deposit" ? "gold" : "blue"}>{t(`plan.kind_${k}`)}</Tag>
+                    : "—" },
                 { title: t("payment.currency"), dataIndex: "currency", key: "cur", width: 80 },
                 { title: t("payment.amount"), key: "amount", align: "right",
                   render: (_: any, row: any) => `${Number(row.amount).toLocaleString("ru-RU", {minimumFractionDigits: 2})} ${row.currency}` },

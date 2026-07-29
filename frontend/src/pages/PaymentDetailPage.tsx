@@ -12,6 +12,8 @@ import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import { getPayment, deletePayment, updatePayment, uploadPaymentReceipt, deletePaymentReceipt, deletePaymentReceiptFile, requestPaymentChange, approvePaymentChange, rejectPaymentChange } from "../api/payments";
 import { getCashRegisters } from "../api/cashRegisters";
+import { getPaymentPlans } from "../api/paymentPlans";
+import PlanSettleModal from "../components/payments/PlanSettleModal";
 import apiClient from "../api/client";
 import { compressImage } from "../utils/compressImage";
 import type { User } from "../types";
@@ -51,6 +53,19 @@ export default function PaymentDetailPage({ user }: Props) {
     queryFn: () => getCashRegisters().then(r => r.data),
     enabled: isAccountant,
   });
+
+  // План (остаток) по связанному заказу/закупке — для кнопки «Оплатить остаток»
+  const linkedOrderId = (payment?.allocations as any[])?.find(a => a.order_id)?.order_id;
+  const linkedPurchaseId = (payment?.allocations as any[])?.find(a => a.purchase_id)?.purchase_id;
+  const { data: linkedPlanData } = useQuery({
+    queryKey: ["payment-plans", "doc", linkedOrderId || linkedPurchaseId],
+    queryFn: () => getPaymentPlans(
+      linkedOrderId ? { order_id: linkedOrderId } : { purchase_id: linkedPurchaseId! }
+    ).then(r => r.data),
+    enabled: !!(linkedOrderId || linkedPurchaseId),
+  });
+  const linkedPlan = linkedPlanData?.items?.[0] ?? null;
+  const [settleOpen, setSettleOpen] = useState(false);
 
   // Кросс-валюта в форме редактирования
   const CURRENCY_RANK: Record<string, number> = { USD: 3, USDT: 2, CNY: 1, RUB: 0 };
@@ -349,6 +364,23 @@ export default function PaymentDetailPage({ user }: Props) {
           </Text>
         )}
       </Card>
+
+      {linkedPlan && Number(linkedPlan.remaining_cny) > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`${t("plan.doc_remaining")}: ${fmtCny(linkedPlan.remaining_cny)} CNY (${linkedPlan.doc_number || ""})`}
+          action={
+            isAccountant && (
+              <Button size="small" type="primary" onClick={() => setSettleOpen(true)}>
+                {t("plan.pay_remaining")}
+              </Button>
+            )
+          }
+        />
+      )}
+      <PlanSettleModal plan={settleOpen ? linkedPlan : null} open={settleOpen} onClose={() => setSettleOpen(false)} />
 
       <Card title={t("payment.receipt")} style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: "100%" }}>

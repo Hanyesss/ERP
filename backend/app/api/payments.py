@@ -1312,6 +1312,7 @@ async def get_payments_for_order(
             "alloc_cny": str(r.alloc_cny),
             "counterparty_name": r.cp_name,
             "direction": r[0].direction,
+            "installment_kind": r[0].installment_kind,
         }
         for r in result
     ]

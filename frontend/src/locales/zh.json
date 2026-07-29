@@ -949,6 +949,8 @@
     "kind_balance": "尾款",
     "new_installment": "新增分期",
     "add_installment": "确认",
-    "need_cash_rate": "请填写兑换到账户币种的汇率"
+    "need_cash_rate": "请填写兑换到账户币种的汇率",
+    "doc_remaining": "单据余额",
+    "pay_remaining": "支付余额"
   }
 }
