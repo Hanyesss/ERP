@@ -502,6 +502,9 @@ async def create_purchase(
             order_obj = (await db.execute(select(Order).where(Order.id == oid))).scalar_one_or_none()
             if order_obj:
                 await on_purchase_created(db, purchase.id, purchase_number, order_obj.manager_id)
+    # Авто-создание плана платежа (ожидаемый исходящий поставщику)
+    from app.services.payment_plans import create_plan_for_purchase
+    await create_plan_for_purchase(db, purchase, current_user.id)
     # Уникальность purchase_number уже гарантирована на flush (savepoint-retry выше):
     # успешный INSERT держит блокировку индекса, поэтому commit коллизий не даёт.
     await db.commit()
@@ -600,6 +603,11 @@ async def update_purchase(
 
     for order_id in affected_order_ids:
         await _recalc_order_cost(db, order_id)
+
+    # Синхронизируем ожидаемую сумму плана платежа
+    from app.services.payment_plans import sync_plan_for_purchase
+    await db.flush()
+    await sync_plan_for_purchase(db, pur)
 
     await write_audit(db, current_user.id, "purchase", pur.id, AuditActionEnum.update,
                       {"purchase_number": pur.purchase_number})

@@ -115,6 +115,24 @@ async def _recalc_purchase_payment_status(db: AsyncSession, purchase_id: uuid.UU
         pur.payment_status = PurchasePaymentStatus.partial
 
 
+async def _recalc_plan_status(db: AsyncSession, plan_id: uuid.UUID) -> None:
+    """Статус плана из суммы взносов (активных платежей с этим plan_id)."""
+    from app.models.payment_plan import PaymentPlan, PlanStatus
+    plan = (await db.execute(select(PaymentPlan).where(PaymentPlan.id == plan_id))).scalar_one_or_none()
+    if not plan:
+        return
+    paid = (await db.execute(
+        select(func.coalesce(func.sum(Payment.amount_cny), Decimal("0")))
+        .where(Payment.plan_id == plan_id, Payment.is_active == True)
+    )).scalar_one() or Decimal("0")
+    if paid <= 0:
+        plan.status = PlanStatus.pending
+    elif paid >= (plan.expected_cny or Decimal("0")):
+        plan.status = PlanStatus.paid
+    else:
+        plan.status = PlanStatus.deposit
+
+
 async def _recalc_order_supplier_payment_status(db: AsyncSession, order_id: uuid.UUID) -> None:
     """Recalculate order.supplier_payment_status based on ALL purchases linked to order."""
     from app.models.order_item import OrderItem
@@ -597,6 +615,8 @@ async def create_payment(
         notes=body.notes,
         created_by=current_user.id,
         is_active=True,
+        plan_id=body.plan_id,
+        installment_kind=body.installment_kind,
     )
     db.add(payment)
     await db.flush()
@@ -713,6 +733,9 @@ async def create_payment(
                     if pur.payment_status == "paid":
                         await on_purchase_paid(db, pur.id, pur.purchase_number,
                                                pur.created_by, str(pur.total_amount_cny))
+    # Взнос по плану платежа — пересчёт статуса плана
+    if body.plan_id:
+        await _recalc_plan_status(db, body.plan_id)
     await db.commit()
     return await _load_payment(db, payment.id)
 

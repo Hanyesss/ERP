@@ -27,6 +27,9 @@ class PaymentCreate(BaseModel):
     # Курс в валюту кассы (если валюта платежа ≠ валюта кассы)
     # Сколько единиц валюты кассы за 1 единицу валюты платежа
     cash_rate: Optional[Decimal] = None
+    # Взнос по плану платежа (депозит/финальный)
+    plan_id: Optional[uuid.UUID] = None
+    installment_kind: Optional[str] = None  # "deposit" | "balance"
 
 
 class PaymentUpdate(BaseModel):

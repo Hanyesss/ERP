@@ -18,7 +18,8 @@
     "partner_dashboard": "Дашборд партнёра",
     "partner_payouts": "Мои выплаты",
     "admin_partners": "Партнёры",
-    "quotes": "Сравнение поставщиков"
+    "quotes": "Сравнение поставщиков",
+    "payment_plans": "Ожидают оплаты"
   },
   "cash": {
     "add_new": "Новая касса",
@@ -924,5 +925,28 @@
     "added_by": "Добавил",
     "manual_row": "Ручная строка",
     "no_quotes_for_order": "Пока нет заявок по этому заказу"
+  },
+  "plan": {
+    "title": "Ожидают оплаты",
+    "doc": "Документ",
+    "direction": "Направление",
+    "counterparty": "Контрагент",
+    "expected": "Ожидается",
+    "paid": "Оплачено",
+    "remaining": "Остаток",
+    "status": "Статус",
+    "status_pending": "Ждёт оплаты",
+    "status_deposit": "Оплачен депозит",
+    "status_paid": "Оплачен",
+    "installments_count": "Взносов",
+    "settle": "Внести оплату",
+    "view": "Просмотр",
+    "search": "Поиск по контрагенту...",
+    "kind": "Тип взноса",
+    "kind_deposit": "Депозит",
+    "kind_balance": "Финальный платёж",
+    "new_installment": "Новый взнос",
+    "add_installment": "Внести",
+    "need_cash_rate": "Укажите курс конвертации в валюту кассы"
   }
 }

@@ -47,3 +47,6 @@ class Payment(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     external_tx_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     payment_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Привязка к плану платежа (взнос): депозит/финальный. NULL — обычный платёж.
+    plan_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("payment_plans.id"), nullable=True)
+    installment_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "deposit" / "balance"

@@ -14,6 +14,7 @@ import OrderDetailPage from "./pages/OrderDetailPage";
 import ExchangeRatesPage from "./pages/ExchangeRatesPage";
 import PurchasesPage from "./pages/PurchasesPage";
 import QuotesComparisonPage from "./pages/QuotesComparisonPage";
+import PaymentPlansPage from "./pages/PaymentPlansPage";
 import PurchaseFormPage from "./pages/PurchaseFormPage";
 import PurchaseDetailPage from "./pages/PurchaseDetailPage";
 import PaymentsPage from "./pages/PaymentsPage";
@@ -81,6 +82,7 @@ function Inner() {
             <Route path="/purchases/new" element={<PurchaseFormPage />} />
             <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
+            <Route path="/payment-plans" element={<PaymentPlansPage />} />
             <Route path="/payments/new" element={<PaymentFormPage />} />
             <Route path="/payments/:id" element={<PaymentDetailPage user={user!} />} />
             <Route path="/expenses" element={<ExpensesPage user={user!} />} />

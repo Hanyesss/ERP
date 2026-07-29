@@ -77,6 +77,9 @@ export interface PaymentCreateInput {
   network_fee?: number;
   notes?: string;
   allocations: AllocationInput[];
+  cash_rate?: number;
+  plan_id?: string;
+  installment_kind?: string;
 }
 
 export interface OrderPaymentBalance {

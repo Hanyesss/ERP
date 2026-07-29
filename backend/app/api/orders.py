@@ -647,6 +647,10 @@ async def create_order(
     order.total_sale_cny = total_sale
     order.total_cost_cny = Decimal("0")
 
+    # Авто-создание плана платежа (ожидаемый входящий от клиента)
+    from app.services.payment_plans import create_plan_for_order
+    await create_plan_for_order(db, order, current_user.id)
+
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.create,
                       {"order_number": order.order_number, "total_sale_cny": str(total_sale)})
     # Notify: accountant and admin about new order (except the creator)
@@ -806,6 +810,11 @@ async def update_order(
 
     for field, value in update_data.items():
         setattr(order, field, value)
+
+    # Синхронизируем ожидаемую сумму плана платежа с новой суммой заказа
+    from app.services.payment_plans import sync_plan_for_order
+    await db.flush()
+    await sync_plan_for_order(db, order)
 
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update,
                       {"old": old_data, "total_sale_cny": str(order.total_sale_cny)})

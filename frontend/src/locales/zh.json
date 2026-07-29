@@ -51,7 +51,8 @@
     "partner_dashboard": "合伙人面板",
     "partner_payouts": "我的结算",
     "admin_partners": "合伙人",
-    "quotes": "报价对比"
+    "quotes": "报价对比",
+    "payment_plans": "待付款"
   },
   "cash": {
     "add_new": "新建收银台",
@@ -924,5 +925,28 @@
     "added_by": "添加人",
     "manual_row": "手动行",
     "no_quotes_for_order": "该订单暂无报价申请"
+  },
+  "plan": {
+    "title": "待付款",
+    "doc": "单据",
+    "direction": "方向",
+    "counterparty": "往来单位",
+    "expected": "应付/应收",
+    "paid": "已付",
+    "remaining": "余额",
+    "status": "状态",
+    "status_pending": "待付款",
+    "status_deposit": "已付定金",
+    "status_paid": "已付清",
+    "installments_count": "分期数",
+    "settle": "付款",
+    "view": "查看",
+    "search": "按往来单位搜索...",
+    "kind": "付款类型",
+    "kind_deposit": "定金",
+    "kind_balance": "尾款",
+    "new_installment": "新增分期",
+    "add_installment": "确认",
+    "need_cash_rate": "请填写兑换到账户币种的汇率"
   }
 }
