@@ -81,8 +81,9 @@ async def _recalc_order_payment_status(db: AsyncSession, order_id: uuid.UUID) ->
 
     total = order.total_sale_cny or Decimal("0")
     remaining = total - paid_cny
-    # Tolerance = 0.5% of order total or 5 CNY minimum (covers FX rounding on RUB/USDT conversions)
-    TOLERANCE = max(total * Decimal("0.005"), Decimal("5"))
+    # Допуск на погрешность конвертации валют: 0.5% суммы, минимум 5 CNY,
+    # но не больше 10% суммы — иначе крошечные заказы считались бы оплаченными.
+    TOLERANCE = min(max(total * Decimal("0.005"), Decimal("5")), total * Decimal("0.1"))
     if paid_cny <= 0:
         order.payment_status = PaymentStatus.unpaid
     elif remaining <= TOLERANCE:
