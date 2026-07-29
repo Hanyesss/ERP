@@ -40,6 +40,7 @@ class PaymentUpdate(BaseModel):
     network_fee: Optional[Decimal] = None
     notes: Optional[str] = None
     cash_register_id: Optional[uuid.UUID] = None
+    cash_rate: Optional[Decimal] = None
 
 
 class AllocationResponse(BaseModel):

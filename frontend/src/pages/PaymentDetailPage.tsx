@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import { getPayment, deletePayment, updatePayment, uploadPaymentReceipt, deletePaymentReceipt, deletePaymentReceiptFile, requestPaymentChange, approvePaymentChange, rejectPaymentChange } from "../api/payments";
+import { getCashRegisters } from "../api/cashRegisters";
 import apiClient from "../api/client";
 import { compressImage } from "../utils/compressImage";
 import type { User } from "../types";
@@ -44,6 +45,25 @@ export default function PaymentDetailPage({ user }: Props) {
     queryFn: () => getPayment(id!).then(r => r.data),
     enabled: !!id,
   });
+
+  const { data: cashRegisters = [] } = useQuery({
+    queryKey: ["cash-registers"],
+    queryFn: () => getCashRegisters().then(r => r.data),
+    enabled: isAccountant,
+  });
+
+  // Кросс-валюта в форме редактирования
+  const CURRENCY_RANK: Record<string, number> = { USD: 3, USDT: 2, CNY: 1, RUB: 0 };
+  const edCurrency: string = Form.useWatch("currency", editForm) || "CNY";
+  const edAmount: number = Form.useWatch("amount", editForm) || 0;
+  const edRate: number = Form.useWatch("rate_to_cny", editForm) || 1;
+  const edRegId: string = Form.useWatch("cash_register_id", editForm);
+  const edCashRate: number = Form.useWatch("cash_rate", editForm) || 0;
+  const edReg = (cashRegisters as any[]).find(r => r.id === edRegId);
+  const edRegCur: string = edReg?.currency ?? "CNY";
+  const edNeedRate = !!edRegId && edCurrency !== edRegCur && edRegCur !== "CNY";
+  const edLarger = (CURRENCY_RANK[edCurrency] ?? 1) >= (CURRENCY_RANK[edRegCur] ?? 1) ? edCurrency : edRegCur;
+  const edSmaller = (CURRENCY_RANK[edCurrency] ?? 1) >= (CURRENCY_RANK[edRegCur] ?? 1) ? edRegCur : edCurrency;
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => updatePayment(id!, data),
@@ -182,6 +202,7 @@ export default function PaymentDetailPage({ user }: Props) {
                     currency: payment.currency,
                     amount: Number(payment.amount),
                     rate_to_cny: Number(payment.rate_to_cny),
+                    cash_register_id: (payment as any).cash_register_id ?? undefined,
                     network_fee: payment.network_fee != null ? Number(payment.network_fee) : undefined,
                     notes: payment.notes,
                   });
@@ -403,14 +424,21 @@ export default function PaymentDetailPage({ user }: Props) {
         <Form
           form={editForm}
           layout="vertical"
-          onFinish={(v) => updateMutation.mutate({
-            payment_date: v.payment_date.format("YYYY-MM-DD"),
-            currency: v.currency,
-            amount: v.amount,
-            rate_to_cny: v.rate_to_cny,
-            network_fee: v.network_fee ?? null,
-            notes: v.notes ?? null,
-          })}
+          onFinish={(v) => {
+            if (edNeedRate && (!v.cash_rate || v.cash_rate <= 0)) {
+              message.error(t("expense.cross_currency_error")); return;
+            }
+            updateMutation.mutate({
+              payment_date: v.payment_date.format("YYYY-MM-DD"),
+              currency: v.currency,
+              amount: v.amount,
+              rate_to_cny: v.rate_to_cny,
+              cash_register_id: v.cash_register_id ?? null,
+              cash_rate: edNeedRate ? v.cash_rate : undefined,
+              network_fee: v.network_fee ?? null,
+              notes: v.notes ?? null,
+            });
+          }}
         >
           <Row gutter={12}>
             <Col span={12}>
@@ -436,6 +464,36 @@ export default function PaymentDetailPage({ user }: Props) {
               </Form.Item>
             </Col>
           </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item label={`${t("payment.amount_cny")} (CNY)`}>
+                <InputNumber disabled value={Number((edAmount * edRate).toFixed(2))} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="cash_register_id" label={t("expense.cash_register")}>
+                <Select allowClear
+                  placeholder={t("expense.select_cash_register")}
+                  options={(cashRegisters as any[]).filter(r => r.is_active).map(r => ({
+                    value: r.id, label: `${r.name} (${r.currency})`,
+                  }))} />
+              </Form.Item>
+            </Col>
+          </Row>
+          {edNeedRate && (
+            <>
+              <Form.Item name="cash_rate"
+                label={t("expense.cash_rate_label", { larger: edLarger, smaller: edSmaller })}
+                rules={[{ required: true, message: t("expense.cash_rate_hint") }]}>
+                <InputNumber min={0.000001} step={0.01} precision={6} style={{ width: "100%" }}
+                  placeholder={`1 ${edLarger} = ? ${edSmaller}`} />
+              </Form.Item>
+              {edCashRate > 0 && (
+                <Alert type="info" showIcon style={{ marginBottom: 8 }}
+                  message={`${t("expense.cash_deduction")}: ${((CURRENCY_RANK[edCurrency] ?? 1) > (CURRENCY_RANK[edRegCur] ?? 1) ? edAmount * edCashRate : edAmount / edCashRate).toFixed(6)} ${edRegCur}`} />
+              )}
+            </>
+          )}
           {payment.currency === "USDT" && (
             <Form.Item name="network_fee" label={t("payment.network_fee")}>
               <InputNumber min={0} step={0.01} precision={2} style={{ width: "100%" }} />

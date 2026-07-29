@@ -815,6 +815,9 @@ async def update_order(
     from app.services.payment_plans import sync_plan_for_order
     await db.flush()
     await sync_plan_for_order(db, order)
+    # Сумма заказа изменилась — пересчитываем статус оплаты (иначе останется «оплачен»)
+    from app.api.payments import _recalc_order_payment_status
+    await _recalc_order_payment_status(db, order.id)
 
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.update,
                       {"old": old_data, "total_sale_cny": str(order.total_sale_cny)})

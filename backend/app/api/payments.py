@@ -740,6 +740,74 @@ async def create_payment(
     return await _load_payment(db, payment.id)
 
 
+async def _recompute_register_balances(db: AsyncSession, register_id: uuid.UUID) -> None:
+    """Пересчёт balance_after по цепочке кассы (после изменения суммы транзакции)."""
+    reg = (await db.execute(select(CashRegister).where(CashRegister.id == register_id))).scalar_one_or_none()
+    if not reg:
+        return
+    txs = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.cash_register_id == register_id,
+            CashTransaction.is_active == True,
+        ).order_by(CashTransaction.created_at)
+    )).scalars().all()
+    bal = reg.initial_balance
+    for tx in txs:
+        bal = bal + tx.amount if tx.direction == "in" else bal - tx.amount
+        tx.balance_after = bal
+
+
+async def _sync_payment_cash_tx(db: AsyncSession, payment: Payment, cash_rate, created_by: uuid.UUID) -> None:
+    """Пересоздать кассовую транзакцию платежа после изменения суммы/валюты/кассы."""
+    from app.api.cash_registers import _get_balance
+    # Старые транзакции этого платежа и их кассы — для пересчёта балансов
+    old = (await db.execute(
+        select(CashTransaction).where(CashTransaction.payment_id == payment.id, CashTransaction.is_active == True)
+    )).scalars().all()
+    affected = {tx.cash_register_id for tx in old}
+    for tx in old:
+        await db.delete(tx)
+    await db.flush()
+
+    if payment.cash_register_id:
+        reg = (await db.execute(
+            select(CashRegister).where(CashRegister.id == payment.cash_register_id)
+        )).scalar_one()
+        reg_currency = reg.currency
+        cur = payment.currency.value if hasattr(payment.currency, "value") else payment.currency
+        _RANK = {"USD": 3, "USDT": 2, "CNY": 1, "RUB": 0}
+        if cur == reg_currency:
+            cash_amount = payment.amount
+        elif reg_currency == "CNY":
+            cash_amount = payment.amount_cny
+        else:
+            if not cash_rate or cash_rate <= 0:
+                raise HTTPException(422, f"cross_currency_rate_required:{cur}:{reg_currency}")
+            if _RANK.get(cur, 1) > _RANK.get(reg_currency, 1):
+                cash_amount = (payment.amount * cash_rate).quantize(Decimal("0.000001"))
+            else:
+                cash_amount = (payment.amount / cash_rate).quantize(Decimal("0.000001"))
+        tx_direction = "in" if payment.direction == "in" else "out"
+        cash_tx = CashTransaction(
+            id=uuid.uuid4(),
+            cash_register_id=payment.cash_register_id,
+            payment_id=payment.id,
+            direction=tx_direction,
+            amount=cash_amount,
+            balance_after=Decimal("0"),  # пересчитается ниже
+            operation_type="payment_in" if tx_direction == "in" else "payment_out",
+            notes=payment.notes,
+            created_by=created_by,
+        )
+        db.add(cash_tx)
+        await db.flush()
+        affected.add(payment.cash_register_id)
+
+    for rid in affected:
+        if rid:
+            await _recompute_register_balances(db, rid)
+
+
 @router.patch("/{payment_id}", response_model=PaymentResponse)
 async def update_payment(
     payment_id: uuid.UUID,
@@ -754,6 +822,7 @@ async def update_payment(
         raise HTTPException(404, "Payment not found")
 
     update_data = body.model_dump(exclude_unset=True)
+    cash_rate = update_data.pop("cash_rate", None)
 
     # Non-accountants cannot change financial fields directly
     _ACCOUNTANT = ("accountant", "admin")
@@ -769,7 +838,15 @@ async def update_payment(
     if "amount" in update_data or "rate_to_cny" in update_data:
         payment.amount_cny = (payment.amount * payment.rate_to_cny).quantize(Decimal("0.01"))
 
+    # Если менялись кассовые поля — пересоздаём кассовую транзакцию и пересчитываем баланс
+    cash_fields = {"amount", "currency", "rate_to_cny", "cash_register_id"}
+    if cash_fields & set(update_data.keys()) or cash_rate is not None:
+        await db.flush()
+        await _sync_payment_cash_tx(db, payment, cash_rate, current_user.id)
+
     await _recalc_all_for_payment(db, payment)
+    if payment.plan_id:
+        await _recalc_plan_status(db, payment.plan_id)
 
     await write_audit(
         db, current_user.id, "payment", payment.id, AuditActionEnum.update,
