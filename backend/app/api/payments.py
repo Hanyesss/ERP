@@ -832,12 +832,30 @@ async def update_payment(
         if blocked:
             raise HTTPException(403, "Изменение суммы требует подтверждения. Используйте запрос на изменение суммы.")
 
+    old_amount_cny = payment.amount_cny
+    # Единственная привязка, покрывавшая весь платёж (для автоподстройки при смене суммы)
+    single_alloc = None
+    if payment.direction == "in":
+        allocs = (await db.execute(
+            select(PaymentAllocation).where(PaymentAllocation.payment_id == payment.id)
+        )).scalars().all()
+    else:
+        allocs = (await db.execute(
+            select(PurchasePaymentLink).where(PurchasePaymentLink.payment_id == payment.id)
+        )).scalars().all()
+    if len(allocs) == 1 and abs((allocs[0].amount_cny or Decimal("0")) - (old_amount_cny or Decimal("0"))) < Decimal("0.01"):
+        single_alloc = allocs[0]
+
     for field, value in update_data.items():
         setattr(payment, field, value)
 
     # Recalculate amount_cny if amount or rate changed
     if "amount" in update_data or "rate_to_cny" in update_data:
         payment.amount_cny = (payment.amount * payment.rate_to_cny).quantize(Decimal("0.01"))
+
+    # Платёж был полностью привязан к одному документу → привязка следует за суммой
+    if single_alloc is not None and payment.amount_cny != old_amount_cny:
+        single_alloc.amount_cny = payment.amount_cny
 
     # Если менялись кассовые поля — пересоздаём кассовую транзакцию и пересчитываем баланс
     cash_fields = {"amount", "currency", "rate_to_cny", "cash_register_id"}
