@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { getPayments, deletePayment } from "../api/payments";
+import { getBusinessTypes } from "../api/references";
 import { fetchUsers } from "../api/users";
 import type { PaymentListItem } from "../types/payment";
 
@@ -21,7 +22,7 @@ const fmtCny = (v: number) =>
   Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PaymentsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -30,6 +31,7 @@ export default function PaymentsPage() {
 
   const [search, setSearch] = useState("");
   const [direction, setDirection] = useState<string | undefined>();
+  const [btId, setBtId] = useState<string | undefined>();
   const [currency, setCurrency] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[string, string] | null>(null);
   const [createdById, setCreatedById] = useState<string | undefined>();
@@ -44,9 +46,19 @@ export default function PaymentsPage() {
     label: u.full_name || u.username,
   }));
 
+  const { data: businessTypes } = useQuery({
+    queryKey: ["business-types"],
+    queryFn: () => getBusinessTypes().then(r => r.data),
+  });
+  const btOptions = (businessTypes || []).map(bt => ({
+    value: bt.id,
+    label: i18n.language === "zh" && bt.name_cn ? bt.name_cn : bt.name,
+  }));
+
   const params = {
     search: search || undefined,
     direction,
+    business_type_id: btId,
     currency,
     date_from: dateRange?.[0],
     date_to: dateRange?.[1],
@@ -233,6 +245,15 @@ export default function PaymentsPage() {
               { value: "out", label: t("payment.outgoing") },
             ]}
             onChange={v => { setDirection(v); setPage(1); }}
+          />
+        </Col>
+        <Col>
+          <Select
+            allowClear
+            placeholder={t("order.business_type")}
+            style={{ width: 140 }}
+            options={btOptions}
+            onChange={v => { setBtId(v); setPage(1); }}
           />
         </Col>
         <Col>

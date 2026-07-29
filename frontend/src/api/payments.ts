@@ -9,6 +9,7 @@ export interface PaymentListParams {
   counterparty_id?: string;
   currency?: string;
   has_allocations?: boolean;
+  business_type_id?: string;
   date_from?: string;
   date_to?: string;
   search?: string;

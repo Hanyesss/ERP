@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, validator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_
 from sqlalchemy.orm import aliased
 
 from app.database import get_db
@@ -17,7 +17,9 @@ from app.models.payment import Payment, PaymentDirection
 from app.models.payment_allocation import PaymentAllocation
 from app.models.purchase_payment_link import PurchasePaymentLink
 from app.models.order import Order, PaymentStatus
+from app.models.order_item import OrderItem
 from app.models.purchase import Purchase, PurchasePaymentStatus
+from app.models.purchase_item import PurchaseItem
 from app.models.counterparty import Counterparty
 from app.models.company import Company
 from app.models.exchange_rate import ExchangeRate
@@ -376,6 +378,7 @@ async def list_payments(
     counterparty_id: Optional[uuid.UUID] = Query(None),
     currency: Optional[str] = Query(None),
     has_allocations: Optional[bool] = Query(None),
+    business_type_id: Optional[uuid.UUID] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     search: Optional[str] = Query(None),
@@ -386,6 +389,24 @@ async def list_payments(
     _: User = Depends(require_roles(*_ALLOWED)),
 ):
     CreatorAlias = aliased(User)
+
+    # Платежи направления: привязанные к заказам этого направления (входящие)
+    # или к их закупкам — напрямую (логистика) / через позиции (торговля) (исходящие).
+    bt_payment_ids = None
+    if business_type_id:
+        bt_orders = select(Order.id).where(Order.business_type_id == business_type_id)
+        in_pay = select(PaymentAllocation.payment_id).where(PaymentAllocation.order_id.in_(bt_orders))
+        trade_pur = (
+            select(PurchaseItem.purchase_id)
+            .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+            .where(OrderItem.order_id.in_(bt_orders))
+        )
+        out_pay = (
+            select(PurchasePaymentLink.payment_id)
+            .join(Purchase, PurchasePaymentLink.purchase_id == Purchase.id)
+            .where(or_(Purchase.order_id.in_(bt_orders), Purchase.id.in_(trade_pur)))
+        )
+        bt_payment_ids = in_pay.union(out_pay).subquery()
 
     # Subquery for allocated_cny per payment
     order_alloc_sq = (
@@ -434,6 +455,8 @@ async def list_payments(
         stmt = stmt.where(Counterparty.name.ilike(f"%{search}%"))
     if created_by_id:
         stmt = stmt.where(Payment.created_by == created_by_id)
+    if bt_payment_ids is not None:
+        stmt = stmt.where(Payment.id.in_(select(bt_payment_ids.c.payment_id)))
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
 
@@ -453,6 +476,8 @@ async def list_payments(
         totals_stmt = totals_stmt.where(Payment.payment_date >= date_from)
     if date_to:
         totals_stmt = totals_stmt.where(Payment.payment_date <= date_to)
+    if bt_payment_ids is not None:
+        totals_stmt = totals_stmt.where(Payment.id.in_(select(bt_payment_ids.c.payment_id)))
     totals_stmt = totals_stmt.group_by(Payment.direction)
     totals_rows = (await db.execute(totals_stmt)).all()
     incoming_cny = Decimal("0")
