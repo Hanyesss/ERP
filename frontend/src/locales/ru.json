@@ -577,7 +577,9 @@
     "change_approved": "Изменение принято",
     "change_rejected": "Запрос отклонён",
     "new_amount": "Новая сумма",
-    "change_reason": "Причина изменения"
+    "change_reason": "Причина изменения",
+    "view_actual": "Платежи",
+    "view_plans": "Ожидают оплаты"
   },
   "tab_payments": "Платежи",
   "expense": {

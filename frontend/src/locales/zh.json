@@ -610,7 +610,9 @@
     "change_approved": "修改已批准",
     "change_rejected": "申请已拒绝",
     "new_amount": "新金额",
-    "change_reason": "修改原因"
+    "change_reason": "修改原因",
+    "view_actual": "付款",
+    "view_plans": "待付款"
   },
   "tab_payments": "付款",
   "expense": {

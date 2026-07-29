@@ -74,6 +74,8 @@ async def list_plans(
     direction: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    order_id: Optional[uuid.UUID] = Query(None),
+    purchase_id: Optional[uuid.UUID] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -84,6 +86,10 @@ async def list_plans(
         stmt = stmt.where(PaymentPlan.direction == direction)
     if status:
         stmt = stmt.where(PaymentPlan.status == status)
+    if order_id:
+        stmt = stmt.where(PaymentPlan.order_id == order_id)
+    if purchase_id:
+        stmt = stmt.where(PaymentPlan.purchase_id == purchase_id)
     if search:
         cp_ids = select(Counterparty.id).where(Counterparty.name.ilike(f"%{search}%"))
         stmt = stmt.where(PaymentPlan.counterparty_id.in_(cp_ids))

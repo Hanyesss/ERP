@@ -36,7 +36,8 @@ export interface PlanListResponse {
 }
 
 export const getPaymentPlans = (params?: {
-  direction?: string; status?: string; search?: string; page?: number; page_size?: number;
+  direction?: string; status?: string; search?: string;
+  order_id?: string; purchase_id?: string; page?: number; page_size?: number;
 }) => apiClient.get<PlanListResponse>("/api/payment-plans", { params });
 
 export const getPaymentPlan = (id: string) =>

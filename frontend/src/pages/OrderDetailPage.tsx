@@ -16,6 +16,8 @@ import { syncOrderToSite, pushOrderStatus } from "../api/integration";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import OrderQuotesTab from "../components/logistics/OrderQuotesTab";
+import { getPaymentPlans, type PaymentPlan } from "../api/paymentPlans";
+import PlanSettleModal from "../components/payments/PlanSettleModal";
 import { useHasAnyRole } from "../hooks/useRole";
 import type { OrderItem, OrderCharge } from "../types/order";
 import type { ExpenseListItem } from "../types/expense";
@@ -66,6 +68,14 @@ export default function OrderDetailPage() {
     queryFn: () => getPaymentsForOrder(id!).then(r => r.data),
     enabled: !!id,
   });
+
+  const { data: orderPlansData } = useQuery({
+    queryKey: ["payment-plans", "order", id],
+    queryFn: () => getPaymentPlans({ order_id: id! }).then(r => r.data),
+    enabled: !!id,
+  });
+  const orderPlan = orderPlansData?.items?.[0] ?? null;
+  const [settlePlan, setSettlePlan] = useState<PaymentPlan | null>(null);
 
   const { data: orderExpenses } = useQuery({
     queryKey: ["expenses-for-order", id],
@@ -493,8 +503,20 @@ export default function OrderDetailPage() {
               <Statistic title={t("order.remaining_amount")} value={fmtCny(order.remaining_amount_cny)} suffix="CNY"
                 valueStyle={{ fontSize: 16, color: order.remaining_amount_cny > 0 ? "#cf1322" : "#3f8600" }} />
             </Col>
-            <Col flex="auto" style={{ display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
-              {order.payment_status !== "paid" && (
+            <Col flex="auto" style={{ display: "flex", alignItems: "flex-end", justifyContent: "flex-end", gap: 8 }}>
+              {orderPlan && (
+                <Space>
+                  <Tag color={orderPlan.status === "paid" ? "green" : orderPlan.status === "deposit" ? "blue" : "gold"}>
+                    {t(`plan.status_${orderPlan.status}`)}
+                  </Tag>
+                  {orderPlan.status !== "paid" && (
+                    <Button type="primary" onClick={() => setSettlePlan(orderPlan)}>
+                      {t("plan.settle")} ({fmtCny(orderPlan.remaining_cny)} CNY)
+                    </Button>
+                  )}
+                </Space>
+              )}
+              {!orderPlan && order.payment_status !== "paid" && (
                 <Button
                   type="primary"
                   onClick={() => navigate(`/payments/new?counterparty_id=${order.client_id}&direction=in&back=/orders/${id}`)}
@@ -889,6 +911,8 @@ export default function OrderDetailPage() {
       </Row>
 
       <Tabs items={tabItems} />
+
+      <PlanSettleModal plan={settlePlan} open={!!settlePlan} onClose={() => setSettlePlan(null)} />
     </div>
   );
 }

@@ -5,15 +5,19 @@ import {
   Typography, Space, Statistic, message, Modal,
 } from "antd";
 import TopScrollTable from "../components/common/TopScrollTable";
-import { PlusOutlined, EyeOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, EyeOutlined, DeleteOutlined, DollarOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { getPayments, deletePayment } from "../api/payments";
+import { getPaymentPlans, type PaymentPlan } from "../api/paymentPlans";
+import PlanSettleModal from "../components/payments/PlanSettleModal";
 import { getBusinessTypes } from "../api/references";
 import { fetchUsers } from "../api/users";
 import type { PaymentListItem } from "../types/payment";
+
+const PLAN_STATUS_COLOR: Record<string, string> = { pending: "gold", deposit: "blue", paid: "green" };
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -28,6 +32,9 @@ export default function PaymentsPage() {
 
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; paymentId: string | null }>({ open: false, paymentId: null });
   const [deleteReason, setDeleteReason] = useState("");
+
+  const [view, setView] = useState<"payments" | "plans">("payments");
+  const [selectedPlan, setSelectedPlan] = useState<PaymentPlan | null>(null);
 
   const [search, setSearch] = useState("");
   const [direction, setDirection] = useState<string | undefined>();
@@ -70,7 +77,35 @@ export default function PaymentsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["payments", params],
     queryFn: () => getPayments(params).then(r => r.data),
+    enabled: view === "payments",
   });
+
+  const { data: plansData, isLoading: plansLoading } = useQuery({
+    queryKey: ["payment-plans", search, direction, page],
+    queryFn: () => getPaymentPlans({
+      search: search || undefined, direction, page, page_size: 20,
+    }).then(r => r.data),
+    enabled: view === "plans",
+  });
+
+  const planColumns: ColumnsType<PaymentPlan> = [
+    { title: t("plan.doc"), dataIndex: "doc_number", key: "doc", render: v => v || "—" },
+    { title: t("payment.direction"), key: "dir", width: 110,
+      render: (_, r) => <Tag color={r.direction === "in" ? "green" : "red"}>
+        {r.direction === "in" ? t("payment.incoming") : t("payment.outgoing")}</Tag> },
+    { title: t("plan.counterparty"), dataIndex: "counterparty_name", key: "cp", render: v => v || "—" },
+    { title: t("plan.expected"), dataIndex: "expected_cny", key: "exp", align: "right",
+      render: v => `${fmtCny(v)} CNY` },
+    { title: t("plan.paid"), dataIndex: "paid_cny", key: "paid", align: "right", render: v => fmtCny(v) },
+    { title: t("plan.remaining"), dataIndex: "remaining_cny", key: "rem", align: "right",
+      render: v => <span style={{ color: v > 0 ? "#cf1322" : "#3f8600" }}>{fmtCny(v)}</span> },
+    { title: t("plan.status"), dataIndex: "status", key: "st", width: 140,
+      render: s => <Tag color={PLAN_STATUS_COLOR[s]}>{t(`plan.status_${s}`)}</Tag> },
+    { title: "", key: "act", width: 130,
+      render: (_, r) => <Button size="small" type={r.status === "paid" ? "default" : "primary"}
+        icon={<DollarOutlined />} onClick={() => setSelectedPlan(r)}>
+        {r.status === "paid" ? t("plan.view") : t("plan.settle")}</Button> },
+  ];
 
   const deleteMutation = useMutation({
     mutationFn: deletePayment,
@@ -209,6 +244,17 @@ export default function PaymentsPage() {
         </Col>
       </Row>
 
+      <Select
+        value={view}
+        onChange={v => { setView(v); setPage(1); }}
+        style={{ width: 220, marginBottom: 16 }}
+        options={[
+          { value: "payments", label: t("payment.view_actual") },
+          { value: "plans", label: t("payment.view_plans") },
+        ]}
+      />
+
+      {view === "payments" && (
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
           <Statistic title={t("payment.balance_in")} value={fmtCny(incoming)} valueStyle={{ color: "#389e0d" }} />
@@ -224,6 +270,7 @@ export default function PaymentsPage() {
           />
         </Col>
       </Row>
+      )}
 
       <Row gutter={8} style={{ marginBottom: 16 }}>
         <Col>
@@ -287,21 +334,41 @@ export default function PaymentsPage() {
         </Col>
       </Row>
 
-      <TopScrollTable
-        scroll={{ x: "max-content" }}
-        columns={columns}
-        dataSource={data?.items ?? []}
-        rowKey="id"
-        loading={isLoading}
-        size="small"
-        pagination={{
-          current: page,
-          total: data?.total ?? 0,
-          pageSize: 20,
-          onChange: setPage,
-          showTotal: total => `${total}`,
-        }}
-      />
+      {view === "payments" ? (
+        <TopScrollTable
+          scroll={{ x: "max-content" }}
+          columns={columns}
+          dataSource={data?.items ?? []}
+          rowKey="id"
+          loading={isLoading}
+          size="small"
+          pagination={{
+            current: page,
+            total: data?.total ?? 0,
+            pageSize: 20,
+            onChange: setPage,
+            showTotal: total => `${total}`,
+          }}
+        />
+      ) : (
+        <TopScrollTable
+          scroll={{ x: "max-content" }}
+          columns={planColumns as any}
+          dataSource={plansData?.items ?? []}
+          rowKey="id"
+          loading={plansLoading}
+          size="small"
+          pagination={{
+            current: page,
+            total: plansData?.total ?? 0,
+            pageSize: 20,
+            onChange: setPage,
+            showTotal: total => `${total}`,
+          }}
+        />
+      )}
+
+      <PlanSettleModal plan={selectedPlan} open={!!selectedPlan} onClose={() => setSelectedPlan(null)} />
     </div>
   );
 }
