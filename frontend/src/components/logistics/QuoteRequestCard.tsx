@@ -123,7 +123,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
               </div>
               {q.delivery_days && <div style={{ fontSize: 12 }}>{q.delivery_days}</div>}
               {q.insurance_pct != null && (
-                <div style={{ fontSize: 12 }}>{t("quote.insurance")}: {q.insurance_pct}%</div>
+                <div style={{ fontSize: 12 }}>{t("quote.insurance")}: {q.insurance_pct}$</div>
               )}
               {q.notes && <div style={{ fontSize: 11, color: "#888" }}>{q.notes}</div>}
               <Popconfirm title={t("common.delete") + "?"}
@@ -193,7 +193,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
       >
         <Form form={quoteForm} layout="vertical" initialValues={{ price_unit: "per_kg", currency: "USD" }}>
           <Form.Item name="supplier_id" label={t("quote.supplier")} rules={[{ required: true }]}>
-            <CounterpartySelect type="supplier" placeholder={t("quote.supplier")} />
+            <CounterpartySelect type="supplier" logisticsOnly placeholder={t("quote.supplier")} />
           </Form.Item>
           <Space>
             <Form.Item name="price" label={t("quote.price")} rules={[{ required: true }]}>
@@ -212,8 +212,8 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
           <Form.Item name="delivery_days" label={t("quote.delivery_days")}>
             <Input placeholder="18-22天" />
           </Form.Item>
-          <Form.Item name="insurance_pct" label={t("quote.insurance") + " %"}>
-            <InputNumber min={0} max={100} step={0.1} style={{ width: "100%" }} />
+          <Form.Item name="insurance_pct" label={t("quote.insurance")}>
+            <InputNumber min={0} step={0.1} prefix="$" style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item name="notes" label={t("payment.notes")}>
             <Input.TextArea rows={2} />

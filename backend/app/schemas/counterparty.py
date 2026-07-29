@@ -20,6 +20,7 @@ class CounterpartyCreate(BaseModel):
     contact_info: Optional[ContactInfo] = None
     notes: Optional[str] = None
     partner_id: Optional[uuid.UUID] = None
+    is_logistics: bool = False
 
 
 class CounterpartyUpdate(BaseModel):
@@ -31,6 +32,7 @@ class CounterpartyUpdate(BaseModel):
     contact_info: Optional[ContactInfo] = None
     notes: Optional[str] = None
     partner_id: Optional[uuid.UUID] = None
+    is_logistics: Optional[bool] = None
 
 
 class CounterpartyResponse(BaseModel):
@@ -48,6 +50,7 @@ class CounterpartyResponse(BaseModel):
     partner_name: Optional[str] = None
     trontok_linked: bool = False
     trontok_provisioned_at: Optional[datetime] = None
+    is_logistics: bool = False
 
     class Config:
         from_attributes = True
@@ -65,6 +68,7 @@ class CounterpartyResponse(BaseModel):
             partner_id=obj.partner_id, partner_name=partner_name,
             trontok_linked=getattr(obj, "trontok_linked", False) or False,
             trontok_provisioned_at=getattr(obj, "trontok_provisioned_at", None),
+            is_logistics=getattr(obj, "is_logistics", False) or False,
         )
 
 

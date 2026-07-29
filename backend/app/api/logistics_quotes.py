@@ -21,7 +21,7 @@ from app.models.warehouse import Warehouse
 
 router = APIRouter(prefix="/api/logistics-quotes", tags=["logistics-quotes"])
 
-_ALLOWED = ("manager", "purchaser", "accountant", "admin")
+_ALLOWED = ("employee", "admin")
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────

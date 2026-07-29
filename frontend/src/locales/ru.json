@@ -184,7 +184,10 @@
     "partner_change_desc": "Все заказы клиента перейдут от «{{from}}» к «{{to}}». Партнёрские комиссии пересчитаются. Это действие нельзя отменить автоматически.",
     "trontok_filter_all": "TronTok: все",
     "trontok_filter_yes": "TronTok: есть",
-    "trontok_filter_no": "TronTok: нет"
+    "trontok_filter_no": "TronTok: нет",
+    "supplier_kind": "Тип поставщика",
+    "kind_trade": "Торговый",
+    "kind_logistics": "Логистический"
   },
   "order": {
     "title": "Заказы",

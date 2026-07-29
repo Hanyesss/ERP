@@ -40,4 +40,5 @@ class Counterparty(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("counterparties.id"), nullable=True
     )
     trontok_linked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_logistics: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     trontok_provisioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

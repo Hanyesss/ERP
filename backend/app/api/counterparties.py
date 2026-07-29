@@ -41,6 +41,7 @@ async def list_counterparties(
     type: Optional[str] = Query(None),
     partner_id: Optional[uuid.UUID] = Query(None),
     trontok_linked: Optional[bool] = Query(None),
+    is_logistics: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -65,6 +66,8 @@ async def list_counterparties(
         q = q.where(Counterparty.partner_id == partner_id)
     if trontok_linked is not None:
         q = q.where(Counterparty.trontok_linked == trontok_linked)
+    if is_logistics is not None:
+        q = q.where(Counterparty.is_logistics == is_logistics)
 
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar_one()
@@ -117,6 +120,7 @@ async def create_counterparty(
         notes=body.notes,
         is_active=True,
         partner_id=body.partner_id,
+        is_logistics=body.is_logistics,
     )
     db.add(cp)
     await db.flush()

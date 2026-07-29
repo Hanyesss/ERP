@@ -20,6 +20,7 @@ export interface Counterparty {
   is_active: boolean;
   partner_id?: string;
   partner_name?: string;
+  is_logistics?: boolean;
 }
 
 export interface CounterpartyListResponse {
@@ -40,4 +41,5 @@ export interface CounterpartyFormData {
   address?: string;
   notes?: string;
   partner_id?: string;
+  is_logistics?: boolean;
 }

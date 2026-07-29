@@ -34,6 +34,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
   const watchedType = Form.useWatch("type", form);
   const watchedPartnerId = Form.useWatch("partner_id", form);
   const isClient = watchedType === "client" || watchedType === "both";
+  const isSupplier = watchedType === "supplier" || watchedType === "both";
   const isPartner = watchedType === "partner";
 
   const oldPartnerId = editing?.partner_id ?? null;
@@ -76,10 +77,11 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
           address: editing.contact_info?.address,
           notes: editing.notes,
           partner_id: editing.partner_id,
+          is_logistics: editing.is_logistics ?? false,
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ default_currency: "CNY", type: forcedType });
+        form.setFieldsValue({ default_currency: "CNY", type: forcedType, is_logistics: false });
       }
     }
   }, [open, editing, form]);
@@ -138,6 +140,17 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
         <Form.Item name="default_currency" label={t("counterparty.default_currency")}>
           <Select options={currencyOptions} />
         </Form.Item>
+
+        {isSupplier && (
+          <Form.Item name="is_logistics" label={t("counterparty.supplier_kind")}>
+            <Select
+              options={[
+                { value: false, label: t("counterparty.kind_trade") },
+                { value: true, label: t("counterparty.kind_logistics") },
+              ]}
+            />
+          </Form.Item>
+        )}
 
         {isClient && (
           <>

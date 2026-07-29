@@ -34,6 +34,7 @@ import AdminPartnersPage from "./pages/AdminPartnersPage";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
+import { useCommaDecimal } from "./hooks/useCommaDecimal";
 import { NavigationGuardProvider } from "./contexts/NavigationGuardContext";
 
 const queryClient = new QueryClient({
@@ -43,6 +44,7 @@ const queryClient = new QueryClient({
 function Inner() {
   const { i18n } = useTranslation();
   const { user, setUser, loading } = useAuth();
+  useCommaDecimal();
   const antLocale = i18n.language === "zh" ? zhCN : ruRU;
   const isPartner = !!user?.roles?.includes("partner") && user.roles.length === 1;
   const homePath = isPartner ? "/partner-dashboard" : "/dashboard";

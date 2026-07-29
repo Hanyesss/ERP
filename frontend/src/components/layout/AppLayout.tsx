@@ -75,7 +75,7 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.purchases"),
     },
 
-    hasRole(user, "purchaser", "manager", "accountant", "admin") && {
+    hasRole(user, "employee", "admin") && {
       key: "/quotes",
       icon: <DiffOutlined />,
       label: t("nav.quotes"),

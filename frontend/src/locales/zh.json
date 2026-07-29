@@ -217,7 +217,10 @@
     "partner_change_desc": "客户所有订单将从「{{from}}」转至「{{to}}」，合伙佣金将重新计算。此操作不可自动撤销。",
     "trontok_filter_all": "TronTok: 全部",
     "trontok_filter_yes": "TronTok: 有",
-    "trontok_filter_no": "TronTok: 无"
+    "trontok_filter_no": "TronTok: 无",
+    "supplier_kind": "供应商类型",
+    "kind_trade": "贸易",
+    "kind_logistics": "物流"
   },
   "order": {
     "title": "订单",

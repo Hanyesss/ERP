@@ -12,14 +12,18 @@ interface Props {
   allowClear?: boolean;
   style?: CSSProperties;
   disabled?: boolean;
+  logisticsOnly?: boolean;
 }
 
-export default function CounterpartySelect({ type, ...rest }: Props) {
+export default function CounterpartySelect({ type, logisticsOnly, ...rest }: Props) {
   const queryKey = type === "client" ? "counterparties-clients" : "counterparties-suppliers";
 
   const { data, isLoading } = useQuery({
-    queryKey: [queryKey],
-    queryFn: () => getCounterparties({ type, page_size: 200 }).then(r => r.data),
+    queryKey: [queryKey, logisticsOnly ? "logistics" : "all"],
+    queryFn: () => getCounterparties({
+      type, page_size: 200,
+      is_logistics: logisticsOnly ? true : undefined,
+    }).then(r => r.data),
   });
 
   const options = (data?.items || []).map(c => ({
