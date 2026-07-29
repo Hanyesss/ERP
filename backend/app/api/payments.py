@@ -853,9 +853,33 @@ async def update_payment(
     if "amount" in update_data or "rate_to_cny" in update_data:
         payment.amount_cny = (payment.amount * payment.rate_to_cny).quantize(Decimal("0.01"))
 
-    # Платёж был полностью привязан к одному документу → привязка следует за суммой
+    # Платёж был полностью привязан к одному документу → привязка следует за суммой,
+    # но не больше остатка по документу (переплата уходит в нераспределённый остаток).
     if single_alloc is not None and payment.amount_cny != old_amount_cny:
-        single_alloc.amount_cny = payment.amount_cny
+        if payment.direction == "in":
+            order = (await db.execute(
+                select(Order).where(Order.id == single_alloc.order_id)
+            )).scalar_one_or_none()
+            doc_total = (order.total_sale_cny if order else payment.amount_cny) or Decimal("0")
+            other = (await db.execute(
+                select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
+                .join(Payment, PaymentAllocation.payment_id == Payment.id)
+                .where(PaymentAllocation.order_id == single_alloc.order_id,
+                       Payment.id != payment.id, Payment.is_active == True)
+            )).scalar_one() or Decimal("0")
+        else:
+            pur = (await db.execute(
+                select(Purchase).where(Purchase.id == single_alloc.purchase_id)
+            )).scalar_one_or_none()
+            doc_total = (pur.total_amount_cny if pur else payment.amount_cny) or Decimal("0")
+            other = (await db.execute(
+                select(func.coalesce(func.sum(PurchasePaymentLink.amount_cny), Decimal("0")))
+                .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+                .where(PurchasePaymentLink.purchase_id == single_alloc.purchase_id,
+                       Payment.id != payment.id, Payment.is_active == True)
+            )).scalar_one() or Decimal("0")
+        cap = max(doc_total - other, Decimal("0"))
+        single_alloc.amount_cny = min(payment.amount_cny, cap)
 
     # Если менялись кассовые поля — пересоздаём кассовую транзакцию и пересчитываем баланс
     cash_fields = {"amount", "currency", "rate_to_cny", "cash_register_id"}
