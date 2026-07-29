@@ -6,7 +6,7 @@ Create Date: 2026-07-23
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ENUM
 
 revision = '0044'
 down_revision = '0043'
@@ -38,8 +38,10 @@ def upgrade() -> None:
     )
     op.create_index('ix_quote_requests_order_id', 'quote_requests', ['order_id'])
 
-    priceunit = sa.Enum('per_kg', 'per_cbm', name='priceunitenum')
-    priceunit.create(op.get_bind(), checkfirst=True)
+    # Явно создаём тип; create_type=False на колонке, чтобы create_table
+    # не пытался создать его повторно (иначе DuplicateObject).
+    priceunit = ENUM('per_kg', 'per_cbm', name='priceunitenum', create_type=False)
+    ENUM('per_kg', 'per_cbm', name='priceunitenum').create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         'supplier_quotes',
