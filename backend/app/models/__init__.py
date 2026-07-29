@@ -20,6 +20,7 @@ from app.models.purchase_payment_link import PurchasePaymentLink
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox, BoxItem, PackingList, BoxStatus
 from app.models.partner_payout import PartnerPayout
+from app.models.logistics_quote import QuoteRequest, SupplierQuote, PriceUnitEnum
 
 __all__ = [
     "TimestampMixin",
@@ -38,4 +39,5 @@ __all__ = [
     "PurchaseItem", "PurchasePaymentLink",
     "Warehouse", "WarehouseBox", "BoxItem", "PackingList", "BoxStatus",
     "PartnerPayout",
+    "QuoteRequest", "SupplierQuote", "PriceUnitEnum",
 ]

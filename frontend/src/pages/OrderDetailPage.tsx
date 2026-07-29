@@ -15,6 +15,7 @@ import { getExpenses, getFileUrl } from "../api/expenses";
 import { syncOrderToSite, pushOrderStatus } from "../api/integration";
 import { OrderStatusTag, PaymentStatusTag, BusinessTypeTag } from "../components/orders/OrderStatusTag";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
+import OrderQuotesTab from "../components/logistics/OrderQuotesTab";
 import { useHasAnyRole } from "../hooks/useRole";
 import type { OrderItem, OrderCharge } from "../types/order";
 import type { ExpenseListItem } from "../types/expense";
@@ -749,6 +750,11 @@ export default function OrderDetailPage() {
           </Col>
         </Row>
       ),
+    }] : []),
+    ...(isLogistics ? [{
+      key: "quotes",
+      label: t("quote.tab_quotes"),
+      children: <OrderQuotesTab orderId={id!} />,
     }] : []),
     {
       key: "history",

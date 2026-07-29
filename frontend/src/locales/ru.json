@@ -17,7 +17,8 @@
     "assets": "Активы",
     "partner_dashboard": "Дашборд партнёра",
     "partner_payouts": "Мои выплаты",
-    "admin_partners": "Партнёры"
+    "admin_partners": "Партнёры",
+    "quotes": "Сравнение поставщиков"
   },
   "cash": {
     "add_new": "Новая касса",
@@ -882,5 +883,43 @@
     "test_fail": "Ошибка подключения",
     "last_sync": "Последняя синхронизация",
     "sync_ok": "OK"
+  },
+  "quote": {
+    "title": "Сравнение поставщиков",
+    "tab_quotes": "Предложения поставщиков",
+    "add_request": "Добавить заявку",
+    "search_placeholder": "Поиск по № заказа или товару...",
+    "from_order": "Из заказа",
+    "manual": "Вручную",
+    "logistics_order": "Логистический заказ",
+    "pick_order": "Выберите заказ",
+    "order_number": "№ заказа",
+    "product": "Товар",
+    "box": "Коробка",
+    "dimensions": "Габариты",
+    "cargo_value": "Стоимость груза",
+    "weight": "Вес (кг)",
+    "volume": "Объём (м³)",
+    "density": "Плотность",
+    "destination": "Назначение",
+    "dispatch": "Отправка",
+    "add_quote": "Предложение",
+    "supplier": "Поставщик",
+    "price": "Цена",
+    "unit": "Единица",
+    "per_kg": "за кг",
+    "per_cbm": "за м³",
+    "delivery_days": "Срок доставки",
+    "insurance": "Страховка",
+    "confirm_selection": "Подтвердить выбор",
+    "chosen": "Выбран",
+    "selected_by": "Выбрал",
+    "selected_ok": "Поставщик выбран",
+    "reset_selection": "Сбросить выбор",
+    "total": "Итого",
+    "total_hint": "Цена × вес (или объём)",
+    "added_by": "Добавил",
+    "manual_row": "Ручная строка",
+    "no_quotes_for_order": "Пока нет заявок по этому заказу"
   }
 }

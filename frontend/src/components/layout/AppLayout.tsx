@@ -5,6 +5,7 @@ import {
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
   BarChartOutlined, DatabaseOutlined, SettingOutlined, BankOutlined,
   MenuOutlined, CloseOutlined, SafetyCertificateOutlined, GiftOutlined,
+  DiffOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -72,6 +73,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       key: "/purchases",
       icon: <ShoppingCartOutlined />,
       label: t("nav.purchases"),
+    },
+
+    hasRole(user, "purchaser", "manager", "accountant", "admin") && {
+      key: "/quotes",
+      icon: <DiffOutlined />,
+      label: t("nav.quotes"),
     },
 
     !hasRole(user, "partner") && {

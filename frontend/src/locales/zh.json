@@ -50,7 +50,8 @@
     "assets": "资产",
     "partner_dashboard": "合伙人面板",
     "partner_payouts": "我的结算",
-    "admin_partners": "合伙人"
+    "admin_partners": "合伙人",
+    "quotes": "报价对比"
   },
   "cash": {
     "add_new": "新建收银台",
@@ -882,5 +883,43 @@
     "test_fail": "连接失败",
     "last_sync": "最后同步",
     "sync_ok": "正常"
+  },
+  "quote": {
+    "title": "供应商报价对比",
+    "tab_quotes": "供应商报价",
+    "add_request": "添加申请",
+    "search_placeholder": "按订单号或品名搜索...",
+    "from_order": "从订单",
+    "manual": "手动",
+    "logistics_order": "物流订单",
+    "pick_order": "选择订单",
+    "order_number": "订单号",
+    "product": "品名",
+    "box": "箱型",
+    "dimensions": "尺寸",
+    "cargo_value": "货值",
+    "weight": "重量(kg)",
+    "volume": "体积(m³)",
+    "density": "密度",
+    "destination": "目的地",
+    "dispatch": "发货地",
+    "add_quote": "报价",
+    "supplier": "供应商",
+    "price": "价格",
+    "unit": "单位",
+    "per_kg": "每kg",
+    "per_cbm": "每m³",
+    "delivery_days": "时效",
+    "insurance": "保险",
+    "confirm_selection": "确认选择",
+    "chosen": "已选",
+    "selected_by": "选择人",
+    "selected_ok": "已选择供应商",
+    "reset_selection": "取消选择",
+    "total": "合计",
+    "total_hint": "价格 × 重量(或体积)",
+    "added_by": "添加人",
+    "manual_row": "手动行",
+    "no_quotes_for_order": "该订单暂无报价申请"
   }
 }
