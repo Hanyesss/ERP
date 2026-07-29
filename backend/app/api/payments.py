@@ -809,6 +809,65 @@ async def _sync_payment_cash_tx(db: AsyncSession, payment: Payment, cash_rate, c
             await _recompute_register_balances(db, rid)
 
 
+async def _sync_single_allocation(db: AsyncSession, payment: Payment) -> None:
+    """Если у платежа ровно одна привязка — держим её = min(сумма платежа,
+    потребность документа). Переплата уходит в нераспределённый остаток."""
+    D0 = Decimal("0")
+    if payment.direction == "in":
+        allocs = (await db.execute(
+            select(PaymentAllocation).where(PaymentAllocation.payment_id == payment.id)
+        )).scalars().all()
+        if len(allocs) != 1:
+            return
+        a = allocs[0]
+        order = (await db.execute(select(Order).where(Order.id == a.order_id))).scalar_one_or_none()
+        doc_total = (order.total_sale_cny if order else payment.amount_cny) or D0
+        other = (await db.execute(
+            select(func.coalesce(func.sum(PaymentAllocation.amount_cny), D0))
+            .join(Payment, PaymentAllocation.payment_id == Payment.id)
+            .where(PaymentAllocation.order_id == a.order_id,
+                   Payment.id != payment.id, Payment.is_active == True)
+        )).scalar_one() or D0
+    else:
+        allocs = (await db.execute(
+            select(PurchasePaymentLink).where(PurchasePaymentLink.payment_id == payment.id)
+        )).scalars().all()
+        if len(allocs) != 1:
+            return
+        a = allocs[0]
+        pur = (await db.execute(select(Purchase).where(Purchase.id == a.purchase_id))).scalar_one_or_none()
+        doc_total = (pur.total_amount_cny if pur else payment.amount_cny) or D0
+        other = (await db.execute(
+            select(func.coalesce(func.sum(PurchasePaymentLink.amount_cny), D0))
+            .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+            .where(PurchasePaymentLink.purchase_id == a.purchase_id,
+                   Payment.id != payment.id, Payment.is_active == True)
+        )).scalar_one() or D0
+    cap = max(doc_total - other, D0)
+    a.amount_cny = min(payment.amount_cny, cap)
+
+
+async def sync_allocations_for_order(db: AsyncSession, order_id: uuid.UUID) -> None:
+    """Пересчитать привязки платежей заказа при изменении его суммы."""
+    pay_ids = (await db.execute(
+        select(PaymentAllocation.payment_id).where(PaymentAllocation.order_id == order_id)
+    )).scalars().all()
+    for pid in set(pay_ids):
+        p = (await db.execute(select(Payment).where(Payment.id == pid, Payment.is_active == True))).scalar_one_or_none()
+        if p:
+            await _sync_single_allocation(db, p)
+
+
+async def sync_allocations_for_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> None:
+    pay_ids = (await db.execute(
+        select(PurchasePaymentLink.payment_id).where(PurchasePaymentLink.purchase_id == purchase_id)
+    )).scalars().all()
+    for pid in set(pay_ids):
+        p = (await db.execute(select(Payment).where(Payment.id == pid, Payment.is_active == True))).scalar_one_or_none()
+        if p:
+            await _sync_single_allocation(db, p)
+
+
 @router.patch("/{payment_id}", response_model=PaymentResponse)
 async def update_payment(
     payment_id: uuid.UUID,
@@ -832,20 +891,6 @@ async def update_payment(
         if blocked:
             raise HTTPException(403, "Изменение суммы требует подтверждения. Используйте запрос на изменение суммы.")
 
-    old_amount_cny = payment.amount_cny
-    # Единственная привязка, покрывавшая весь платёж (для автоподстройки при смене суммы)
-    single_alloc = None
-    if payment.direction == "in":
-        allocs = (await db.execute(
-            select(PaymentAllocation).where(PaymentAllocation.payment_id == payment.id)
-        )).scalars().all()
-    else:
-        allocs = (await db.execute(
-            select(PurchasePaymentLink).where(PurchasePaymentLink.payment_id == payment.id)
-        )).scalars().all()
-    if len(allocs) == 1 and abs((allocs[0].amount_cny or Decimal("0")) - (old_amount_cny or Decimal("0"))) < Decimal("0.01"):
-        single_alloc = allocs[0]
-
     for field, value in update_data.items():
         setattr(payment, field, value)
 
@@ -853,33 +898,10 @@ async def update_payment(
     if "amount" in update_data or "rate_to_cny" in update_data:
         payment.amount_cny = (payment.amount * payment.rate_to_cny).quantize(Decimal("0.01"))
 
-    # Платёж был полностью привязан к одному документу → привязка следует за суммой,
-    # но не больше остатка по документу (переплата уходит в нераспределённый остаток).
-    if single_alloc is not None and payment.amount_cny != old_amount_cny:
-        if payment.direction == "in":
-            order = (await db.execute(
-                select(Order).where(Order.id == single_alloc.order_id)
-            )).scalar_one_or_none()
-            doc_total = (order.total_sale_cny if order else payment.amount_cny) or Decimal("0")
-            other = (await db.execute(
-                select(func.coalesce(func.sum(PaymentAllocation.amount_cny), Decimal("0")))
-                .join(Payment, PaymentAllocation.payment_id == Payment.id)
-                .where(PaymentAllocation.order_id == single_alloc.order_id,
-                       Payment.id != payment.id, Payment.is_active == True)
-            )).scalar_one() or Decimal("0")
-        else:
-            pur = (await db.execute(
-                select(Purchase).where(Purchase.id == single_alloc.purchase_id)
-            )).scalar_one_or_none()
-            doc_total = (pur.total_amount_cny if pur else payment.amount_cny) or Decimal("0")
-            other = (await db.execute(
-                select(func.coalesce(func.sum(PurchasePaymentLink.amount_cny), Decimal("0")))
-                .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
-                .where(PurchasePaymentLink.purchase_id == single_alloc.purchase_id,
-                       Payment.id != payment.id, Payment.is_active == True)
-            )).scalar_one() or Decimal("0")
-        cap = max(doc_total - other, Decimal("0"))
-        single_alloc.amount_cny = min(payment.amount_cny, cap)
+    # Единственная привязка следует за суммой платежа (в пределах потребности документа)
+    if "amount" in update_data or "rate_to_cny" in update_data:
+        await db.flush()
+        await _sync_single_allocation(db, payment)
 
     # Если менялись кассовые поля — пересоздаём кассовую транзакцию и пересчитываем баланс
     cash_fields = {"amount", "currency", "rate_to_cny", "cash_register_id"}

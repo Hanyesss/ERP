@@ -23,32 +23,60 @@ _ALLOWED = ("manager", "purchaser", "accountant", "admin")
 
 
 async def _plan_dict(db: AsyncSession, plan: PaymentPlan) -> dict:
+    """План — это ВИД на оплату документа. Оплата и взносы берутся из привязок
+    заказа/закупки (все платежи, а не только созданные через план), поэтому план
+    всегда согласован со статусом заказа."""
+    from app.models.payment_allocation import PaymentAllocation
+    from app.models.purchase_payment_link import PurchasePaymentLink
+
     cp = (await db.execute(select(Counterparty.name).where(Counterparty.id == plan.counterparty_id))).scalar_one_or_none()
     doc_number = None
-    if plan.order_id:
-        doc_number = (await db.execute(select(Order.order_number).where(Order.id == plan.order_id))).scalar_one_or_none()
-    elif plan.purchase_id:
-        doc_number = (await db.execute(select(Purchase.purchase_number).where(Purchase.id == plan.purchase_id))).scalar_one_or_none()
-
+    expected_cny = plan.expected_cny or Decimal("0")
     Creator = aliased(User)
-    inst_rows = (await db.execute(
-        select(Payment, Creator.full_name)
-        .outerjoin(Creator, Payment.created_by == Creator.id)
-        .where(Payment.plan_id == plan.id, Payment.is_active == True)
-        .order_by(Payment.payment_date)
-    )).all()
+
+    if plan.order_id:
+        order = (await db.execute(select(Order).where(Order.id == plan.order_id))).scalar_one_or_none()
+        if order:
+            doc_number = order.order_number
+            expected_cny = order.total_sale_cny or Decimal("0")  # всегда актуальная сумма заказа
+        rows = (await db.execute(
+            select(Payment, PaymentAllocation.amount_cny, Creator.full_name)
+            .join(PaymentAllocation, PaymentAllocation.payment_id == Payment.id)
+            .outerjoin(Creator, Payment.created_by == Creator.id)
+            .where(PaymentAllocation.order_id == plan.order_id, Payment.is_active == True)
+            .order_by(Payment.payment_date)
+        )).all()
+    else:
+        pur = (await db.execute(select(Purchase).where(Purchase.id == plan.purchase_id))).scalar_one_or_none()
+        if pur:
+            doc_number = pur.purchase_number
+            expected_cny = pur.total_amount_cny or Decimal("0")
+        rows = (await db.execute(
+            select(Payment, PurchasePaymentLink.amount_cny, Creator.full_name)
+            .join(PurchasePaymentLink, PurchasePaymentLink.payment_id == Payment.id)
+            .outerjoin(Creator, Payment.created_by == Creator.id)
+            .where(PurchasePaymentLink.purchase_id == plan.purchase_id, Payment.is_active == True)
+            .order_by(Payment.payment_date)
+        )).all()
+
     installments = [{
         "id": str(p.id),
         "kind": p.installment_kind,
         "amount": p.amount,
         "currency": p.currency.value if hasattr(p.currency, "value") else p.currency,
-        "amount_cny": p.amount_cny,
+        "amount_cny": alloc_cny,   # сколько этого платежа отнесено на документ
         "payment_date": str(p.payment_date),
         "created_by_name": cname or "",
-    } for p, cname in inst_rows]
+    } for p, alloc_cny, cname in rows]
 
     paid_cny = sum((Decimal(str(i["amount_cny"])) for i in installments), Decimal("0"))
-    remaining_cny = max((plan.expected_cny or Decimal("0")) - paid_cny, Decimal("0"))
+    remaining_cny = max(expected_cny - paid_cny, Decimal("0"))
+    if paid_cny <= 0:
+        status = "pending"
+    elif paid_cny >= expected_cny:
+        status = "paid"
+    else:
+        status = "deposit"
 
     return {
         "id": str(plan.id),
@@ -60,10 +88,10 @@ async def _plan_dict(db: AsyncSession, plan: PaymentPlan) -> dict:
         "counterparty_name": cp,
         "currency": plan.currency,
         "expected_amount": plan.expected_amount,
-        "expected_cny": plan.expected_cny,
+        "expected_cny": expected_cny,
         "paid_cny": paid_cny,
         "remaining_cny": remaining_cny,
-        "status": plan.status.value if hasattr(plan.status, "value") else plan.status,
+        "status": status,
         "installments": installments,
         "created_at": plan.created_at.isoformat() if plan.created_at else None,
     }

@@ -608,8 +608,10 @@ async def update_purchase(
     from app.services.payment_plans import sync_plan_for_purchase
     await db.flush()
     await sync_plan_for_purchase(db, pur)
-    # Сумма закупки изменилась — пересчитываем статус оплаты
-    from app.api.payments import _recalc_purchase_payment_status
+    # Сумма закупки изменилась — пересчитываем привязки платежей и статус оплаты
+    from app.api.payments import sync_allocations_for_purchase, _recalc_purchase_payment_status
+    await sync_allocations_for_purchase(db, pur.id)
+    await db.flush()
     await _recalc_purchase_payment_status(db, pur.id)
 
     await write_audit(db, current_user.id, "purchase", pur.id, AuditActionEnum.update,
