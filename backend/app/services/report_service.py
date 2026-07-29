@@ -5,7 +5,7 @@ from typing import Optional
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case, and_, not_, text
+from sqlalchemy import select, func, case, and_, or_, not_, text
 
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
@@ -38,32 +38,73 @@ async def _calc_pnl_for_period(
 ):
     D0 = Decimal("0")
 
-    # Revenue = all incoming payments; outgoing = all supplier payments
     pay_filter = [
         Payment.is_active == True,
         Payment.payment_date >= date_from,
         Payment.payment_date <= date_to,
     ]
 
-    revenue_row = await db.execute(
-        select(func.coalesce(func.sum(Payment.amount_cny), D0))
-        .where(*pay_filter, Payment.direction == "in")
-    )
-    revenue = revenue_row.scalar_one() or D0
+    # Ограничение по направлению/складу: заказы, попадающие под фильтр
+    filtered = business_type_id is not None or warehouse_id is not None
+    if filtered:
+        order_ids_sq = select(Order.id).where(Order.status != OrderStatus.cancelled)
+        if business_type_id is not None:
+            order_ids_sq = order_ids_sq.where(Order.business_type_id == business_type_id)
+        if warehouse_id is not None:
+            order_ids_sq = order_ids_sq.where(Order.warehouse_id == warehouse_id)
+        order_ids_sq = order_ids_sq.subquery()
 
-    outgoing_row = await db.execute(
-        select(func.coalesce(func.sum(Payment.amount_cny), D0))
-        .where(*pay_filter, Payment.direction == "out")
-    )
-    outgoing = outgoing_row.scalar_one() or D0
+    if not filtered:
+        # Revenue = все входящие платежи; outgoing = все исходящие
+        revenue = (await db.execute(
+            select(func.coalesce(func.sum(Payment.amount_cny), D0))
+            .where(*pay_filter, Payment.direction == "in")
+        )).scalar_one() or D0
+        outgoing = (await db.execute(
+            select(func.coalesce(func.sum(Payment.amount_cny), D0))
+            .where(*pay_filter, Payment.direction == "out")
+        )).scalar_one() or D0
+    else:
+        # Revenue = привязки входящих платежей к заказам этого направления
+        revenue = (await db.execute(
+            select(func.coalesce(func.sum(PaymentAllocation.amount_cny), D0))
+            .join(Payment, PaymentAllocation.payment_id == Payment.id)
+            .where(
+                *pay_filter, Payment.direction == "in",
+                PaymentAllocation.order_id.in_(select(order_ids_sq.c.id)),
+            )
+        )).scalar_one() or D0
+        # Outgoing = привязки исходящих платежей к закупкам этих заказов.
+        # Закупка связана с заказом напрямую (логистика) или через позиции (торговля).
+        trade_pur_sq = (
+            select(PurchaseItem.purchase_id)
+            .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+            .where(OrderItem.order_id.in_(select(order_ids_sq.c.id)))
+        )
+        outgoing = (await db.execute(
+            select(func.coalesce(func.sum(PurchasePaymentLink.amount_cny), D0))
+            .join(Payment, PurchasePaymentLink.payment_id == Payment.id)
+            .join(Purchase, PurchasePaymentLink.purchase_id == Purchase.id)
+            .where(
+                *pay_filter, Payment.direction == "out",
+                or_(
+                    Purchase.order_id.in_(select(order_ids_sq.c.id)),
+                    Purchase.id.in_(trade_pur_sq),
+                ),
+            )
+        )).scalar_one() or D0
 
-    # All expenses in period
+    # Расходы в периоде
     exp_filter = [
         Expense.expense_date >= date_from,
         Expense.expense_date <= date_to,
         Expense.is_active == True,
         not_(and_(Expense.is_reimbursement == True, Expense.reimburse_status == "rejected")),
     ]
+    if filtered:
+        # Только расходы, привязанные к заказам этого направления
+        exp_filter.append(Expense.link_type == "order")
+        exp_filter.append(Expense.order_id.in_(select(order_ids_sq.c.id)))
 
     expenses_sum = (await db.execute(
         select(func.coalesce(func.sum(Expense.amount_cny), D0)).where(*exp_filter)
