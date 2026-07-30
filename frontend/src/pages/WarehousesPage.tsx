@@ -1477,7 +1477,7 @@ function HistoryTab() {
         columns={plColumns}
         rowKey="id"
         loading={loadingPL}
-        pagination={false}
+        pagination={{ pageSize: 10, showSizeChanger: false }}
         size="small"
         scroll={{ x: "max-content" }}
         style={{ marginBottom: 32 }}
@@ -1490,7 +1490,7 @@ function HistoryTab() {
         columns={boxColumns}
         rowKey="id"
         loading={loadingBoxes}
-        pagination={{ pageSize: 50, showSizeChanger: false }}
+        pagination={{ pageSize: 10, showSizeChanger: false }}
         size="small"
         scroll={{ x: "max-content" }}
         locale={{ emptyText: t("warehouse.no_shipped_yet") }}
