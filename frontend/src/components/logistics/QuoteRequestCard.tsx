@@ -4,13 +4,15 @@ import {
   Select, Input, message, Popconfirm, Typography, Tooltip,
 } from "antd";
 import {
-  PlusOutlined, CheckCircleFilled, DeleteOutlined, CheckOutlined,
+  PlusOutlined, CheckCircleFilled, DeleteOutlined, CheckOutlined, EditOutlined,
 } from "@ant-design/icons";
+import QuoteRequestFields from "./QuoteRequestFields";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import CounterpartySelect from "../common/CounterpartySelect";
 import {
   addSupplierQuote, selectQuote, unselectQuote, deleteSupplierQuote, deleteQuoteRequest,
+  updateQuoteRequest,
   type QuoteRequest, type SupplierQuote,
 } from "../../api/logisticsQuotes";
 
@@ -31,6 +33,41 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
   const [pending, setPending] = useState<string | null>(request.selected_quote_id ?? null);
   const [quoteModal, setQuoteModal] = useState(false);
   const [quoteForm] = Form.useForm();
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm] = Form.useForm();
+
+  const openEdit = () => {
+    editForm.setFieldsValue({
+      order_number: request.order_number,
+      product_name: request.product_name,
+      box: request.box ? request.box.split(",").map(s => s.trim()).filter(Boolean) : [],
+      dimensions: request.dimensions,
+      cargo_value: request.cargo_value,
+      client_price: request.client_price ?? undefined,
+      weight_kg: request.weight_kg ?? undefined,
+      volume_m3: request.volume_m3 ?? undefined,
+      destination: request.destination,
+      dispatch_place: request.dispatch_place,
+    });
+    setEditOpen(true);
+  };
+
+  const editMut = useMutation({
+    mutationFn: (v: any) => updateQuoteRequest(request.id, {
+      order_number: v.order_number,
+      product_name: v.product_name,
+      box: Array.isArray(v.box) ? v.box.join(", ") : v.box,
+      dimensions: v.dimensions,
+      cargo_value: v.cargo_value,
+      client_price: v.client_price ?? undefined,
+      weight_kg: v.weight_kg ?? undefined,
+      volume_m3: v.volume_m3 ?? undefined,
+      destination: v.destination,
+      dispatch_place: v.dispatch_place,
+    }),
+    onSuccess: () => { message.success("✓"); setEditOpen(false); onChanged(); },
+    onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
+  });
 
   const err = (e: any) => message.error(e.response?.data?.detail || "Error");
   const refreshBadge = () => qc.invalidateQueries({ queryKey: ["quotes-pending-count"] });
@@ -77,12 +114,15 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
         </Space>
       }
       extra={
-        showDelete && (
-          <Popconfirm title={t("common.delete") + "?"} onConfirm={() => delReqMut.mutate()}
-            okText={t("common.yes")} cancelText={t("common.no")}>
-            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        )
+        <Space size={0}>
+          <Button size="small" type="text" icon={<EditOutlined />} onClick={openEdit} />
+          {showDelete && (
+            <Popconfirm title={t("common.delete") + "?"} onConfirm={() => delReqMut.mutate()}
+              okText={t("common.yes")} cancelText={t("common.no")}>
+              <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
+        </Space>
       }
     >
       <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} style={{ marginBottom: 12 }}>
@@ -92,6 +132,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
         <Descriptions.Item label={t("quote.weight")}>{fmtNum(request.weight_kg)} кг</Descriptions.Item>
         <Descriptions.Item label={t("quote.density")}>{fmtNum(request.density)}</Descriptions.Item>
         <Descriptions.Item label={t("quote.cargo_value")}>{request.cargo_value || "—"}</Descriptions.Item>
+        <Descriptions.Item label={t("quote.client_price")}>{fmtNum(request.client_price)}</Descriptions.Item>
         <Descriptions.Item label={t("quote.destination")}>{request.destination || "—"}</Descriptions.Item>
         <Descriptions.Item label={t("quote.dispatch")}>{request.dispatch_place || "—"}</Descriptions.Item>
         <Descriptions.Item label={t("quote.added_by")}>{request.created_by_name || "—"}</Descriptions.Item>
@@ -220,6 +261,21 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
           <Form.Item name="notes" label={t("payment.notes")}>
             <Input.TextArea rows={2} />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={editOpen}
+        title={t("quote.edit_request")}
+        onOk={() => editForm.validateFields().then(v => editMut.mutate(v))}
+        onCancel={() => setEditOpen(false)}
+        confirmLoading={editMut.isPending}
+        okText={t("common.save")}
+        cancelText={t("common.cancel")}
+        destroyOnClose
+      >
+        <Form form={editForm} layout="vertical">
+          <QuoteRequestFields />
         </Form>
       </Modal>
     </Card>

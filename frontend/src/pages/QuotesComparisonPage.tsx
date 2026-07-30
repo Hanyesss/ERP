@@ -7,6 +7,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import QuoteRequestCard from "../components/logistics/QuoteRequestCard";
+import QuoteRequestFields from "../components/logistics/QuoteRequestFields";
 import { getQuoteRequests, createQuoteRequest } from "../api/logisticsQuotes";
 import { getOrders } from "../api/orders";
 import { getBusinessTypes } from "../api/references";
@@ -68,12 +69,13 @@ export default function QuotesComparisonPage() {
         order_number: v.order_number,
         product_name: v.product_name,
         cargo_value: v.cargo_value,
-        box: v.box,
+        box: Array.isArray(v.box) ? v.box.join(", ") : v.box,
         dimensions: v.dimensions,
         volume_m3: v.volume_m3 ?? undefined,
         weight_kg: v.weight_kg ?? undefined,
         destination: v.destination,
         dispatch_place: v.dispatch_place,
+        client_price: v.client_price ?? undefined,
       });
     }
   };
@@ -136,41 +138,7 @@ export default function QuotesComparisonPage() {
               />
             </Form.Item>
           ) : (
-            <>
-              <Form.Item name="order_number" label={t("quote.order_number")}>
-                <Input />
-              </Form.Item>
-              <Form.Item name="product_name" label={t("quote.product")}>
-                <Input />
-              </Form.Item>
-              <Space wrap>
-                <Form.Item name="box" label={t("quote.box")}>
-                  <Input style={{ width: 130 }} />
-                </Form.Item>
-                <Form.Item name="dimensions" label={t("quote.dimensions")}>
-                  <Input style={{ width: 150 }} placeholder="51*46*35" />
-                </Form.Item>
-                <Form.Item name="cargo_value" label={t("quote.cargo_value")}>
-                  <Input style={{ width: 120 }} />
-                </Form.Item>
-              </Space>
-              <Space wrap>
-                <Form.Item name="weight_kg" label={t("quote.weight")}>
-                  <InputNumber min={0} step={0.1} style={{ width: 120 }} />
-                </Form.Item>
-                <Form.Item name="volume_m3" label={t("quote.volume")}>
-                  <InputNumber min={0} step={0.01} style={{ width: 120 }} />
-                </Form.Item>
-              </Space>
-              <Space wrap>
-                <Form.Item name="destination" label={t("quote.destination")}>
-                  <Input style={{ width: 160 }} />
-                </Form.Item>
-                <Form.Item name="dispatch_place" label={t("quote.dispatch")}>
-                  <Input style={{ width: 160 }} />
-                </Form.Item>
-              </Space>
-            </>
+            <QuoteRequestFields />
           )}
         </Form>
       </Modal>

@@ -36,6 +36,7 @@ class QuoteRequestCreate(BaseModel):
     weight_kg: Optional[Decimal] = None
     destination: Optional[str] = None
     dispatch_place: Optional[str] = None
+    client_price: Optional[Decimal] = None
     notes: Optional[str] = None
 
 
@@ -49,6 +50,7 @@ class QuoteRequestUpdate(BaseModel):
     weight_kg: Optional[Decimal] = None
     destination: Optional[str] = None
     dispatch_place: Optional[str] = None
+    client_price: Optional[Decimal] = None
     notes: Optional[str] = None
 
 
@@ -137,6 +139,7 @@ async def _load_request(db: AsyncSession, req: QuoteRequest) -> dict:
         "density": density,
         "destination": r.destination,
         "dispatch_place": r.dispatch_place,
+        "client_price": r.client_price,
         "notes": r.notes,
         "selected_quote_id": str(r.selected_quote_id) if r.selected_quote_id else None,
         "selected_by_name": selector_name,

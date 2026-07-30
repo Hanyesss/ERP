@@ -926,7 +926,16 @@
     "total_hint": "价格 × 重量(或体积)",
     "added_by": "添加人",
     "manual_row": "手动行",
-    "no_quotes_for_order": "该订单暂无报价申请"
+    "no_quotes_for_order": "该订单暂无报价申请",
+    "client_price": "客户价格",
+    "edit_request": "编辑申请",
+    "box_hint": "可选择多种包装或自行输入",
+    "box_placeholder": "选择包装",
+    "pack_carton": "纸箱",
+    "pack_pallet": "木托",
+    "pack_crate": "木箱",
+    "pack_frame": "木架",
+    "pack_wrap": "合包缠绕"
   },
   "plan": {
     "title": "待付款",

@@ -32,12 +32,13 @@ class QuoteRequest(Base):
     order_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     product_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     cargo_value: Mapped[str | None] = mapped_column(String(120), nullable=True)   # 货值: "5000", "1%", "300$"
-    box: Mapped[str | None] = mapped_column(String(120), nullable=True)           # 纸箱18 / 木托1 / 合包缠绕
+    box: Mapped[str | None] = mapped_column(Text, nullable=True)                  # упаковка (может быть несколько: 纸箱, 木托, 木箱…)
     dimensions: Mapped[str | None] = mapped_column(Text, nullable=True)           # "51*46*35" (может быть многострочным)
     volume_m3: Mapped[Decimal | None] = mapped_column(Numeric(18, 3), nullable=True)
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     destination: Mapped[str | None] = mapped_column(String(255), nullable=True)   # 莫斯科
     dispatch_place: Mapped[str | None] = mapped_column(String(255), nullable=True) # 佛山
+    client_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)  # цена для клиента
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Выбор поставщика

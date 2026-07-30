@@ -26,6 +26,7 @@ export interface QuoteRequest {
   density?: number | null;
   destination?: string | null;
   dispatch_place?: string | null;
+  client_price?: number | null;
   notes?: string | null;
   selected_quote_id?: string | null;
   selected_by_name?: string | null;
@@ -47,6 +48,7 @@ export interface QuoteRequestInput {
   weight_kg?: number;
   destination?: string;
   dispatch_place?: string;
+  client_price?: number;
   notes?: string;
 }
 
