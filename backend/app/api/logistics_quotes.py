@@ -149,6 +149,21 @@ async def _load_request(db: AsyncSession, req: QuoteRequest) -> dict:
 
 
 # ── Requests ─────────────────────────────────────────────────────────────────
+@router.get("/pending-count")
+async def pending_count(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_ALLOWED)),
+):
+    """Количество необработанных сравнений (без выбранного поставщика)."""
+    cnt = (await db.execute(
+        select(func.count(QuoteRequest.id)).where(
+            QuoteRequest.is_active == True,
+            QuoteRequest.selected_quote_id.is_(None),
+        )
+    )).scalar_one()
+    return {"count": cnt or 0}
+
+
 @router.get("/requests")
 async def list_requests(
     search: Optional[str] = Query(None),

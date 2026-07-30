@@ -63,6 +63,9 @@ export interface SupplierQuoteInput {
 export const getQuoteRequests = (params?: { search?: string; order_id?: string; only_unselected?: boolean }) =>
   apiClient.get<QuoteRequest[]>("/api/logistics-quotes/requests", { params });
 
+export const getQuotesPendingCount = () =>
+  apiClient.get<{ count: number }>("/api/logistics-quotes/pending-count");
+
 export const createQuoteRequest = (data: QuoteRequestInput) =>
   apiClient.post<QuoteRequest>("/api/logistics-quotes/requests", data);
 

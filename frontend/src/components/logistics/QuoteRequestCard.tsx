@@ -6,7 +6,7 @@ import {
 import {
   PlusOutlined, CheckCircleFilled, DeleteOutlined, CheckOutlined,
 } from "@ant-design/icons";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import CounterpartySelect from "../common/CounterpartySelect";
 import {
@@ -27,11 +27,13 @@ interface Props {
 
 export default function QuoteRequestCard({ request, onChanged, showDelete = true }: Props) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [pending, setPending] = useState<string | null>(request.selected_quote_id ?? null);
   const [quoteModal, setQuoteModal] = useState(false);
   const [quoteForm] = Form.useForm();
 
   const err = (e: any) => message.error(e.response?.data?.detail || "Error");
+  const refreshBadge = () => qc.invalidateQueries({ queryKey: ["quotes-pending-count"] });
 
   const addMut = useMutation({
     mutationFn: (v: any) => addSupplierQuote(request.id, v),
@@ -40,12 +42,12 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
   });
   const selectMut = useMutation({
     mutationFn: (quoteId: string) => selectQuote(request.id, quoteId),
-    onSuccess: () => { message.success(t("quote.selected_ok")); onChanged(); },
+    onSuccess: () => { message.success(t("quote.selected_ok")); onChanged(); refreshBadge(); },
     onError: err,
   });
   const unselectMut = useMutation({
     mutationFn: () => unselectQuote(request.id),
-    onSuccess: () => { setPending(null); onChanged(); },
+    onSuccess: () => { setPending(null); onChanged(); refreshBadge(); },
     onError: err,
   });
   const delQuoteMut = useMutation({
@@ -55,7 +57,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
   });
   const delReqMut = useMutation({
     mutationFn: () => deleteQuoteRequest(request.id),
-    onSuccess: () => { message.success("✓"); onChanged(); },
+    onSuccess: () => { message.success("✓"); onChanged(); refreshBadge(); },
     onError: err,
   });
 

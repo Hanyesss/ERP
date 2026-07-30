@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Layout, Menu, Button, Typography, Space, Tooltip, Drawer } from "antd";
+import { Layout, Menu, Button, Typography, Space, Tooltip, Drawer, Badge } from "antd";
+import { useQuery } from "@tanstack/react-query";
 import {
   TeamOutlined, DashboardOutlined, ShoppingOutlined,
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
@@ -11,6 +12,7 @@ import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User, UserRole } from "../../types";
 import { logout } from "../../api/auth";
+import { getQuotesPendingCount } from "../../api/logisticsQuotes";
 import NotificationBell from "../notifications/NotificationBell";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
@@ -32,6 +34,13 @@ export default function AppLayout({ user, onLogout }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+  const canSeeQuotes = hasRole(user, "employee", "admin");
+  const { data: quotesPending } = useQuery({
+    queryKey: ["quotes-pending-count"],
+    queryFn: () => getQuotesPendingCount().then(r => r.data.count),
+    enabled: canSeeQuotes,
+    refetchInterval: 60000,
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { checkGuard } = useNavigationGuard();
@@ -78,7 +87,12 @@ export default function AppLayout({ user, onLogout }: Props) {
     hasRole(user, "employee", "admin") && {
       key: "/quotes",
       icon: <DiffOutlined />,
-      label: t("nav.quotes"),
+      label: (
+        <Space size={6}>
+          {t("nav.quotes")}
+          {!!quotesPending && <Badge count={quotesPending} size="small" />}
+        </Space>
+      ),
     },
 
     !hasRole(user, "partner") && {

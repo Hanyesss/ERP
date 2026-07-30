@@ -16,7 +16,10 @@ export default function OrderQuotesTab({ orderId }: Props) {
     queryFn: () => getQuoteRequests({ order_id: orderId }).then(r => r.data),
   });
 
-  const refetch = () => qc.invalidateQueries({ queryKey: ["quote-requests"] });
+  const refetch = () => {
+    qc.invalidateQueries({ queryKey: ["quote-requests"] });
+    qc.invalidateQueries({ queryKey: ["quotes-pending-count"] });
+  };
 
   const createMut = useMutation({
     mutationFn: () => createQuoteRequest({ order_id: orderId }),

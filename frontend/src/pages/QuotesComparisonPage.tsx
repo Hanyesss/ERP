@@ -48,7 +48,10 @@ export default function QuotesComparisonPage() {
     label: `${o.order_number}${o.client_name ? " · " + o.client_name : ""}`,
   }));
 
-  const refetch = () => qc.invalidateQueries({ queryKey: ["quote-requests"] });
+  const refetch = () => {
+    qc.invalidateQueries({ queryKey: ["quote-requests"] });
+    qc.invalidateQueries({ queryKey: ["quotes-pending-count"] });
+  };
 
   const createMut = useMutation({
     mutationFn: createQuoteRequest,
