@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
-      includeAssets: ["favicon-32.png", "apple-touch-icon.png"],
+      includeAssets: ["fav-v3-32.png", "fav-v3-16.png", "fav-v3.ico", "apple-touch-icon.png"],
       manifest: {
         name: "IRS ERP",
         short_name: "IRS ERP",
