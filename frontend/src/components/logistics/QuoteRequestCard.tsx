@@ -5,6 +5,7 @@ import {
 } from "antd";
 import {
   PlusOutlined, CheckCircleFilled, DeleteOutlined, CheckOutlined, EditOutlined,
+  DownOutlined, RightOutlined,
 } from "@ant-design/icons";
 import QuoteRequestFields from "./QuoteRequestFields";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -102,6 +103,9 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
 
   const selected = request.selected_quote_id;
   const pendingChanged = pending && pending !== selected;
+  const selectedQuote = request.quotes.find(q => q.id === selected);
+  // Свернуть можно только после выбора поставщика; по умолчанию свёрнуто (обработано)
+  const [collapsed, setCollapsed] = useState<boolean>(!!selected);
 
   return (
     <Card
@@ -109,8 +113,19 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
       style={{ marginBottom: 16 }}
       title={
         <Space wrap size={4}>
+          {selected && (
+            <Button size="small" type="text" style={{ padding: "0 4px" }}
+              icon={collapsed ? <RightOutlined /> : <DownOutlined />}
+              onClick={() => setCollapsed(c => !c)} />
+          )}
           <Text strong>{request.order_number || t("quote.manual_row")}</Text>
           {request.product_name && <Text type="secondary">· {request.product_name}</Text>}
+          {collapsed && selectedQuote && (
+            <Tag color="green" style={{ marginLeft: 4 }}>
+              {selectedQuote.supplier_name} · {selectedQuote.price} {selectedQuote.currency}
+              {request.selected_total != null ? ` · ${fmtNum(request.selected_total)}` : ""}
+            </Tag>
+          )}
         </Space>
       }
       extra={
@@ -125,6 +140,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
         </Space>
       }
     >
+      {!collapsed && (<>
       <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} style={{ marginBottom: 12 }}>
         <Descriptions.Item label={t("quote.box")}>{request.box || "—"}</Descriptions.Item>
         <Descriptions.Item label={t("quote.dimensions")}>{request.dimensions || "—"}</Descriptions.Item>
@@ -220,6 +236,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
           </Space>
         )}
       </div>
+      </>)}
 
       <Modal
         open={quoteModal}
