@@ -619,7 +619,7 @@ export default function OrderFormPage({ user }: Props) {
       <Form form={form} layout="vertical" onFinish={handleSubmit} onValuesChange={() => { if (!isEdit || formInitializedRef.current) markDirty(); }}>
         {/* Main fields */}
         <Card title={t("order.tab_main")} style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
+          <Row gutter={16} className="responsive-form">
             <Col span={6}>
               <Form.Item name="order_number" label={t("order.number")} rules={[{ required: true }]}>
                 <Input onChange={() => { orderNumberEditedRef.current = true; }} />
@@ -673,7 +673,7 @@ export default function OrderFormPage({ user }: Props) {
         {/* Logistics: route info */}
         {isLogistics && (
           <Card title={t("order.routing_info")} style={{ marginBottom: 16 }}>
-            <Row gutter={16}>
+            <Row gutter={16} className="responsive-form">
               <Col span={6}>
                 <Form.Item name="recipient" label={t("order.recipient")}>
                   <Input />

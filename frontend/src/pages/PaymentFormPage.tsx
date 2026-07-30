@@ -359,7 +359,7 @@ export default function PaymentFormPage() {
         </Col>
       </Row>
 
-      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+      <Form form={form} layout="vertical" className="responsive-form" onFinish={handleSubmit}>
         <Card style={{ marginBottom: 16 }}>
           {/* Direction toggle */}
           <Form.Item label={t("payment.direction")}>

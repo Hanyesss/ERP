@@ -119,7 +119,7 @@ export default function CounterpartyForm({ open, editing, onClose, onSubmit, loa
       confirmLoading={loading}
       destroyOnClose
     >
-      <Form form={form} layout="vertical" size="middle">
+      <Form form={form} layout="vertical" size="middle" className="responsive-form">
         <Form.Item name="name" label={t("counterparty.name")} rules={[{ required: true, message: t("validation.required") }]}>
           <Input />
         </Form.Item>

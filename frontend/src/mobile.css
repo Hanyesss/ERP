@@ -106,4 +106,39 @@ input, select, textarea { font-size: 16px !important; }
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
+
+  /* ── Адаптивные формы: на телефоне колонки в полную ширину, поля на 100% ──
+     Вешать класс responsive-form на <Form> / контейнер формы с ПОДПИСАННЫМИ
+     полями (Form.Item label). Перекрывает inline width у Input/Select/… */
+  .responsive-form .ant-col {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+  .responsive-form .ant-select,
+  .responsive-form .ant-picker,
+  .responsive-form .ant-input-number,
+  .responsive-form .ant-input-affix-wrapper,
+  .responsive-form .ant-input,
+  .responsive-form input,
+  .responsive-form textarea {
+    width: 100% !important;
+  }
+  /* Space внутри формы — переносить и растягивать элементы на всю ширину */
+  .responsive-form .ant-space,
+  .responsive-form .ant-space-item {
+    width: 100% !important;
+  }
+  .responsive-form .ant-space-horizontal {
+    flex-wrap: wrap !important;
+  }
+
+  /* ── Горизонтальный скролл для сеток-редакторов (позиции заказа и т.п.) ──
+     чтобы столбцы не сжимались и заголовки совпадали со значениями. */
+  .mobile-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-scroll-x > * {
+    min-width: 680px;
+  }
 }

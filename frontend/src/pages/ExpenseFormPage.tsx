@@ -255,7 +255,7 @@ export default function ExpenseFormPage({ user }: Props) {
         </Col>
       </Row>
 
-      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+      <Form form={form} layout="vertical" className="responsive-form" onFinish={handleSubmit}>
         <Card>
           <Row gutter={16}>
             <Col span={8}>

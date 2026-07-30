@@ -24,7 +24,7 @@ export default function ChargesEditor({ form, rates }: Props) {
   const { t } = useTranslation();
 
   return (
-    <div>
+    <div className="mobile-scroll-x">
       <Row gutter={8} style={{ marginBottom: 4 }}>
         <Col span={8}>
           <Text type="secondary" style={{ fontSize: 11 }}>{t("order.cost_breakdown")}</Text>

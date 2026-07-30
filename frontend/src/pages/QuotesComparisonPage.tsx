@@ -125,7 +125,7 @@ export default function QuotesComparisonPage() {
           ]}
           style={{ marginBottom: 16 }}
         />
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" className="responsive-form">
           {mode === "order" ? (
             <Form.Item name="order_id" label={t("quote.logistics_order")} rules={[{ required: true }]}>
               <Select

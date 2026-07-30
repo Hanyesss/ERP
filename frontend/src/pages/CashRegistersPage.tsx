@@ -318,7 +318,7 @@ export default function CashRegistersPage() {
         onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }}
         okText={t("common.save")} cancelText={t("common.cancel")}
         confirmLoading={createMut.isPending || updateMut.isPending} destroyOnClose>
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" className="responsive-form">
           <Form.Item name="name" label={t("cash.name")} rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="currency" label={t("payment.currency")} rules={[{ required: true }]}>
             <Select options={CURRENCIES.map(c => ({ value: c, label: c }))} />
@@ -365,7 +365,7 @@ export default function CashRegistersPage() {
         confirmLoading={transferMut.isPending}
         destroyOnClose
       >
-        <Form form={transferForm} layout="vertical">
+        <Form form={transferForm} layout="vertical" className="responsive-form">
           <Form.Item name="from_register_id" label={t("cash.from")} rules={[{ required: true }]}>
             <Select
               options={registers.filter(r => r.is_active).map(r => ({ value: r.id, label: `${r.name} (${r.currency})` }))}

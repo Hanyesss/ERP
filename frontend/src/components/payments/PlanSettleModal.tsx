@@ -147,7 +147,7 @@ export default function PlanSettleModal({ plan, open, onClose }: Props) {
           {plan.status !== "paid" && (
             <>
               <Divider style={{ margin: "8px 0" }}>{t("plan.new_installment")}</Divider>
-              <Form form={form} layout="vertical">
+              <Form form={form} layout="vertical" className="responsive-form">
                 <Form.Item name="kind" label={t("plan.kind")} rules={[{ required: true }]}>
                   <Select options={[
                     { value: "deposit", label: t("plan.kind_deposit") },

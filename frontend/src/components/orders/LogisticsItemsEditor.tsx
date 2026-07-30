@@ -29,7 +29,7 @@ export default function LogisticsItemsEditor({ form, rates, savedItemIdByKey = {
   return (
     <Form.List name="items">
       {(fields, { add, remove }) => (
-        <div>
+        <div className="mobile-scroll-x">
           {/* Header */}
           <Row gutter={4} style={{ marginBottom: 4 }}>
             {[

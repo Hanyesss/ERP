@@ -73,7 +73,7 @@ export default function OrderItemsEditor({
   return (
     <Form.List name="items">
       {(fields, { add, remove }) => (
-        <div>
+        <div className="mobile-scroll-x">
           <Row gutter={4} style={{ marginBottom: 4, paddingLeft: 4 }}>
             {[
               [t("order.item_name"), 3],

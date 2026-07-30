@@ -234,7 +234,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
         cancelText={t("common.cancel")}
         destroyOnClose
       >
-        <Form form={quoteForm} layout="vertical" initialValues={{ price_unit: "per_kg", currency: "USD" }}>
+        <Form form={quoteForm} layout="vertical" className="responsive-form" initialValues={{ price_unit: "per_kg", currency: "USD" }}>
           <Form.Item name="supplier_id" label={t("quote.supplier")} rules={[{ required: true }]}>
             <CounterpartySelect type="supplier" logisticsOnly placeholder={t("quote.supplier")} />
           </Form.Item>
@@ -274,7 +274,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
         cancelText={t("common.cancel")}
         destroyOnClose
       >
-        <Form form={editForm} layout="vertical">
+        <Form form={editForm} layout="vertical" className="responsive-form">
           <QuoteRequestFields />
         </Form>
       </Modal>

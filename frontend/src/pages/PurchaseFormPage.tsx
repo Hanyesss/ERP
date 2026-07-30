@@ -340,7 +340,7 @@ export default function PurchaseFormPage() {
         </Space>
       </Modal>
 
-      <Form form={form} layout="vertical" onFinish={handleSubmit} onValuesChange={markDirty}>
+      <Form form={form} layout="vertical" className="responsive-form" onFinish={handleSubmit} onValuesChange={markDirty}>
         <Card style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={6}>
