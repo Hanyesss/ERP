@@ -105,7 +105,7 @@ export default function NotificationBell() {
   const unread = countData?.count || 0;
 
   const content = (
-    <div style={{ width: 340 }}>
+    <div style={{ width: "min(340px, calc(100vw - 24px))" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <Text strong>{t("notification.title")}</Text>
         {unread > 0 && (
@@ -146,6 +146,7 @@ export default function NotificationBell() {
       onOpenChange={setOpen}
       placement="bottomRight"
       arrow={false}
+      overlayStyle={{ maxWidth: "calc(100vw - 12px)" }}
     >
       <Badge count={unread} size="small" offset={[-2, 2]}>
         <Button type="text" icon={<BellOutlined style={{ fontSize: 18 }} />} />
