@@ -12,8 +12,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import CounterpartySelect from "../common/CounterpartySelect";
 import {
-  addSupplierQuote, selectQuote, unselectQuote, deleteSupplierQuote, deleteQuoteRequest,
-  updateQuoteRequest,
+  addSupplierQuote, updateSupplierQuote, selectQuote, unselectQuote,
+  deleteSupplierQuote, deleteQuoteRequest, updateQuoteRequest,
   type QuoteRequest, type SupplierQuote,
 } from "../../api/logisticsQuotes";
 
@@ -33,7 +33,28 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
   const qc = useQueryClient();
   const [pending, setPending] = useState<string | null>(request.selected_quote_id ?? null);
   const [quoteModal, setQuoteModal] = useState(false);
+  const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [quoteForm] = Form.useForm();
+
+  const openAddQuote = () => {
+    setEditingQuoteId(null);
+    quoteForm.resetFields();
+    quoteForm.setFieldsValue({ price_unit: "per_kg", currency: "USD" });
+    setQuoteModal(true);
+  };
+  const openEditQuote = (q: SupplierQuote) => {
+    setEditingQuoteId(q.id);
+    quoteForm.setFieldsValue({
+      supplier_id: q.supplier_id,
+      price: q.price,
+      price_unit: q.price_unit,
+      currency: q.currency,
+      delivery_days: q.delivery_days ?? undefined,
+      insurance_pct: q.insurance_pct ?? undefined,
+      notes: q.notes ?? undefined,
+    });
+    setQuoteModal(true);
+  };
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
 
@@ -78,6 +99,16 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
     onSuccess: () => { message.success("✓"); setQuoteModal(false); quoteForm.resetFields(); onChanged(); },
     onError: err,
   });
+  const updateQuoteMut = useMutation({
+    mutationFn: (v: any) => updateSupplierQuote(editingQuoteId!, v),
+    onSuccess: () => { message.success("✓"); setQuoteModal(false); quoteForm.resetFields(); onChanged(); },
+    onError: err,
+  });
+  const saveQuote = (v: any) => {
+    const data = { ...v, insurance_pct: v.insurance_pct ?? undefined };
+    if (editingQuoteId) updateQuoteMut.mutate(data);
+    else addMut.mutate(data);
+  };
   const selectMut = useMutation({
     mutationFn: (quoteId: string) => selectQuote(request.id, quoteId),
     onSuccess: () => { message.success(t("quote.selected_ok")); onChanged(); refreshBadge(); },
@@ -185,6 +216,9 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
                 <div style={{ fontSize: 12 }}>{t("quote.insurance")}: {q.insurance_pct}$</div>
               )}
               {q.notes && <div style={{ fontSize: 11, color: "#888" }}>{q.notes}</div>}
+              <Button size="small" type="text" icon={<EditOutlined />}
+                style={{ position: "absolute", bottom: 2, right: 26 }}
+                onClick={(e) => { e.stopPropagation(); openEditQuote(q); }} />
               <Popconfirm title={t("common.delete") + "?"}
                 onConfirm={(e) => { e?.stopPropagation(); delQuoteMut.mutate(q.id); }}
                 onCancel={(e) => e?.stopPropagation()}
@@ -199,7 +233,7 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
 
         {/* Добавить предложение */}
         <div
-          onClick={() => setQuoteModal(true)}
+          onClick={openAddQuote}
           style={{
             cursor: "pointer", minWidth: 90, display: "flex", alignItems: "center", justifyContent: "center",
             border: "1px dashed #bbb", borderRadius: 8, padding: "8px 12px", color: "#1677ff",
@@ -240,18 +274,14 @@ export default function QuoteRequestCard({ request, onChanged, showDelete = true
 
       <Modal
         open={quoteModal}
-        title={t("quote.add_quote")}
-        onOk={() => quoteForm.validateFields().then(v => addMut.mutate({
-          ...v,
-          insurance_pct: v.insurance_pct ?? undefined,
-        }))}
+        title={editingQuoteId ? t("quote.edit_quote") : t("quote.add_quote")}
+        onOk={() => quoteForm.validateFields().then(saveQuote)}
         onCancel={() => { setQuoteModal(false); quoteForm.resetFields(); }}
-        confirmLoading={addMut.isPending}
+        confirmLoading={addMut.isPending || updateQuoteMut.isPending}
         okText={t("common.save")}
         cancelText={t("common.cancel")}
-        destroyOnClose
       >
-        <Form form={quoteForm} layout="vertical" className="responsive-form" initialValues={{ price_unit: "per_kg", currency: "USD" }}>
+        <Form form={quoteForm} layout="vertical" className="responsive-form">
           <Form.Item name="supplier_id" label={t("quote.supplier")} rules={[{ required: true }]}>
             <CounterpartySelect type="supplier" logisticsOnly placeholder={t("quote.supplier")} />
           </Form.Item>

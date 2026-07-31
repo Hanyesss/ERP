@@ -935,7 +935,8 @@
     "pack_pallet": "木托",
     "pack_crate": "木箱",
     "pack_frame": "木架",
-    "pack_wrap": "合包缠绕"
+    "pack_wrap": "合包缠绕",
+    "edit_quote": "编辑报价"
   },
   "plan": {
     "title": "待付款",
