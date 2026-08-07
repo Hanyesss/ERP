@@ -825,6 +825,7 @@
     "tonnage": "货运量",
     "direction": "方向",
     "export_excel": "导出Excel",
+    "export_by_volume": "按采购额导出",
     "period": "期间",
     "incoming_payments": "入账款",
     "outgoing_payments": "出账款",

@@ -13,7 +13,7 @@ from app.core.deps import require_roles
 from app.models.user import User
 from app.services import report_service
 from app.services.excel_export import (
-    export_pnl, export_by_client, export_by_supplier,
+    export_pnl, export_by_client, export_clients_by_volume, export_by_supplier,
     export_expenses, export_tonnage, export_tonnage_detail,
 )
 
@@ -88,6 +88,20 @@ async def export_by_client_report(
     data = await report_service.get_by_client(db, date_from, date_to, business_type_id)
     data_bytes = export_by_client(data, lang)
     return _excel_response(data_bytes, f"by_client_{date_from}_{date_to}.xlsx")
+
+
+@router.get("/by-client/volume-export")
+async def export_clients_by_volume_report(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    business_type_id: Optional[uuid.UUID] = Query(None),
+    lang: str = Query("ru"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_FINANCE_ROLES)),
+):
+    data = await report_service.get_by_client(db, date_from, date_to, business_type_id)
+    data_bytes = export_clients_by_volume(data, lang)
+    return _excel_response(data_bytes, f"clients_by_volume_{date_from}_{date_to}.xlsx")
 
 
 @router.get("/by-client/{client_id}")

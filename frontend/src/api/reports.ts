@@ -185,6 +185,9 @@ export const exportPnL = (params: { date_from: string; date_to: string; lang: st
 export const exportByClient = (params: { date_from: string; date_to: string; lang: string; business_type_id?: string }) =>
   downloadExcel(`${BASE}/by-client/export`, params, `by_client_${params.date_from}_${params.date_to}.xlsx`);
 
+export const exportClientsByVolume = (params: { date_from: string; date_to: string; lang: string; business_type_id?: string }) =>
+  downloadExcel(`${BASE}/by-client/volume-export`, params, `clients_by_volume_${params.date_from}_${params.date_to}.xlsx`);
+
 export const exportBySupplier = (params: { date_from: string; date_to: string; lang: string }) =>
   downloadExcel(`${BASE}/by-supplier/export`, params, `by_supplier_${params.date_from}_${params.date_to}.xlsx`);
 

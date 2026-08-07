@@ -18,6 +18,7 @@ HEADERS = {
             "net_profit": "Чистая прибыль",
         },
         "by_client": ["Клиент", "Выручка", "Оплачено (клиентом)", "Оплачено (поставщику)", "Себестоимость", "Прямые расходы", "Представительские", "Чистая прибыль", "Долг"],
+        "by_client_volume": ["Клиент", "Величина закупа", "Прибыль"],
         "by_supplier": ["Поставщик", "Всего закуплено", "Оплачено", "Долг", "Кол-во", "Просрочка"],
         "expenses": ["Категория", "Сумма CNY", "%", "Кол-во"],
         "tonnage": {
@@ -39,6 +40,7 @@ HEADERS = {
             "net_profit": "净利润",
         },
         "by_client": ["客户", "收入", "客户已付", "已付供应商", "成本", "直接费用", "招待费", "净利润", "欠款"],
+        "by_client_volume": ["客户", "采购额", "利润"],
         "by_supplier": ["供应商", "采购总额", "已付", "欠款", "数量", "逾期"],
         "expenses": ["类别", "金额CNY", "%", "数量"],
         "tonnage": {
@@ -186,6 +188,42 @@ def export_by_client(data: list, lang: str = "ru") -> bytes:
                _fmt(totals["cogs"]), _fmt(totals["direct_expenses"]), _fmt(totals["client_expenses"]),
                _fmt(totals["net_profit"]), _fmt(totals["balance"])])
     for col in range(1, 10):
+        cell = ws.cell(row=ws.max_row, column=col)
+        cell.font = BOLD_FONT
+        cell.fill = PatternFill("solid", fgColor="D9E1F2")
+
+    _auto_width(ws)
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def export_clients_by_volume(data: list, lang: str = "ru") -> bytes:
+    """Клиенты по убыванию величины закупа (выручки) — только закуп и прибыль."""
+    headers = HEADERS.get(lang, HEADERS["ru"])["by_client_volume"]
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "По объёму закупа" if lang == "ru" else "按采购额"
+
+    _header_row(ws, headers)
+
+    rows = sorted(data, key=lambda r: r.get("revenue") or Decimal("0"), reverse=True)
+    total_revenue = Decimal("0")
+    total_profit = Decimal("0")
+    for i, row in enumerate(rows):
+        revenue = row.get("revenue") or Decimal("0")
+        profit = row.get("net_profit") or Decimal("0")
+        total_revenue += revenue
+        total_profit += profit
+        ws.append([row.get("client_name"), _fmt(revenue), _fmt(profit)])
+        pcell = ws.cell(row=ws.max_row, column=3)
+        pcell.font = GREEN_FONT if profit >= 0 else RED_FONT
+        if i % 2 == 1:
+            for col in range(1, 4):
+                ws.cell(row=ws.max_row, column=col).fill = ALT_FILL
+
+    ws.append(["Итого" if lang == "ru" else "合计", _fmt(total_revenue), _fmt(total_profit)])
+    for col in range(1, 4):
         cell = ws.cell(row=ws.max_row, column=col)
         cell.font = BOLD_FONT
         cell.fill = PatternFill("solid", fgColor="D9E1F2")

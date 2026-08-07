@@ -792,6 +792,7 @@
     "tonnage": "Тоннаж",
     "direction": "Направление",
     "export_excel": "Экспорт Excel",
+    "export_by_volume": "Экспорт по объёму закупа",
     "period": "Период",
     "incoming_payments": "Входящие платежи",
     "outgoing_payments": "Исходящие платежи",

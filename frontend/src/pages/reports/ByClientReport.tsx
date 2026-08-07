@@ -5,7 +5,7 @@ import { SearchOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
-import { getByClient, exportByClient, type ByClientRow } from "../../api/reports";
+import { getByClient, exportByClient, exportClientsByVolume, type ByClientRow } from "../../api/reports";
 import type { ColumnsType } from "antd/es/table";
 import ClientDetailDrawer from "./ClientDetailDrawer";
 
@@ -149,9 +149,14 @@ export default function ByClientReport({ businessTypeId, dateRange: externalDate
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
           <Col><Title level={5} style={{ margin: 0 }}>{t("report.by_client")}</Title></Col>
           <Col>
-            <Button icon={<DownloadOutlined />} onClick={() => exportByClient({ ...params, lang })}>
-              {t("report.export_excel")}
-            </Button>
+            <Space>
+              <Button icon={<DownloadOutlined />} onClick={() => exportClientsByVolume({ ...params, lang })}>
+                {t("report.export_by_volume")}
+              </Button>
+              <Button icon={<DownloadOutlined />} onClick={() => exportByClient({ ...params, lang })}>
+                {t("report.export_excel")}
+              </Button>
+            </Space>
           </Col>
         </Row>
       )}
@@ -170,6 +175,11 @@ export default function ByClientReport({ businessTypeId, dateRange: externalDate
           allowClear
           style={{ width: 200 }}
         />
+        {!isEmbedded && (
+          <Button icon={<DownloadOutlined />} onClick={() => exportClientsByVolume({ ...params, lang })}>
+            {t("report.export_by_volume")}
+          </Button>
+        )}
         {!isEmbedded && (
           <Button icon={<DownloadOutlined />} onClick={() => exportByClient({ ...params, lang })}>
             {t("report.export_excel")}
