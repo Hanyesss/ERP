@@ -5,7 +5,7 @@ Same algorithm as irsway's shipments/services/rates.py — keeps both systems in
 import logging
 from decimal import Decimal
 
-import requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,9 @@ def _moex_price(secid: str) -> Decimal:
         "https://iss.moex.com/iss/engines/currency/markets/selt/boards/CETS/"
         f"securities/{secid}.json"
     )
-    r = requests.get(url, params={"iss.meta": "off", "iss.only": "marketdata",
-                                   "marketdata.columns": "LAST,WAPRICE"},
-                     timeout=_MOEX_TIMEOUT)
+    r = httpx.get(url, params={"iss.meta": "off", "iss.only": "marketdata",
+                               "marketdata.columns": "LAST,WAPRICE"},
+                  timeout=_MOEX_TIMEOUT, follow_redirects=True)
     r.raise_for_status()
     md = r.json().get("marketdata", {}).get("data", [])
     if not md:
@@ -49,7 +49,7 @@ def _moex_any(secids: list[str]) -> Decimal:
 
 
 def _cbr_usd_cny_rub() -> tuple[Decimal, Decimal]:
-    r = requests.get("https://www.cbr.ru/scripts/XML_daily.asp", timeout=_CBR_TIMEOUT)
+    r = httpx.get("https://www.cbr.ru/scripts/XML_daily.asp", timeout=_CBR_TIMEOUT, follow_redirects=True)
     r.raise_for_status()
     xml = r.text
 
