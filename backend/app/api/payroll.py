@@ -22,6 +22,25 @@ from app.database import get_db
 from app.core.deps import require_roles
 from app.models.user import User
 from app.models.payroll import PayrollEmployee, PayrollRecord, PayrollAttendance
+
+# роль пользователя → должность по умолчанию
+_ROLE_TITLES = {
+    "manager": "Менеджер",
+    "accountant": "Бухгалтер",
+    "purchaser": "Закупщик",
+    "seller": "Продавец",
+    "employee": "Сотрудник",
+    "admin": "Администратор",
+    "partner": "Партнёр",
+}
+_ROLE_PRIORITY = ["manager", "accountant", "purchaser", "seller", "employee", "admin", "partner"]
+
+
+def _position_from_roles(roles: list[str]) -> Optional[str]:
+    for r in _ROLE_PRIORITY:
+        if r in roles:
+            return _ROLE_TITLES.get(r, r)
+    return None
 from app.models.expense import Expense, LinkTypeEnum
 from app.models.expense_category import ExpenseCategory
 from app.models.cash_register import CashRegister
@@ -35,7 +54,8 @@ Q2 = Decimal("0.01")
 
 # ── schemas ─────────────────────────────────────────────────────────────────
 class EmployeeIn(BaseModel):
-    name: str
+    user_id: Optional[uuid.UUID] = None
+    name: Optional[str] = None
     position: Optional[str] = None
 
 
@@ -116,15 +136,52 @@ async def list_employees(
     return [{"id": str(e.id), "name": e.name, "position": e.position, "is_active": e.is_active} for e in rows]
 
 
+@router.get("/available-users")
+async def available_users(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_ROLES)),
+):
+    """Активные сотрудники системы, которых ещё нет в списке работников (для выпадашки)."""
+    taken = (await db.execute(
+        select(PayrollEmployee.user_id).where(PayrollEmployee.user_id.isnot(None))
+    )).scalars().all()
+    taken_set = set(taken)
+    users = (await db.execute(
+        select(User).where(User.is_active == True).order_by(User.full_name)
+    )).scalars().all()
+    return [
+        {"user_id": str(u.id), "full_name": u.full_name, "position": _position_from_roles(u.roles)}
+        for u in users if u.id not in taken_set
+    ]
+
+
 @router.post("/employees")
 async def create_employee(
     body: EmployeeIn,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(*_ROLES)),
 ):
-    if not body.name.strip():
-        raise HTTPException(422, "Имя обязательно")
-    emp = PayrollEmployee(id=uuid.uuid4(), name=body.name.strip(), position=(body.position or None))
+    name = (body.name or "").strip()
+    position = (body.position or None)
+    user_id = body.user_id
+
+    if user_id:
+        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        if not user:
+            raise HTTPException(422, "Сотрудник не найден")
+        exists = (await db.execute(
+            select(PayrollEmployee).where(PayrollEmployee.user_id == user_id)
+        )).scalar_one_or_none()
+        if exists:
+            raise HTTPException(422, "Этот сотрудник уже добавлен")
+        name = name or user.full_name
+        if not position:
+            position = _position_from_roles(user.roles)
+
+    if not name:
+        raise HTTPException(422, "Укажите сотрудника или имя")
+
+    emp = PayrollEmployee(id=uuid.uuid4(), name=name, position=position, user_id=user_id)
     db.add(emp)
     await db.commit()
     return {"id": str(emp.id), "name": emp.name, "position": emp.position, "is_active": emp.is_active}

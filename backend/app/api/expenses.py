@@ -15,6 +15,7 @@ from app.core.deps import get_current_user, require_roles
 from app.models.user import User
 from app.models.expense import Expense, LinkTypeEnum, ReimburseStatusEnum
 from app.models.expense_category import ExpenseCategory
+from app.models.asset import Asset
 from app.models.order import Order
 from app.models.counterparty import Counterparty
 from app.models.company import Company
@@ -113,6 +114,48 @@ async def _get_default_company(db: AsyncSession) -> Company:
     if not company:
         raise HTTPException(400, "No active company found")
     return company
+
+
+OFFICE_DEPOSIT_CATEGORY = "Депозит за офис"
+
+
+async def _sync_office_deposit_asset(db: AsyncSession, expense: Expense) -> None:
+    """Расход категории «Депозит за офис» — возвратный залог → отражаем как Актив.
+
+    Идемпотентно: держим единственный Актив на расход (source_expense_id).
+    Расход удалён/деактивирован или категория сменилась → актив скрываем.
+    """
+    cat = (await db.execute(
+        select(ExpenseCategory).where(ExpenseCategory.id == expense.category_id)
+    )).scalar_one_or_none()
+    is_deposit = bool(cat and cat.name == OFFICE_DEPOSIT_CATEGORY)
+
+    asset = (await db.execute(
+        select(Asset).where(Asset.source_expense_id == expense.id)
+    )).scalar_one_or_none()
+
+    active = is_deposit and expense.is_active
+    if active:
+        if asset:
+            asset.is_deleted = False
+            asset.name = expense.description or OFFICE_DEPOSIT_CATEGORY
+            asset.price = expense.amount_cny
+            asset.quantity = Decimal("1")
+            asset.purchase_date = expense.expense_date
+        else:
+            db.add(Asset(
+                id=uuid.uuid4(),
+                name=expense.description or OFFICE_DEPOSIT_CATEGORY,
+                quantity=Decimal("1"),
+                price=expense.amount_cny,
+                account=None,
+                purchase_date=expense.expense_date,
+                created_by=expense.created_by,
+                source_expense_id=expense.id,
+                is_deleted=False,
+            ))
+    elif asset:
+        asset.is_deleted = True
 
 
 async def _load_expense(db: AsyncSession, expense_id: uuid.UUID) -> ExpenseResponse:
@@ -464,6 +507,8 @@ async def create_expense(
             body.description[:80],  # только пользовательский текст
             current_user.id,
         )
+    await db.flush()
+    await _sync_office_deposit_asset(db, expense)
     await db.commit()
     return await _load_expense(db, expense.id)
 
@@ -528,6 +573,7 @@ async def update_expense(
 
     await write_audit(db, current_user.id, "expense", expense.id, AuditActionEnum.update,
                       {"updated": list(data.keys())})
+    await _sync_office_deposit_asset(db, expense)
     await db.commit()
     return await _load_expense(db, expense.id)
 
@@ -684,6 +730,7 @@ async def delete_expense(
             "expense_id": str(expense_id),
         })
 
+    await _sync_office_deposit_asset(db, expense)
     await db.commit()
 
 

@@ -42,8 +42,11 @@ export interface AttendanceDay {
   overtime_hours: number;
 }
 
+export interface AvailableUser { user_id: string; full_name: string; position?: string | null; }
+
 export const listEmployees = () => apiClient.get<PayrollEmployee[]>("/api/payroll/employees");
-export const createEmployee = (d: { name: string; position?: string }) =>
+export const availableUsers = () => apiClient.get<AvailableUser[]>("/api/payroll/available-users");
+export const createEmployee = (d: { user_id?: string; name?: string; position?: string }) =>
   apiClient.post("/api/payroll/employees", d);
 export const patchEmployee = (id: string, d: Partial<{ name: string; position: string; is_active: boolean }>) =>
   apiClient.patch(`/api/payroll/employees/${id}`, d);

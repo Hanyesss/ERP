@@ -943,6 +943,9 @@
   "payroll": {
     "employee": "Работник",
     "position": "Должность",
+    "select_employee": "Выберите сотрудника",
+    "no_free_users": "Нет свободных сотрудников",
+    "position_auto": "Подтянется автоматически",
     "add_employee": "Добавить работника",
     "no_employees": "Нет работников — добавьте первого",
     "monthly_salary": "Оклад",

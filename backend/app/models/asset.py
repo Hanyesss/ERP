@@ -21,4 +21,6 @@ class Asset(Base, TimestampMixin):
     account: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # Актив, авто-созданный из расхода категории «Депозит за офис» (возвратный залог)
+    source_expense_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

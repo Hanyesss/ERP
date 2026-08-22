@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import {
-  getMonth, patchRecord, createEmployee, payRecord, type PayrollRow,
+  getMonth, patchRecord, createEmployee, payRecord, availableUsers, type PayrollRow,
 } from "../api/payroll";
 import { getCashRegisters } from "../api/cashRegisters";
 import TimesheetModal from "../components/payroll/TimesheetModal";
@@ -61,6 +61,12 @@ export default function PayrollPage() {
     queryFn: () => getCashRegisters().then((r) => r.data),
   });
 
+  const { data: freeUsers = [] } = useQuery({
+    queryKey: ["payroll-available-users"],
+    queryFn: () => availableUsers().then((r) => r.data),
+    enabled: addOpen,
+  });
+
   const patchMut = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: any }) => patchRecord(id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payroll-month", year, mon] }),
@@ -74,6 +80,7 @@ export default function PayrollPage() {
       setAddOpen(false);
       addForm.resetFields();
       qc.invalidateQueries({ queryKey: ["payroll-month", year, mon] });
+      qc.invalidateQueries({ queryKey: ["payroll-available-users"] });
     },
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
@@ -207,11 +214,21 @@ export default function PayrollPage() {
         okText={t("common.save")}
       >
         <Form form={addForm} layout="vertical">
-          <Form.Item name="name" label={t("payroll.employee")} rules={[{ required: true }]}>
-            <Input />
+          <Form.Item name="user_id" label={t("payroll.employee")} rules={[{ required: true, message: t("payroll.select_employee") }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder={t("payroll.select_employee")}
+              notFoundContent={t("payroll.no_free_users")}
+              options={(freeUsers as any[]).map((u) => ({ value: u.user_id, label: u.full_name }))}
+              onChange={(val) => {
+                const u = (freeUsers as any[]).find((x) => x.user_id === val);
+                addForm.setFieldsValue({ position: u?.position || undefined });
+              }}
+            />
           </Form.Item>
           <Form.Item name="position" label={t("payroll.position")}>
-            <Input />
+            <Input placeholder={t("payroll.position_auto")} />
           </Form.Item>
         </Form>
       </Modal>

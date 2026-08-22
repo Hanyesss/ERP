@@ -943,6 +943,9 @@
   "payroll": {
     "employee": "员工",
     "position": "职位",
+    "select_employee": "选择员工",
+    "no_free_users": "没有可选员工",
+    "position_auto": "自动填充",
     "add_employee": "添加员工",
     "no_employees": "暂无员工 — 请先添加",
     "monthly_salary": "月薪",
