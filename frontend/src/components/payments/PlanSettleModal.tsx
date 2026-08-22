@@ -149,10 +149,17 @@ export default function PlanSettleModal({ plan, open, onClose }: Props) {
               <Divider style={{ margin: "8px 0" }}>{t("plan.new_installment")}</Divider>
               <Form form={form} layout="vertical" className="responsive-form">
                 <Form.Item name="kind" label={t("plan.kind")} rules={[{ required: true }]}>
-                  <Select options={[
-                    { value: "deposit", label: t("plan.kind_deposit") },
-                    { value: "balance", label: t("plan.kind_balance") },
-                  ]} />
+                  <Select
+                    onChange={(k) => {
+                      if (k === "full" && plan) {
+                        form.setFieldsValue({ currency: "CNY", rate_to_cny: 1, amount: Number(plan.remaining_cny) });
+                      }
+                    }}
+                    options={[
+                      { value: "deposit", label: t("plan.kind_deposit") },
+                      { value: "balance", label: t("plan.kind_balance") },
+                      { value: "full", label: t("plan.kind_full") },
+                    ]} />
                 </Form.Item>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Form.Item name="currency" label={t("payment.currency")} rules={[{ required: true }]}>

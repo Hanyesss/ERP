@@ -958,6 +958,7 @@
     "kind": "Тип взноса",
     "kind_deposit": "Депозит",
     "kind_balance": "Финальный платёж",
+    "kind_full": "Полная оплата",
     "new_installment": "Новый взнос",
     "add_installment": "Внести",
     "need_cash_rate": "Укажите курс конвертации в валюту кассы",
