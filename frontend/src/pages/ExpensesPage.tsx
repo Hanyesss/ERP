@@ -153,14 +153,21 @@ export default function ExpensesPage({ user }: Props) {
     {
       title: t("expense.reimbursement"),
       key: "reimburse",
-      width: 140,
+      width: 170,
       render: (_, row) => {
         if (!row.is_reimbursement) return null;
         const color = REIMBURSE_COLORS[row.reimburse_status || "pending"];
         return (
-          <Tag color={color}>
-            {t(`expense.reimburse_${row.reimburse_status || "pending"}`)}
-          </Tag>
+          <div>
+            <Tag color={color}>
+              {t(`expense.reimburse_${row.reimburse_status || "pending"}`)}
+            </Tag>
+            {row.reimburse_to_name && (
+              <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 2 }}>
+                {t("expense.reimburse_to")}: {row.reimburse_to_name}
+              </div>
+            )}
+          </div>
         );
       },
     },

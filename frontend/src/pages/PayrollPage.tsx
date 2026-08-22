@@ -95,7 +95,8 @@ export default function PayrollPage() {
 
   const rows = data?.rows ?? [];
 
-  const payReg = (registers as any[]).find((r) => r.id === Form.useWatch("cash_register_id", payForm));
+  const payRegId = Form.useWatch("cash_register_id", payForm);
+  const payReg = (registers as any[]).find((r) => r.id === payRegId);
   const payRegCur: string = payReg?.currency ?? "CNY";
   const needCashRate = !!payReg && payRegCur !== "CNY";
 
