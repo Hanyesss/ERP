@@ -18,6 +18,7 @@ export interface PayrollRow {
   monthly_salary: number;
   working_days: number;
   social_insurance: number;
+  taxes: number;
   bonus: number;
   is_paid: boolean;
   paid_at?: string | null;
@@ -57,7 +58,7 @@ export const getMonth = (year: number, month: number) =>
 
 export const patchRecord = (
   id: string,
-  d: Partial<{ monthly_salary: number; working_days: number; social_insurance: number; bonus: number }>,
+  d: Partial<{ monthly_salary: number; working_days: number; social_insurance: number; taxes: number; bonus: number }>,
 ) => apiClient.patch(`/api/payroll/records/${id}`, d);
 
 export const getAttendance = (id: string) =>

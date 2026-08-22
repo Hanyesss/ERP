@@ -144,6 +144,10 @@ export default function PayrollPage() {
       render: (_, r) => <EditableNum value={r.social_insurance} disabled={r.is_paid} onSave={(v) => save(r.id, "social_insurance", v)} />,
     },
     {
+      title: t("payroll.taxes"), key: "taxes", width: 110,
+      render: (_, r) => <EditableNum value={r.taxes} disabled={r.is_paid} onSave={(v) => save(r.id, "taxes", v)} />,
+    },
+    {
       title: t("payroll.bonus"), key: "bonus", width: 120,
       render: (_, r) => <EditableNum value={r.bonus} disabled={r.is_paid} onSave={(v) => save(r.id, "bonus", v)} />,
     },
@@ -188,11 +192,11 @@ export default function PayrollPage() {
           summary={() => rows.length ? (
             <Table.Summary fixed>
               <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={8}><Text strong>{t("common.total")}</Text></Table.Summary.Cell>
-                <Table.Summary.Cell index={8} align="right">
+                <Table.Summary.Cell index={0} colSpan={9}><Text strong>{t("common.total")}</Text></Table.Summary.Cell>
+                <Table.Summary.Cell index={9} align="right">
                   <Text strong style={{ color: "#389e0d" }}>{fmt(data?.totals.net_total)}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={9} />
+                <Table.Summary.Cell index={10} />
               </Table.Summary.Row>
             </Table.Summary>
           ) : null}

@@ -41,6 +41,7 @@ class PayrollRecord(Base):
     monthly_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
     working_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="24")
     social_insurance: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
+    taxes: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
     bonus: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
     is_paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     paid_expense_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

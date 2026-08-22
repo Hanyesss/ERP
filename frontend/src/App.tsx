@@ -77,7 +77,11 @@ function Inner() {
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/orders/:id/edit" element={<OrderFormPage user={user!} />} />
             <Route path="/exchange-rates" element={<ExchangeRatesPage />} />
-            <Route path="/payroll" element={<PayrollPage />} />
+            <Route path="/payroll" element={
+              user?.roles?.some((r) => r === "accountant" || r === "admin")
+                ? <PayrollPage />
+                : <Navigate to={homePath} replace />
+            } />
             <Route path="/purchases" element={<PurchasesPage />} />
             <Route path="/quotes" element={<QuotesComparisonPage />} />
             <Route path="/purchases/new" element={<PurchaseFormPage />} />

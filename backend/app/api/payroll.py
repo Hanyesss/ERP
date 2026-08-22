@@ -77,6 +77,7 @@ class RecordPatch(BaseModel):
     monthly_salary: Optional[Decimal] = None
     working_days: Optional[int] = None
     social_insurance: Optional[Decimal] = None
+    taxes: Optional[Decimal] = None
     bonus: Optional[Decimal] = None
 
 
@@ -101,7 +102,13 @@ def _compute(rec: PayrollRecord, atts: list[PayrollAttendance]) -> dict:
     ot_hours = sum((a.overtime_hours or Decimal("0")) for a in atts)
     base_earned = daily * days_attended
     overtime_pay = (daily / 8) * ot_hours if ot_hours else Decimal("0")
-    net = base_earned + (rec.bonus or Decimal("0")) + overtime_pay - (rec.social_insurance or Decimal("0"))
+    net = (
+        base_earned
+        + (rec.bonus or Decimal("0"))
+        + overtime_pay
+        - (rec.social_insurance or Decimal("0"))
+        - (rec.taxes or Decimal("0"))
+    )
     return {
         "daily_rate": daily.quantize(Q2),
         "days_attended": days_attended,
@@ -126,6 +133,7 @@ def _record_dict(rec: PayrollRecord, emp: PayrollEmployee, role: Optional[str] =
         "monthly_salary": rec.monthly_salary,
         "working_days": rec.working_days,
         "social_insurance": rec.social_insurance,
+        "taxes": rec.taxes,
         "bonus": rec.bonus,
         "is_paid": rec.is_paid,
         "paid_at": rec.paid_at.isoformat() if rec.paid_at else None,
@@ -285,6 +293,8 @@ async def patch_record(
         rec.working_days = max(1, body.working_days)
     if body.social_insurance is not None:
         rec.social_insurance = body.social_insurance
+    if body.taxes is not None:
+        rec.taxes = body.taxes
     if body.bonus is not None:
         rec.bonus = body.bonus
     await db.commit()
