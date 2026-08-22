@@ -48,35 +48,41 @@ async def _shipment_rates(db: AsyncSession, order_date, currencies: set) -> dict
     return rates
 
 
+def _q2(d: Decimal) -> float:
+    """Округляем до 2 знаков — на сайте DecimalField(max_digits=10, decimal_places=2)."""
+    from decimal import ROUND_HALF_UP
+    return float(d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 def _to_usd(amount, currency: Optional[str], rates: dict) -> Optional[float]:
-    """Конвертирует сумму любой валюты в РЕАЛЬНЫЕ USD через rate_to_cny."""
+    """Конвертирует сумму любой валюты в РЕАЛЬНЫЕ USD через rate_to_cny (2 знака)."""
     if amount is None:
         return None
     d = Decimal(str(amount))
     if currency == "USD":
-        return float(d)
+        return _q2(d)
     usd = rates.get("USD")
     if not usd:
         logger.warning("USD rate missing — cannot convert %s %s to USD", amount, currency)
         return None
     if currency == "CNY" or currency is None:
-        return float(d / usd)
+        return _q2(d / usd)
     cny_rate = rates.get(currency)
     if not cny_rate:
         logger.warning("Rate for %s missing — cannot convert to USD", currency)
         return None
-    return float((d * cny_rate) / usd)
+    return _q2((d * cny_rate) / usd)
 
 
 def _charge_to_usd(charge: Optional[OrderCharge], rates: dict) -> Optional[float]:
-    """Сумма статьи в реальных USD (у статьи есть amount_cny → делим на курс USD)."""
+    """Сумма статьи в реальных USD (у статьи есть amount_cny → делим на курс USD), 2 знака."""
     if not charge or not charge.amount:
         return None
     if charge.currency == "USD":
-        return float(charge.amount)
+        return _q2(Decimal(str(charge.amount)))
     usd = rates.get("USD")
     if charge.amount_cny and usd:
-        return float(Decimal(str(charge.amount_cny)) / usd)
+        return _q2(Decimal(str(charge.amount_cny)) / usd)
     return _to_usd(charge.amount, charge.currency, rates)
 
 
