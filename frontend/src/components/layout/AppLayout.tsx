@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, cloneElement } from "react";
 import { Layout, Menu, Button, Typography, Space, Tooltip, Drawer, Badge } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,6 +8,32 @@ import {
   MenuOutlined, CloseOutlined, SafetyCertificateOutlined, GiftOutlined,
   DiffOutlined, SolutionOutlined,
 } from "@ant-design/icons";
+
+// Цвет иконки по группам разделов (чтобы визуально различались)
+const OPS = "#1677ff";      // операционные (синий)
+const FIN = "#52c41a";      // финансы (зелёный)
+const ANALYTICS = "#722ed1"; // аналитика (фиолетовый)
+const PARTNER = "#fa8c16";  // партнёры (оранжевый)
+const SERVICE = "#8c8c8c";  // служебное (серый)
+const MENU_ICON_COLORS: Record<string, string> = {
+  "/partner-dashboard": PARTNER,
+  "/dashboard": ANALYTICS,
+  "/counterparties": SERVICE,
+  "/orders": OPS,
+  "/purchases": OPS,
+  "/quotes": OPS,
+  "/payments": FIN,
+  "/cash-registers": FIN,
+  "/expenses": FIN,
+  "/exchange-rates": FIN,
+  "/payroll": FIN,
+  "/warehouses": OPS,
+  "/reports": ANALYTICS,
+  "/assets": ANALYTICS,
+  "/admin-partners": PARTNER,
+  "/users": SERVICE,
+  "/settings/integrations": SERVICE,
+};
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User, UserRole } from "../../types";
@@ -160,7 +186,14 @@ export default function AppLayout({ user, onLogout }: Props) {
       icon: <SettingOutlined />,
       label: t("nav.integrations"),
     },
-  ].filter(Boolean) as { key: string; icon: JSX.Element; label: string }[];
+  ]
+    .filter(Boolean)
+    .map((it: any) => ({
+      ...it,
+      icon: cloneElement(it.icon, {
+        style: { fontSize: 19, color: MENU_ICON_COLORS[it.key] ?? "#8c8c8c", ...(it.icon.props?.style || {}) },
+      }),
+    })) as { key: string; icon: JSX.Element; label: string }[];
 
   const selectedKey = location.pathname.startsWith("/orders")
     ? "/orders"
