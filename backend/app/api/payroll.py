@@ -41,6 +41,14 @@ def _position_from_roles(roles: list[str]) -> Optional[str]:
         if r in roles:
             return _ROLE_TITLES.get(r, r)
     return None
+
+
+def _primary_role(roles: list[str]) -> Optional[str]:
+    """Ключ основной роли (для перевода должности на фронте)."""
+    for r in _ROLE_PRIORITY:
+        if r in roles:
+            return r
+    return None
 from app.models.expense import Expense, LinkTypeEnum
 from app.models.expense_category import ExpenseCategory
 from app.models.cash_register import CashRegister
@@ -104,7 +112,7 @@ def _compute(rec: PayrollRecord, atts: list[PayrollAttendance]) -> dict:
     }
 
 
-def _record_dict(rec: PayrollRecord, emp: PayrollEmployee) -> dict:
+def _record_dict(rec: PayrollRecord, emp: PayrollEmployee, role: Optional[str] = None) -> dict:
     atts = list(rec.attendance or [])
     c = _compute(rec, atts)
     return {
@@ -112,6 +120,7 @@ def _record_dict(rec: PayrollRecord, emp: PayrollEmployee) -> dict:
         "employee_id": str(emp.id),
         "employee_name": emp.name,
         "position": emp.position,
+        "role": role,
         "year": rec.year,
         "month": rec.month,
         "monthly_salary": rec.monthly_salary,
@@ -150,7 +159,7 @@ async def available_users(
         select(User).where(User.is_active == True).order_by(User.full_name)
     )).scalars().all()
     return [
-        {"user_id": str(u.id), "full_name": u.full_name, "position": _position_from_roles(u.roles)}
+        {"user_id": str(u.id), "full_name": u.full_name, "role": _primary_role(u.roles)}
         for u in users if u.id not in taken_set
     ]
 
@@ -175,8 +184,7 @@ async def create_employee(
         if exists:
             raise HTTPException(422, "Этот сотрудник уже добавлен")
         name = name or user.full_name
-        if not position:
-            position = _position_from_roles(user.roles)
+        # должность не храним строкой — на фронте переводим из роли пользователя
 
     if not name:
         raise HTTPException(422, "Укажите сотрудника или имя")
@@ -241,7 +249,14 @@ async def get_month(
         )).scalars().all()
         by_emp = {r.employee_id: r for r in existing}
 
-    rows = [_record_dict(by_emp[emp.id], emp) for emp in employees if emp.id in by_emp]
+    # роли связанных сотрудников — для перевода должности на фронте
+    linked_ids = [e.user_id for e in employees if e.user_id]
+    roles_map: dict = {}
+    if linked_ids:
+        users = (await db.execute(select(User).where(User.id.in_(linked_ids)))).scalars().all()
+        roles_map = {u.id: _primary_role(u.roles) for u in users}
+
+    rows = [_record_dict(by_emp[emp.id], emp, roles_map.get(emp.user_id)) for emp in employees if emp.id in by_emp]
     totals = {
         "net_total": sum((Decimal(str(r["net_total"])) for r in rows), Decimal("0")),
         "count": len(rows),

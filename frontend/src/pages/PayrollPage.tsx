@@ -113,7 +113,9 @@ export default function PayrollPage() {
       render: (v, r) => (
         <div>
           <div>{v} {r.is_paid && <Tag color="green">{t("payroll.paid")}</Tag>}</div>
-          {r.position && <Text type="secondary" style={{ fontSize: 12 }}>{r.position}</Text>}
+          {(r.role || r.position) && (
+            <Text type="secondary" style={{ fontSize: 12 }}>{r.role ? t(`role.${r.role}`) : r.position}</Text>
+          )}
         </div>
       ),
     },
@@ -223,7 +225,7 @@ export default function PayrollPage() {
               options={(freeUsers as any[]).map((u) => ({ value: u.user_id, label: u.full_name }))}
               onChange={(val) => {
                 const u = (freeUsers as any[]).find((x) => x.user_id === val);
-                addForm.setFieldsValue({ position: u?.position || undefined });
+                addForm.setFieldsValue({ position: u?.role ? t(`role.${u.role}`) : undefined });
               }}
             />
           </Form.Item>

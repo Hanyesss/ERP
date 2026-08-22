@@ -12,6 +12,7 @@ export interface PayrollRow {
   employee_id: string;
   employee_name: string;
   position?: string | null;
+  role?: string | null;
   year: number;
   month: number;
   monthly_salary: number;
@@ -42,7 +43,7 @@ export interface AttendanceDay {
   overtime_hours: number;
 }
 
-export interface AvailableUser { user_id: string; full_name: string; position?: string | null; }
+export interface AvailableUser { user_id: string; full_name: string; role?: string | null; }
 
 export const listEmployees = () => apiClient.get<PayrollEmployee[]>("/api/payroll/employees");
 export const availableUsers = () => apiClient.get<AvailableUser[]>("/api/payroll/available-users");

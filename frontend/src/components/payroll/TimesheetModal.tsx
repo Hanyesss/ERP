@@ -13,10 +13,9 @@ interface Props {
   onClose: () => void;
 }
 
-const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
-
 export default function TimesheetModal({ recordId, employeeName, open, onClose }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === "zh" ? "zh-CN" : "ru-RU";
   const qc = useQueryClient();
   const [days, setDays] = useState<AttendanceDay[]>([]);
   const [year, setYear] = useState(0);
@@ -58,7 +57,12 @@ export default function TimesheetModal({ recordId, employeeName, open, onClose }
 
   const weekday = (day: number) => {
     if (!year || !month) return "";
-    return WD[new Date(year, month - 1, day).getDay()];
+    return new Date(year, month - 1, day).toLocaleDateString(locale, { weekday: "short" });
+  };
+  const isWeekend = (day: number) => {
+    if (!year || !month) return false;
+    const g = new Date(year, month - 1, day).getDay();
+    return g === 0 || g === 6;
   };
 
   return (
@@ -91,11 +95,11 @@ export default function TimesheetModal({ recordId, employeeName, open, onClose }
             title: t("payroll.day"),
             dataIndex: "day",
             width: 80,
-            render: (d: number) => {
-              const wd = weekday(d);
-              const weekend = wd === "сб" || wd === "вс";
-              return <span style={{ color: weekend ? "#cf1322" : undefined }}>{d} <Text type="secondary">{wd}</Text></span>;
-            },
+            render: (d: number) => (
+              <span style={{ color: isWeekend(d) ? "#cf1322" : undefined }}>
+                {d} <Text type="secondary">{weekday(d)}</Text>
+              </span>
+            ),
           },
           {
             title: t("payroll.present"),
