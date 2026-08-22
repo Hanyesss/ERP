@@ -291,6 +291,23 @@ class IrswayClient:
         except Exception as e:
             return TradeOrderResult(error=str(e))
 
+    def upload_cargo_photo(self, number: str, file_bytes: bytes, filename: str,
+                           content_type: str = "image/jpeg") -> tuple:
+        """Загрузить фото груза для отправления (для накладной сайта)."""
+        upload_headers = {k: v for k, v in self.headers.items() if k != "Content-Type"}
+        try:
+            r = httpx.post(
+                self._url(f"/api/v1/shipments/{number}/cargo-photo/"),
+                headers=upload_headers,
+                files={"photo": (filename, file_bytes, content_type)},
+                timeout=30.0,
+            )
+            if r.status_code in (200, 201):
+                return True, ""
+            return False, f"HTTP {r.status_code}: {r.text[:200]}"
+        except Exception as e:
+            return False, str(e)
+
     def upsert_warehouse_stock(self, payload: WarehouseStockPayload) -> WarehouseStockResult:
         try:
             r = httpx.post(

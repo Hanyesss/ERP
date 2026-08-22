@@ -10,6 +10,7 @@ from app.models.integration_settings import IntegrationSettings
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_charge import OrderCharge
+from app.models.exchange_rate import ExchangeRate
 from app.models.counterparty import Counterparty
 from .client import IrswayClient
 from .schemas import ShipmentCreatePayload, ShipmentItemPayload, ShipmentStatusPayload, TradeOrderPayload, WarehouseStockPayload, WarehouseStockItem, ReconciliationPayload, ReconciliationRowPayload, PaymentEntryPayload
@@ -28,23 +29,55 @@ async def get_active_client(db: AsyncSession) -> Optional[IrswayClient]:
     return IrswayClient(base_url=row.base_url, api_token=row.api_token)
 
 
-def _charge_usd(charge: Optional[OrderCharge]) -> Optional[float]:
-    """
-    Возвращает сумму расхода в USD.
-    Если расход в USD — берём amount напрямую.
-    Если в другой валюте — берём amount_cny как приближение (НЕ USD!),
-    логируем предупреждение. Логистические расходы должны вводиться в USD.
-    """
+async def _shipment_rates(db: AsyncSession, order_date, currencies: set) -> dict:
+    """rate_to_cny по валютам (на дату заказа, иначе последний доступный). CNY=1."""
+    rates: dict = {"CNY": Decimal("1")}
+    for cur in currencies:
+        if not cur or cur == "CNY":
+            continue
+        row = (await db.execute(
+            select(ExchangeRate).where(ExchangeRate.currency == cur, ExchangeRate.rate_date == order_date)
+        )).scalar_one_or_none()
+        if not row:
+            row = (await db.execute(
+                select(ExchangeRate).where(ExchangeRate.currency == cur)
+                .order_by(ExchangeRate.rate_date.desc()).limit(1)
+            )).scalar_one_or_none()
+        if row:
+            rates[cur] = row.rate_to_cny
+    return rates
+
+
+def _to_usd(amount, currency: Optional[str], rates: dict) -> Optional[float]:
+    """Конвертирует сумму любой валюты в РЕАЛЬНЫЕ USD через rate_to_cny."""
+    if amount is None:
+        return None
+    d = Decimal(str(amount))
+    if currency == "USD":
+        return float(d)
+    usd = rates.get("USD")
+    if not usd:
+        logger.warning("USD rate missing — cannot convert %s %s to USD", amount, currency)
+        return None
+    if currency == "CNY" or currency is None:
+        return float(d / usd)
+    cny_rate = rates.get(currency)
+    if not cny_rate:
+        logger.warning("Rate for %s missing — cannot convert to USD", currency)
+        return None
+    return float((d * cny_rate) / usd)
+
+
+def _charge_to_usd(charge: Optional[OrderCharge], rates: dict) -> Optional[float]:
+    """Сумма статьи в реальных USD (у статьи есть amount_cny → делим на курс USD)."""
     if not charge or not charge.amount:
         return None
     if charge.currency == "USD":
         return float(charge.amount)
-    logger.warning(
-        "Charge %s currency=%s (not USD) — sending amount_cny=%.2f as fallback; "
-        "logistics charges should be entered in USD",
-        charge.charge_type, charge.currency, float(charge.amount_cny or 0),
-    )
-    return float(charge.amount_cny) if charge.amount_cny else None
+    usd = rates.get("USD")
+    if charge.amount_cny and usd:
+        return float(Decimal(str(charge.amount_cny)) / usd)
+    return _to_usd(charge.amount, charge.currency, rates)
 
 
 async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCreatePayload:
@@ -84,16 +117,29 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
     if ins_charge and ins_charge.amount:
         insurance_percent = float(ins_charge.amount)
 
+    # Курсы для конвертации всех сумм накладной в РЕАЛЬНЫЕ USD (накладная сайта — USD-база)
+    needed_currencies = {"USD"}
+    for c in charges.values():
+        if c.currency:
+            needed_currencies.add(c.currency)
+    for it in items_rows:
+        if it.price_per_kg_currency:
+            needed_currencies.add(it.price_per_kg_currency)
+        if it.cargo_value_currency:
+            needed_currencies.add(it.cargo_value_currency)
+    rates = await _shipment_rates(db, order.order_date, needed_currencies)
+
     items = [
         ShipmentItemPayload(
             name=item.name,
             weight_kg=float(item.weight_kg) if item.weight_kg is not None else None,
             volume_m3=float(item.volume_m3) if item.volume_m3 is not None else None,
             places_count=item.places_count,
-            cargo_value=float(item.cargo_value) if item.cargo_value is not None else None,
-            cargo_value_currency=item.cargo_value_currency,
-            price_per_kg=float(item.price_per_kg) if item.price_per_kg is not None else None,
-            price_per_kg_currency=item.price_per_kg_currency,
+            # cargo_value и price_per_kg — в USD (накладная считает в USD)
+            cargo_value=_to_usd(item.cargo_value, item.cargo_value_currency, rates),
+            cargo_value_currency="USD",
+            price_per_kg=_to_usd(item.price_per_kg, item.price_per_kg_currency, rates),
+            price_per_kg_currency="USD",
         )
         for item in items_rows
     ]
@@ -114,9 +160,9 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
         items=items,
         generate_invoice=True,
         insurance_percent=insurance_percent,
-        china_delivery=_charge_usd(charges.get("china_delivery")),
-        packing=_charge_usd(charges.get("extra_packing")),
-        market_fee=_charge_usd(charges.get("loaders")),
+        china_delivery=_charge_to_usd(charges.get("china_delivery"), rates),
+        packing=_charge_to_usd(charges.get("extra_packing"), rates),
+        market_fee=_charge_to_usd(charges.get("loaders"), rates),
     )
 
     logger.info(
@@ -134,6 +180,35 @@ async def _build_shipment_payload(order: Order, db: AsyncSession) -> ShipmentCre
     )
 
     return payload
+
+
+async def _push_cargo_photo(client, shipment_number: str, order: Order, db: AsyncSession) -> None:
+    """Выгружает фото груза заказа (OrderFile cargo_photo) на сайт — для накладной."""
+    from pathlib import Path
+    from app.models.order_file import OrderFile, FileTypeEnum
+
+    f = (await db.execute(
+        select(OrderFile)
+        .where(OrderFile.order_id == order.id, OrderFile.file_type == FileTypeEnum.cargo_photo)
+        .order_by(OrderFile.uploaded_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    if not f:
+        return
+    path = Path(__file__).resolve().parents[3] / "uploads" / f.file_url
+    try:
+        data = path.read_bytes()
+    except Exception as e:
+        logger.warning("Cargo photo file missing (%s): %s", path, e)
+        return
+    loop = asyncio.get_event_loop()
+    ok, err = await loop.run_in_executor(
+        None,
+        lambda: client.upload_cargo_photo(shipment_number, data, f.file_name, f.mime_type or "image/jpeg"),
+    )
+    if ok:
+        logger.info("Cargo photo uploaded for shipment %s", shipment_number)
+    else:
+        logger.warning("Cargo photo upload failed for %s: %s", shipment_number, err)
 
 
 async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]:
@@ -218,6 +293,13 @@ async def sync_order_to_site(order: Order, db: AsyncSession) -> Tuple[bool, str]
         order.external_invoice_url = result.invoice_url
     if result.tracking_url:
         order.external_tracking_url = result.tracking_url
+
+    # Фото груза → на сайт (для накладной)
+    if order.external_shipment_number:
+        try:
+            await _push_cargo_photo(client, order.external_shipment_number, order, db)
+        except Exception as e:
+            logger.warning("Cargo photo push error: %s", e)
 
     settings_row = (await db.execute(
         select(IntegrationSettings).where(IntegrationSettings.integration_name == INTEGRATION_NAME)
