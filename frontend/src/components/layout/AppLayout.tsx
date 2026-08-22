@@ -6,7 +6,7 @@ import {
   SwapOutlined, ShoppingCartOutlined, WalletOutlined, AccountBookOutlined,
   BarChartOutlined, DatabaseOutlined, SettingOutlined, BankOutlined,
   MenuOutlined, CloseOutlined, SafetyCertificateOutlined, GiftOutlined,
-  DiffOutlined,
+  DiffOutlined, SolutionOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -119,6 +119,12 @@ export default function AppLayout({ user, onLogout }: Props) {
       label: t("nav.exchange_rates"),
     },
 
+    hasRole(user, "accountant", "admin") && {
+      key: "/payroll",
+      icon: <SolutionOutlined />,
+      label: t("nav.payroll"),
+    },
+
     hasRole(user, "employee", "seller", "accountant", "admin") && {
       key: "/warehouses",
       icon: <DatabaseOutlined />,
@@ -166,6 +172,8 @@ export default function AppLayout({ user, onLogout }: Props) {
     ? "/expenses"
     : location.pathname.startsWith("/exchange-rates")
     ? "/exchange-rates"
+    : location.pathname.startsWith("/payroll")
+    ? "/payroll"
     : location.pathname.startsWith("/cash-registers")
     ? "/cash-registers"
     : location.pathname.startsWith("/warehouses")
