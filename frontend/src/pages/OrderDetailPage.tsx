@@ -162,6 +162,7 @@ export default function OrderDetailPage() {
   if (isLoading || !order) return null;
 
   const isLogistics = order.business_type_code === "logistics";
+  const isService = order.business_type_code === "service";
   const expensesCny = order.expenses_cny ?? 0;
   const totalCostCny = order.total_cost_cny ?? 0;
   const margin = canSeeCost
@@ -239,6 +240,17 @@ export default function OrderDetailPage() {
         }
       },
     ] : []),
+  ];
+
+  const serviceItemColumns: ColumnsType<OrderItem> = [
+    { title: "№", key: "idx", width: 40, render: (_, __, i) => i + 1 },
+    { title: t("order.service_description"), dataIndex: "name", key: "name" },
+    { title: t("order.service_amount"), key: "amount", width: 170, align: "right",
+      render: (_, row) => row.sale_price != null ? `${row.sale_price} ${row.sale_currency}` : "—" },
+    { title: `${t("order.total_sale")} CNY`, key: "sale_cny", width: 140, align: "right",
+      render: (_, row) => row.sale_price != null && row.sale_rate_to_cny != null
+        ? fmtCny(Number(row.quantity || 1) * Number(row.sale_price) * Number(row.sale_rate_to_cny))
+        : "—" },
   ];
 
   const logisticsItemColumns: ColumnsType<OrderItem> = [
@@ -405,11 +417,11 @@ export default function OrderDetailPage() {
     },
     {
       key: "items",
-      label: t("order.items"),
+      label: isService ? t("order.service") : t("order.items"),
       children: (
         <>
           <Table scroll={{ x: "max-content" }}
-            columns={isLogistics ? logisticsItemColumns : tradeItemColumns}
+            columns={isLogistics ? logisticsItemColumns : isService ? serviceItemColumns : tradeItemColumns}
             dataSource={order.items}
             rowKey="id"
             size="small"
@@ -914,7 +926,7 @@ export default function OrderDetailPage() {
         </Col>
       </Row>
 
-      <Tabs items={tabItems} />
+      <Tabs items={isService ? tabItems.filter((ti) => ti.key !== "purchases") : tabItems} />
 
       <PlanSettleModal plan={settlePlan} open={!!settlePlan} onClose={() => setSettlePlan(null)} />
     </div>

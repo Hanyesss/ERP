@@ -16,6 +16,7 @@ import { getManagers, getBusinessTypes } from "../api/references";
 import { getWarehouses } from "../api/warehouses";
 import OrderItemsEditor, { type PendingItemPhotos } from "../components/orders/OrderItemsEditor";
 import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
+import ServiceItemEditor from "../components/orders/ServiceItemEditor";
 import ChargesEditor from "../components/orders/ChargesEditor";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import ItemPhotosEditor from "../components/orders/ItemPhotosEditor";
@@ -193,6 +194,7 @@ export default function OrderFormPage({ user }: Props) {
   }, [businessTypes, businessTypeId]);
 
   const isLogistics = businessTypeCode === "logistics";
+  const isService = businessTypeCode === "service";
 
   const clientCode = useMemo(() => {
     if (!clientId || !clients) return undefined;
@@ -464,6 +466,14 @@ export default function OrderFormPage({ user }: Props) {
     onError: (e: any) => message.error(e.response?.data?.detail || "Error"),
   });
 
+  // Сервис: только одна строка (описание + сумма), quantity=1
+  useEffect(() => {
+    if (!isService) return;
+    const cur = form.getFieldValue("items") || [];
+    const first = cur[0] || {};
+    form.setFieldValue("items", [{ ...first, quantity: 1 }]);
+  }, [isService]);
+
   const handleSubmit = (values: any) => {
     const missingRates = rateCheck?.missing ?? [];
     if (!isLogistics && missingRates.length > 0) {
@@ -712,7 +722,7 @@ export default function OrderFormPage({ user }: Props) {
 
         {/* Items */}
         <Card
-          title={isLogistics ? t("order.cargo_details") : t("order.items")}
+          title={isLogistics ? t("order.cargo_details") : isService ? t("order.service") : t("order.items")}
           style={{ marginBottom: 16 }}
           extra={
             <Space size="large">
@@ -731,6 +741,8 @@ export default function OrderFormPage({ user }: Props) {
               savedItemIdByKey={savedItemIdByKey}
               purchasedItemIds={purchasedItemIds}
             />
+          ) : isService ? (
+            <ServiceItemEditor clientCurrency={clientCurrency} />
           ) : (
             <OrderItemsEditor
               form={form}
