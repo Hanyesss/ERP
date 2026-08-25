@@ -162,7 +162,7 @@ export default function OrderDetailPage() {
   if (isLoading || !order) return null;
 
   const isLogistics = order.business_type_code === "logistics";
-  const isService = order.business_type_code === "service";
+  const isService = order.business_type_code === "services";
   const expensesCny = order.expenses_cny ?? 0;
   const totalCostCny = order.total_cost_cny ?? 0;
   const margin = canSeeCost

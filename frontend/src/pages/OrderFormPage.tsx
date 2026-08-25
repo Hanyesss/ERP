@@ -194,7 +194,7 @@ export default function OrderFormPage({ user }: Props) {
   }, [businessTypes, businessTypeId]);
 
   const isLogistics = businessTypeCode === "logistics";
-  const isService = businessTypeCode === "service";
+  const isService = businessTypeCode === "services";
 
   const clientCode = useMemo(() => {
     if (!clientId || !clients) return undefined;
