@@ -188,6 +188,10 @@ class OrderListItem(BaseModel):
     remaining_amount_cny: Decimal = Decimal("0")
     sync_status: Optional[str] = None
     excluded_from_accounting: bool = False
+    source: str = "erp"
+    cargo_status: Optional[str] = None
+    cargo_status_label: Optional[str] = None
+    cargo_status_at: Optional[datetime] = None
 
 
 class OrderResponseManager(BaseModel):
@@ -229,6 +233,10 @@ class OrderResponseManager(BaseModel):
     sync_error: Optional[str] = None
     synced_at: Optional[datetime] = None
     excluded_from_accounting: bool = False
+    source: str = "erp"
+    cargo_status: Optional[str] = None
+    cargo_status_label: Optional[str] = None
+    cargo_status_at: Optional[datetime] = None
 
 
 class OrderResponseFull(BaseModel):
@@ -273,6 +281,10 @@ class OrderResponseFull(BaseModel):
     sync_error: Optional[str] = None
     synced_at: Optional[datetime] = None
     excluded_from_accounting: bool = False
+    source: str = "erp"
+    cargo_status: Optional[str] = None
+    cargo_status_label: Optional[str] = None
+    cargo_status_at: Optional[datetime] = None
 
 
 # Alias for imports that still use OrderResponse

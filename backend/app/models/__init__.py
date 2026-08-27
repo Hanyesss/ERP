@@ -22,6 +22,7 @@ from app.models.warehouse_box import WarehouseBox, BoxItem, PackingList, BoxStat
 from app.models.partner_payout import PartnerPayout
 from app.models.logistics_quote import QuoteRequest, SupplierQuote, PriceUnitEnum
 from app.models.payment_plan import PaymentPlan, PlanStatus
+from app.models.net_status_event import NetStatusEvent
 
 __all__ = [
     "TimestampMixin",
@@ -42,4 +43,5 @@ __all__ = [
     "PartnerPayout",
     "QuoteRequest", "SupplierQuote", "PriceUnitEnum",
     "PaymentPlan", "PlanStatus",
+    "NetStatusEvent",
 ]

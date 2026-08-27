@@ -8,7 +8,7 @@ import {
 } from "antd";
 import { EditOutlined, CheckOutlined, CloseOutlined, ShoppingCartOutlined, DownloadOutlined, SyncOutlined, LinkOutlined, PlusOutlined, FileOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { getOrder, closeOrder, cancelOrder, getOrderHistory, downloadClientPdf, downloadLogisticsPdf, getItemPhotoUrl } from "../api/orders";
+import { getOrder, closeOrder, cancelOrder, getOrderHistory, getNetEvents, downloadClientPdf, downloadLogisticsPdf, getItemPhotoUrl } from "../api/orders";
 import { getPurchases } from "../api/purchases";
 import { getPaymentsForOrder } from "../api/payments";
 import { getExpenses, getFileUrl } from "../api/expenses";
@@ -67,6 +67,12 @@ export default function OrderDetailPage() {
     queryKey: ["payments-for-order", id],
     queryFn: () => getPaymentsForOrder(id!).then(r => r.data),
     enabled: !!id,
+  });
+
+  const { data: netEvents } = useQuery({
+    queryKey: ["net-events", id],
+    queryFn: () => getNetEvents(id!).then(r => r.data),
+    enabled: !!id && order?.source === "net",
   });
 
   const { data: orderPlansData } = useQuery({
@@ -163,6 +169,7 @@ export default function OrderDetailPage() {
 
   const isLogistics = order.business_type_code === "logistics";
   const isService = order.business_type_code === "services";
+  const isNet = order.source === "net";
   const expensesCny = order.expenses_cny ?? 0;
   const totalCostCny = order.total_cost_cny ?? 0;
   const margin = canSeeCost
@@ -926,7 +933,51 @@ export default function OrderDetailPage() {
         </Col>
       </Row>
 
-      <Tabs items={isService ? tabItems.filter((ti) => ti.key !== "purchases") : tabItems} />
+      <Tabs items={[
+        ...(isService ? tabItems.filter((ti) => ti.key !== "purchases") : tabItems),
+        ...(isNet ? [{
+          key: "cargo",
+          label: t("order.cargo_movement"),
+          children: (
+            <Card size="small">
+              {order.cargo_status_label && (
+                <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
+                  <Descriptions.Item label={t("order.cargo_status")}>
+                    <Tag color="cyan">{order.cargo_status_label}</Tag>
+                    {order.cargo_status_at && (
+                      <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                        {new Date(order.cargo_status_at).toLocaleString("ru-RU")}
+                      </Text>
+                    )}
+                  </Descriptions.Item>
+                  {order.tracking_number && (
+                    <Descriptions.Item label={t("order.tracking_number")}>{order.tracking_number}</Descriptions.Item>
+                  )}
+                </Descriptions>
+              )}
+              {(netEvents && netEvents.length > 0) ? (
+                <Timeline
+                  items={[...netEvents].reverse().map((e) => ({
+                    color: e.lifecycle === "closed" ? "green" : e.lifecycle === "cancelled" ? "red" : "blue",
+                    children: (
+                      <Space direction="vertical" size={0}>
+                        <Text strong>{e.label || e.code}</Text>
+                        {e.occurred_at && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {new Date(e.occurred_at).toLocaleString("ru-RU")}
+                          </Text>
+                        )}
+                      </Space>
+                    ),
+                  }))}
+                />
+              ) : (
+                <Text type="secondary">{t("order.cargo_no_events")}</Text>
+              )}
+            </Card>
+          ),
+        }] : []),
+      ]} />
 
       <PlanSettleModal plan={settlePlan} open={!!settlePlan} onClose={() => setSettlePlan(null)} />
     </div>

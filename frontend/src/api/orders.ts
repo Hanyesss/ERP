@@ -1,5 +1,5 @@
 import apiClient from "./client";
-import type { Order, OrderListResponse, OrderFormData, OrderFile } from "../types/order";
+import type { Order, OrderListResponse, OrderFormData, OrderFile, NetStatusEvent } from "../types/order";
 
 export interface OrderListParams {
   search?: string;
@@ -10,6 +10,7 @@ export interface OrderListParams {
   date_from?: string;
   date_to?: string;
   sync_status?: string;
+  source?: string;
   page?: number;
   page_size?: number;
 }
@@ -42,6 +43,9 @@ export const closeOrder = (id: string) =>
 
 export const getOrderHistory = (id: string) =>
   apiClient.get<any[]>(`/api/orders/${id}/history`);
+
+export const getNetEvents = (id: string) =>
+  apiClient.get<NetStatusEvent[]>(`/api/orders/${id}/net-events`);
 
 // Files
 export const getOrderFiles = (orderId: string) =>

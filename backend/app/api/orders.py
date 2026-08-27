@@ -26,6 +26,7 @@ from app.models.payment_allocation import PaymentAllocation
 from app.models.expense import Expense
 from app.models.audit_log import AuditActionEnum
 from app.models.warehouse import Warehouse
+from app.models.net_status_event import NetStatusEvent
 from app.schemas.order import (
     OrderCreate, OrderUpdate, OrderListItem, OrderListResponse,
     OrderChargeResponse, OrderItemResponseManager, OrderItemResponseFull,
@@ -218,6 +219,10 @@ async def _load_order_detail(
             sync_error=order.sync_error,
             synced_at=order.synced_at,
             excluded_from_accounting=order.excluded_from_accounting,
+            source=order.source or "erp",
+            cargo_status=order.cargo_status,
+            cargo_status_label=order.cargo_status_label,
+            cargo_status_at=order.cargo_status_at,
         )
 
     # pi_by_item already loaded above (before is_manager_only branch)
@@ -287,6 +292,10 @@ async def _load_order_detail(
         sync_error=order.sync_error,
         synced_at=order.synced_at,
         excluded_from_accounting=order.excluded_from_accounting,
+        source=order.source or "erp",
+        cargo_status=order.cargo_status,
+        cargo_status_label=order.cargo_status_label,
+        cargo_status_at=order.cargo_status_at,
     )
 
 
@@ -405,6 +414,7 @@ async def list_orders(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     sync_status: Optional[str] = Query(None),
+    source: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -434,6 +444,7 @@ async def list_orders(
             Order.client_id, Order.business_type_id, Order.manager_id,
             Order.sync_status,
             Order.excluded_from_accounting,
+            Order.source, Order.cargo_status, Order.cargo_status_label, Order.cargo_status_at,
             ClientAlias.name.label("client_name"),
             ClientAlias.code.label("client_code"),
             ManagerAlias.full_name.label("manager_name"),
@@ -469,6 +480,8 @@ async def list_orders(
         stmt = stmt.where(Order.order_date <= date_to)
     if sync_status:
         stmt = stmt.where(Order.sync_status == sync_status)
+    if source:
+        stmt = stmt.where(Order.source == source)
 
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     stmt = stmt.order_by(Order.order_date.desc(), Order.order_number.desc())
@@ -492,6 +505,10 @@ async def list_orders(
             remaining_amount_cny=max(r.total_sale_cny - (r.paid_amount_cny or Decimal("0")), Decimal("0")),
             sync_status=r.sync_status,
             excluded_from_accounting=r.excluded_from_accounting,
+            source=r.source or "erp",
+            cargo_status=r.cargo_status,
+            cargo_status_label=r.cargo_status_label,
+            cargo_status_at=r.cargo_status_at,
         )
         for r in rows
     ]
@@ -576,6 +593,27 @@ async def get_order_history(
             "changes": r[0].changes, "created_at": r[0].created_at.isoformat(),
         }
         for r in rows
+    ]
+
+
+@router.get("/{order_id}/net-events")
+async def get_net_events(
+    order_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_ALL_EXCEPT_EMPLOYEE)),
+):
+    """Движение груза NET-заказа (таймлайн статусов)."""
+    events = (await db.execute(
+        select(NetStatusEvent)
+        .where(NetStatusEvent.order_id == order_id)
+        .order_by(NetStatusEvent.occurred_at)
+    )).scalars().all()
+    return [
+        {
+            "id": str(e.id), "code": e.code, "label": e.label, "lifecycle": e.lifecycle,
+            "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+        }
+        for e in events
     ]
 
 

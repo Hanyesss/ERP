@@ -124,6 +124,18 @@ export interface Order {
   sync_error?: string;
   synced_at?: string;
   excluded_from_accounting?: boolean;
+  source?: string;
+  cargo_status?: string;
+  cargo_status_label?: string;
+  cargo_status_at?: string;
+}
+
+export interface NetStatusEvent {
+  id: string;
+  code: string;
+  label?: string;
+  lifecycle?: string;
+  occurred_at?: string;
 }
 
 export interface OrderListItem {
@@ -149,6 +161,10 @@ export interface OrderListItem {
   remaining_amount_cny: number;
   sync_status?: string;
   excluded_from_accounting?: boolean;
+  source?: string;
+  cargo_status?: string;
+  cargo_status_label?: string;
+  cargo_status_at?: string;
 }
 
 export interface OrderListResponse {

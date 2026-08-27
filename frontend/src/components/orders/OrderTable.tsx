@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Space, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip, Modal } from "antd";
+import { Button, Space, Typography, Row, Col, DatePicker, Select, Input, Tag, Tooltip, Modal, Segmented } from "antd";
 import TopScrollTable from "../common/TopScrollTable";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, MinusCircleOutlined } from "@ant-design/icons";
@@ -36,6 +36,7 @@ export default function OrderTable() {
   const btId = searchParams.get("bt") ?? undefined;
   const statusFilter = searchParams.get("status") ?? undefined;
   const syncStatusFilter = searchParams.get("sync") ?? undefined;
+  const sourceFilter = searchParams.get("source") ?? "all";
   const managerId = searchParams.get("manager") ?? undefined;
   const dateFrom = searchParams.get("from");
   const dateTo = searchParams.get("to");
@@ -66,6 +67,7 @@ export default function OrderTable() {
     status: statusFilter, manager_id: managerId,
     date_from: dateRange?.[0], date_to: dateRange?.[1],
     sync_status: syncStatusFilter,
+    source: sourceFilter === "all" ? undefined : sourceFilter,
     page, page_size: 20,
   };
 
@@ -104,6 +106,9 @@ export default function OrderTable() {
               onClick={() => navigate(`/orders/${row.id}`)}>
               {num}
             </Button>
+            {row.source === "net" && (
+              <Tag color="geekblue" style={{ fontSize: 10, padding: "0 4px", lineHeight: "16px", borderRadius: 3, margin: 0 }}>NET</Tag>
+            )}
             {row.excluded_from_accounting && (
               <Tooltip title={t("order.excluded_from_accounting")}>
                 <Tag color="default" style={{ fontSize: 10, padding: "0 4px", lineHeight: "16px", borderRadius: 3 }}>∅</Tag>
@@ -128,6 +133,21 @@ export default function OrderTable() {
       width: 120,
       render: (_, row) => <BusinessTypeTag code={row.business_type_code} name={row.business_type_name} nameCn={row.business_type_name_cn} />,
     },
+    ...((sourceFilter === "net" || (data?.items ?? []).some(o => o.source === "net")) ? [{
+      title: t("order.cargo_status"),
+      key: "cargo_status",
+      width: 180,
+      render: (_: any, row: OrderListItem) => row.source === "net" && row.cargo_status_label
+        ? (
+          <Space direction="vertical" size={0}>
+            <Tag color="cyan" style={{ margin: 0 }}>{row.cargo_status_label}</Tag>
+            {row.cargo_status_at && (
+              <Text type="secondary" style={{ fontSize: 11 }}>{dayjs(row.cargo_status_at).format("DD.MM HH:mm")}</Text>
+            )}
+          </Space>
+        )
+        : <Text type="secondary">—</Text>,
+    }] : []),
     { title: t("order.manager"), dataIndex: "manager_name", key: "manager_name", width: 130 },
     {
       title: `${t("order.total_sale")} (CNY)`,
@@ -251,6 +271,18 @@ export default function OrderTable() {
         />
       </Modal>
       <Row gutter={[8, 8]} style={{ marginBottom: 12 }} className="mobile-full-width">
+        <Col xs={24} sm="auto">
+          <Segmented
+            block={isMobile}
+            value={sourceFilter}
+            onChange={(v) => setFilter({ source: v === "all" ? null : String(v) })}
+            options={[
+              { label: t("order.source_all"), value: "all" },
+              { label: t("order.source_erp"), value: "erp" },
+              { label: "NET", value: "net" },
+            ]}
+          />
+        </Col>
         <Col xs={24} sm="auto">
           <Input.Search placeholder={t("order.number")} allowClear style={{ width: isMobile ? "100%" : 180 }}
             defaultValue={search}

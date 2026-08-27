@@ -28,6 +28,7 @@ from app.api.trontok import router as trontok_router
 from app.api.logistics_quotes import router as logistics_quotes_router
 from app.api.payment_plans import router as payment_plans_router
 from app.api.payroll import router as payroll_router
+from app.api.integration_net import router as integration_net_router
 
 app = FastAPI(title="ERP API", version="1.0.0")
 
@@ -68,6 +69,7 @@ app.include_router(trontok_router)
 app.include_router(logistics_quotes_router)
 app.include_router(payment_plans_router)
 app.include_router(payroll_router)
+app.include_router(integration_net_router)
 
 
 @app.get("/health")
