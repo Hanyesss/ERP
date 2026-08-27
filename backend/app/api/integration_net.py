@@ -16,8 +16,10 @@ from app.database import get_db
 from app.models.integration_settings import IntegrationSettings
 from app.models.order import Order
 from app.models.net_status_event import NetStatusEvent
-from app.integrations.net_app.schemas import NetOrderIn
-from app.integrations.net_app.service import upsert_net_order, NetUpsertError, INTEGRATION_NAME
+from app.integrations.net_app.schemas import NetOrderIn, NetShipmentIn
+from app.integrations.net_app.service import (
+    upsert_net_order, upsert_net_shipment, NetUpsertError, INTEGRATION_NAME,
+)
 
 log = logging.getLogger("net_inbound")
 
@@ -44,21 +46,34 @@ router = APIRouter(
 )
 
 
+@router.post("/shipments")
+async def receive_net_shipment(
+    payload: NetShipmentIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """Приём агрегатной отправки от склада (wh.net-delivery.com) → один логистический заказ."""
+    try:
+        result = await upsert_net_shipment(db, payload)
+    except NetUpsertError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:  # noqa: BLE001 — не отдаём 500 на штатных путях
+        await db.rollback()
+        log.exception("net shipment upsert failed: %s", e)
+        raise HTTPException(422, "upsert failed")
+    status_code = 201 if result.get("created") else 200
+    return JSONResponse(status_code=status_code, content=result)
+
+
 @router.post("/orders")
 async def receive_net_order(
     payload: NetOrderIn,
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        result = await upsert_net_order(db, payload)
-    except NetUpsertError as e:
-        raise HTTPException(422, str(e))
-    except Exception as e:  # noqa: BLE001 — не отдаём 500 на штатных путях
-        await db.rollback()
-        log.exception("net inbound upsert failed: %s", e)
-        raise HTTPException(422, "upsert failed")
-    status_code = 201 if result.get("created") else 200
-    return JSONResponse(status_code=status_code, content=result)
+    """ОТКЛЮЧЕНО. Пер-посылочный приём был отладочным — заменён на /shipments
+    (агрегатный заказ на уровне отправки). ERP пер-посылочные заказы не хранит."""
+    raise HTTPException(
+        410, "per-parcel intake retired; use POST /api/integration/net/shipments"
+    )
 
 
 @router.get("/orders/{external_ref}")

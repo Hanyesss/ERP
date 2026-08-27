@@ -35,3 +35,33 @@ class NetOrderResult(BaseModel):
     external_ref: str
     order_number: str
     created: bool
+
+
+# ── Агрегатная отправка (WH → ERP), уровень отправки, а не посылки ──────────────
+
+class NetBoxIn(BaseModel):
+    box_code: str
+    city: Optional[str] = None
+    weight_kg: Optional[float] = None
+    volume_m3: Optional[float] = None
+    paid_rub: Optional[float] = None
+    parcels_count: Optional[int] = None
+
+
+class NetShipmentIn(BaseModel):
+    shipment_ref: str
+    created_at: Optional[datetime] = None
+    total_weight_kg: Optional[float] = None
+    total_volume_m3: Optional[float] = None
+    total_paid_rub: Optional[float] = 0
+    boxes_count: Optional[int] = None
+    parcels_count: Optional[int] = None
+    destinations: list[str] = Field(default_factory=list)
+    boxes: list[NetBoxIn] = Field(default_factory=list)
+
+
+class NetShipmentResult(BaseModel):
+    ok: bool = True
+    shipment_ref: str
+    erp_order_number: str
+    created: bool

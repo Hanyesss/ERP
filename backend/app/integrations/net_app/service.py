@@ -18,7 +18,10 @@ from app.models.company import Company
 from app.models.user import User
 from app.models.user_role import UserRoleEntry
 from app.models.net_status_event import NetStatusEvent
-from app.integrations.net_app.schemas import NetOrderIn
+from app.integrations.net_app.schemas import NetOrderIn, NetShipmentIn
+
+RETAIL_CLIENT_CODE = "NET-RETAIL"
+RETAIL_CLIENT_NAME = "NET (розничные посылки)"
 
 log = logging.getLogger("net_inbound")
 
@@ -208,3 +211,122 @@ async def upsert_net_order(db: AsyncSession, payload: NetOrderIn) -> dict:
     await db.commit()
     return {"ok": True, "external_ref": external_ref,
             "order_number": order.order_number, "created": True}
+
+
+# ── Агрегатная отправка (WH → ERP) ──────────────────────────────────────────────
+
+async def _get_or_create_retail_client(db: AsyncSession) -> Counterparty:
+    """Служебный контрагент NET-RETAIL для агрегатных заказов-отправок."""
+    c = (await db.execute(
+        select(Counterparty).where(Counterparty.code == RETAIL_CLIENT_CODE)
+    )).scalars().first()
+    if c:
+        return c
+    c = Counterparty(
+        id=uuid.uuid4(),
+        name=RETAIL_CLIENT_NAME,
+        code=RETAIL_CLIENT_CODE,
+        type=CounterpartyType.client,
+        default_currency=CurrencyEnum.RUB,
+        is_active=True,
+    )
+    db.add(c)
+    await db.flush()
+    return c
+
+
+def _shipment_notes(payload: NetShipmentIn) -> str:
+    boxes_n = payload.boxes_count if payload.boxes_count is not None else len(payload.boxes)
+    head = f"Отправка {payload.shipment_ref} · коробок: {boxes_n}"
+    if payload.parcels_count is not None:
+        head += f" · посылок: {payload.parcels_count}"
+    if payload.total_weight_kg is not None:
+        head += f" · вес: {payload.total_weight_kg} кг"
+    lines = [head]
+    if payload.destinations:
+        lines.append("Города: " + ", ".join(payload.destinations))
+    for b in payload.boxes:
+        parts = [b.box_code or "?", b.city or "—"]
+        if b.weight_kg is not None:
+            parts.append(f"{b.weight_kg} кг")
+        if b.parcels_count is not None:
+            parts.append(f"{b.parcels_count} посылок")
+        if b.paid_rub is not None:
+            parts.append(f"{b.paid_rub} ₽")
+        lines.append("— " + " · ".join(str(p) for p in parts))
+    return "\n".join(lines)
+
+
+async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
+    """Идемпотентный upsert агрегатного заказа-отправки по shipment_ref.
+
+    Один обычный логистический заказ (business_type=logistics), в учёте (деньги реальные).
+    Наружу (irsway_site) не пушим.
+    """
+    ref = payload.shipment_ref.strip()
+    created_at = payload.created_at or datetime.now(timezone.utc)
+    revenue = Decimal(str(payload.total_paid_rub or 0)).quantize(Decimal("0.01"))
+    notes = _shipment_notes(payload)
+
+    bt = (await db.execute(
+        select(BusinessType).where(BusinessType.code == "logistics")
+    )).scalar_one_or_none()
+    if not bt:
+        raise NetUpsertError("business_type 'logistics' not found")
+
+    order = (await db.execute(
+        select(Order).where(Order.external_ref == ref, Order.source == "net")
+    )).scalar_one_or_none()
+
+    if order is not None:
+        order.total_sale_cny = revenue
+        order.notes = notes
+        order.tracking_number = ref
+        order.excluded_from_accounting = False
+        await db.commit()
+        return {"ok": True, "shipment_ref": ref,
+                "erp_order_number": order.order_number, "created": False}
+
+    company = await _get_company(db)
+    system_user = await _get_system_user(db)
+    client = await _get_or_create_retail_client(db)
+
+    order = Order(
+        id=uuid.uuid4(),
+        order_number=f"NET-{ref}",
+        company_id=company.id,
+        client_id=client.id,
+        business_type_id=bt.id,
+        manager_id=system_user.id,
+        created_by=system_user.id,
+        order_date=created_at.date(),
+        status=OrderStatus.active,
+        client_currency=OrderCurrencyEnum.RUB,
+        total_sale_cny=revenue,
+        total_cost_cny=Decimal("0"),
+        notes=notes,
+        tracking_number=ref,
+        source="net",
+        external_ref=ref,
+        excluded_from_accounting=False,
+    )
+    db.add(order)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        order = (await db.execute(
+            select(Order).where(Order.external_ref == ref, Order.source == "net")
+        )).scalar_one_or_none()
+        if order is None:
+            raise NetUpsertError("upsert race, retry")
+        order.total_sale_cny = revenue
+        order.notes = notes
+        order.excluded_from_accounting = False
+        await db.commit()
+        return {"ok": True, "shipment_ref": ref,
+                "erp_order_number": order.order_number, "created": False}
+
+    await db.commit()
+    return {"ok": True, "shipment_ref": ref,
+            "erp_order_number": order.order_number, "created": True}
