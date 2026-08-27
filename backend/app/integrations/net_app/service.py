@@ -15,6 +15,7 @@ from app.models.order import Order, OrderStatus, OrderCurrencyEnum
 from app.models.business_type import BusinessType
 from app.models.counterparty import Counterparty, CounterpartyType, CurrencyEnum
 from app.models.company import Company
+from app.models.exchange_rate import ExchangeRate
 from app.models.user import User
 from app.models.user_role import UserRoleEntry
 from app.models.net_status_event import NetStatusEvent
@@ -235,6 +236,33 @@ async def _get_or_create_retail_client(db: AsyncSession) -> Counterparty:
     return c
 
 
+async def _rate_to_cny(db: AsyncSession, currency: str, on_date: date) -> Decimal | None:
+    """Курс валюты→CNY на дату: самый свежий на/до даты, иначе самый ранний. CNY→1."""
+    if not currency or currency == "CNY":
+        return Decimal("1")
+    r = (await db.execute(
+        select(ExchangeRate)
+        .where(ExchangeRate.currency == currency, ExchangeRate.rate_date <= on_date)
+        .order_by(ExchangeRate.rate_date.desc()).limit(1)
+    )).scalar_one_or_none()
+    if not r:
+        r = (await db.execute(
+            select(ExchangeRate)
+            .where(ExchangeRate.currency == currency)
+            .order_by(ExchangeRate.rate_date.asc()).limit(1)
+        )).scalar_one_or_none()
+    return r.rate_to_cny if r else None
+
+
+async def _shipment_revenue_cny(db: AsyncSession, revenue_rub: Decimal, on_date: date) -> Decimal:
+    """RUB-выручку → CNY по курсу (бухгалтерия сводится в CNY)."""
+    rate = await _rate_to_cny(db, "RUB", on_date)
+    if rate is None:
+        log.warning("net shipment: no RUB rate, storing raw revenue as CNY")
+        return revenue_rub
+    return (revenue_rub * rate).quantize(Decimal("0.01"))
+
+
 def _shipment_notes(payload: NetShipmentIn) -> str:
     boxes_n = payload.boxes_count if payload.boxes_count is not None else len(payload.boxes)
     head = f"Отправка {payload.shipment_ref} · коробок: {boxes_n}"
@@ -242,6 +270,8 @@ def _shipment_notes(payload: NetShipmentIn) -> str:
         head += f" · посылок: {payload.parcels_count}"
     if payload.total_weight_kg is not None:
         head += f" · вес: {payload.total_weight_kg} кг"
+    if payload.total_paid_rub is not None:
+        head += f" · оплачено: {payload.total_paid_rub} ₽"
     lines = [head]
     if payload.destinations:
         lines.append("Города: " + ", ".join(payload.destinations))
@@ -265,7 +295,7 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
     """
     ref = payload.shipment_ref.strip()
     created_at = payload.created_at or datetime.now(timezone.utc)
-    revenue = Decimal(str(payload.total_paid_rub or 0)).quantize(Decimal("0.01"))
+    revenue_rub = Decimal(str(payload.total_paid_rub or 0)).quantize(Decimal("0.01"))
     notes = _shipment_notes(payload)
 
     bt = (await db.execute(
@@ -279,7 +309,7 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
     )).scalar_one_or_none()
 
     if order is not None:
-        order.total_sale_cny = revenue
+        order.total_sale_cny = await _shipment_revenue_cny(db, revenue_rub, order.order_date)
         order.notes = notes
         order.tracking_number = ref
         order.excluded_from_accounting = False
@@ -287,6 +317,8 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
         return {"ok": True, "shipment_ref": ref,
                 "erp_order_number": order.order_number, "created": False}
 
+    order_date = created_at.date()
+    revenue_cny = await _shipment_revenue_cny(db, revenue_rub, order_date)
     company = await _get_company(db)
     system_user = await _get_system_user(db)
     client = await _get_or_create_retail_client(db)
@@ -299,10 +331,10 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
         business_type_id=bt.id,
         manager_id=system_user.id,
         created_by=system_user.id,
-        order_date=created_at.date(),
+        order_date=order_date,
         status=OrderStatus.active,
         client_currency=OrderCurrencyEnum.RUB,
-        total_sale_cny=revenue,
+        total_sale_cny=revenue_cny,
         total_cost_cny=Decimal("0"),
         notes=notes,
         tracking_number=ref,
@@ -320,7 +352,7 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
         )).scalar_one_or_none()
         if order is None:
             raise NetUpsertError("upsert race, retry")
-        order.total_sale_cny = revenue
+        order.total_sale_cny = await _shipment_revenue_cny(db, revenue_rub, order.order_date)
         order.notes = notes
         order.excluded_from_accounting = False
         await db.commit()
