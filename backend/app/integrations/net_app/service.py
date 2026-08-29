@@ -7,11 +7,12 @@ import logging
 from datetime import datetime, timezone, date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order, OrderStatus, OrderCurrencyEnum
+from app.models.order_item import OrderItem
 from app.models.business_type import BusinessType
 from app.models.counterparty import Counterparty, CounterpartyType, CurrencyEnum
 from app.models.company import Company
@@ -254,13 +255,30 @@ async def _rate_to_cny(db: AsyncSession, currency: str, on_date: date) -> Decima
     return r.rate_to_cny if r else None
 
 
-async def _shipment_revenue_cny(db: AsyncSession, revenue_rub: Decimal, on_date: date) -> Decimal:
-    """RUB-выручку → CNY по курсу (бухгалтерия сводится в CNY)."""
+async def _shipment_revenue_cny(db: AsyncSession, revenue_rub: Decimal, on_date: date) -> Decimal | None:
+    """RUB-выручку → CNY по курсу. None, если курса RUB нет вообще.
+
+    НИКОГДА не подставляем рубли как юани 1:1 — это исказило бы бухгалтерию (~×12).
+    """
     rate = await _rate_to_cny(db, "RUB", on_date)
     if rate is None:
-        log.warning("net shipment: no RUB rate, storing raw revenue as CNY")
-        return revenue_rub
+        return None
     return (revenue_rub * rate).quantize(Decimal("0.01"))
+
+
+def _apply_revenue(order: Order, revenue_cny: Decimal | None) -> None:
+    """Проставить выручку и признак учёта.
+
+    Нет курса RUB → 0 и `excluded_from_accounting=True` (вне учёта, needs-FX);
+    при ре-синке, когда курс появится, заказ пересчитается и вернётся в учёт.
+    """
+    if revenue_cny is None:
+        log.warning("net shipment %s: no RUB rate → booked 0, excluded from accounting", order.order_number)
+        order.total_sale_cny = Decimal("0")
+        order.excluded_from_accounting = True
+    else:
+        order.total_sale_cny = revenue_cny
+        order.excluded_from_accounting = False
 
 
 def _shipment_notes(payload: NetShipmentIn) -> str:
@@ -287,6 +305,63 @@ def _shipment_notes(payload: NetShipmentIn) -> str:
     return "\n".join(lines)
 
 
+async def _rub_to_usd(db: AsyncSession, amount_rub: Decimal, on_date: date) -> Decimal | None:
+    """RUB → USD через CNY-курсы: usd = rub * (CNY/RUB) / (CNY/USD)."""
+    if amount_rub is None:
+        return None
+    rub = await _rate_to_cny(db, "RUB", on_date)  # CNY за 1 RUB
+    usd = await _rate_to_cny(db, "USD", on_date)   # CNY за 1 USD
+    if not rub or not usd or usd == 0:
+        return None
+    return Decimal(str(amount_rub)) * rub / usd
+
+
+def _shipment_destination(payload: NetShipmentIn) -> str | None:
+    """Пункт назначения: один город — как есть, несколько — через запятую."""
+    dests = [d for d in (payload.destinations or []) if d]
+    if not dests:
+        return None
+    return dests[0] if len(dests) == 1 else ", ".join(dests)
+
+
+async def _rebuild_shipment_items(db: AsyncSession, order: Order, payload: NetShipmentIn) -> None:
+    """Пересобрать позиции заказа из коробок отправки (одна позиция на коробку).
+
+    Идемпотентно: удаляем прежние позиции NET-заказа и создаём заново — чтобы ⟳ ре-синк
+    из WH обновлял вес/объём/плотность/цену-кг.
+    """
+    await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
+    await db.flush()
+    for b in payload.boxes:
+        weight = Decimal(str(b.weight_kg)) if b.weight_kg is not None else None
+        volume = Decimal(str(b.volume_m3)) if b.volume_m3 is not None else None
+        density = None
+        if weight is not None and volume not in (None, Decimal("0")) and volume != 0:
+            density = (weight / volume).quantize(Decimal("0.01"))
+        price_per_kg = None
+        ppk_ccy = None
+        if weight is not None and weight != 0 and b.paid_rub is not None:
+            usd = await _rub_to_usd(db, Decimal(str(b.paid_rub)), order.order_date)
+            if usd is not None:
+                price_per_kg = (usd / weight).quantize(Decimal("0.01"))
+                ppk_ccy = "USD"
+        qty = Decimal(str(b.parcels_count)) if b.parcels_count is not None else None
+        db.add(OrderItem(
+            id=uuid.uuid4(),
+            order_id=order.id,
+            name=f"{b.box_code or '?'} · {b.city or '—'}",
+            quantity=qty,
+            unit="шт",
+            weight_kg=weight,
+            volume_m3=volume,
+            density_kg_m3=density,
+            price_per_kg=price_per_kg,
+            price_per_kg_currency=ppk_ccy,
+            places_count=b.parcels_count,
+        ))
+    await db.flush()
+
+
 async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
     """Идемпотентный upsert агрегатного заказа-отправки по shipment_ref.
 
@@ -309,10 +384,11 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
     )).scalar_one_or_none()
 
     if order is not None:
-        order.total_sale_cny = await _shipment_revenue_cny(db, revenue_rub, order.order_date)
+        _apply_revenue(order, await _shipment_revenue_cny(db, revenue_rub, order.order_date))
         order.notes = notes
         order.tracking_number = ref
-        order.excluded_from_accounting = False
+        order.destination = _shipment_destination(payload)
+        await _rebuild_shipment_items(db, order, payload)
         await db.commit()
         return {"ok": True, "shipment_ref": ref,
                 "erp_order_number": order.order_number, "created": False}
@@ -334,14 +410,16 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
         order_date=order_date,
         status=OrderStatus.active,
         client_currency=OrderCurrencyEnum.RUB,
-        total_sale_cny=revenue_cny,
+        total_sale_cny=Decimal("0"),
         total_cost_cny=Decimal("0"),
         notes=notes,
         tracking_number=ref,
+        destination=_shipment_destination(payload),
         source="net",
         external_ref=ref,
         excluded_from_accounting=False,
     )
+    _apply_revenue(order, revenue_cny)
     db.add(order)
     try:
         await db.flush()
@@ -352,13 +430,15 @@ async def upsert_net_shipment(db: AsyncSession, payload: NetShipmentIn) -> dict:
         )).scalar_one_or_none()
         if order is None:
             raise NetUpsertError("upsert race, retry")
-        order.total_sale_cny = await _shipment_revenue_cny(db, revenue_rub, order.order_date)
+        _apply_revenue(order, await _shipment_revenue_cny(db, revenue_rub, order.order_date))
         order.notes = notes
-        order.excluded_from_accounting = False
+        order.destination = _shipment_destination(payload)
+        await _rebuild_shipment_items(db, order, payload)
         await db.commit()
         return {"ok": True, "shipment_ref": ref,
                 "erp_order_number": order.order_number, "created": False}
 
+    await _rebuild_shipment_items(db, order, payload)
     await db.commit()
     return {"ok": True, "shipment_ref": ref,
             "erp_order_number": order.order_number, "created": True}
