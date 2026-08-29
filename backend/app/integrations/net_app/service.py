@@ -325,40 +325,45 @@ def _shipment_destination(payload: NetShipmentIn) -> str | None:
 
 
 async def _rebuild_shipment_items(db: AsyncSession, order: Order, payload: NetShipmentIn) -> None:
-    """Пересобрать позиции заказа из коробок отправки (одна позиция на коробку).
+    """Пересобрать позицию груза заказа — ОДНА сводная строка на отправку.
 
-    Идемпотентно: удаляем прежние позиции NET-заказа и создаём заново — чтобы ⟳ ре-синк
-    из WH обновлял вес/объём/плотность/цену-кг.
+    По правилу владельца: «место = коробка», поэтому Мест = boxes_count, а вес/объём —
+    суммарные по отправке. Идемпотентно: удаляем прежние позиции и создаём заново
+    (⟳ ре-синк из WH обновит вес/объём/плотность/цену-кг).
     """
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
     await db.flush()
-    for b in payload.boxes:
-        weight = Decimal(str(b.weight_kg)) if b.weight_kg is not None else None
-        volume = Decimal(str(b.volume_m3)) if b.volume_m3 is not None else None
-        density = None
-        if weight is not None and volume not in (None, Decimal("0")) and volume != 0:
-            density = (weight / volume).quantize(Decimal("0.01"))
-        price_per_kg = None
-        ppk_ccy = None
-        if weight is not None and weight != 0 and b.paid_rub is not None:
-            usd = await _rub_to_usd(db, Decimal(str(b.paid_rub)), order.order_date)
-            if usd is not None:
-                price_per_kg = (usd / weight).quantize(Decimal("0.01"))
-                ppk_ccy = "USD"
-        qty = Decimal(str(b.parcels_count)) if b.parcels_count is not None else None
-        db.add(OrderItem(
-            id=uuid.uuid4(),
-            order_id=order.id,
-            name=f"{b.box_code or '?'} · {b.city or '—'}",
-            quantity=qty,
-            unit="шт",
-            weight_kg=weight,
-            volume_m3=volume,
-            density_kg_m3=density,
-            price_per_kg=price_per_kg,
-            price_per_kg_currency=ppk_ccy,
-            places_count=b.parcels_count,
-        ))
+
+    weight = Decimal(str(payload.total_weight_kg)) if payload.total_weight_kg is not None else None
+    volume = Decimal(str(payload.total_volume_m3)) if payload.total_volume_m3 is not None else None
+    density = None
+    if weight is not None and volume not in (None, Decimal("0")) and volume != 0:
+        density = (weight / volume).quantize(Decimal("0.01"))
+
+    price_per_kg = None
+    ppk_ccy = None
+    if weight is not None and weight != 0 and payload.total_paid_rub is not None:
+        usd = await _rub_to_usd(db, Decimal(str(payload.total_paid_rub)), order.order_date)
+        if usd is not None:
+            price_per_kg = (usd / weight).quantize(Decimal("0.01"))
+            ppk_ccy = "USD"
+
+    boxes_n = payload.boxes_count if payload.boxes_count is not None else (len(payload.boxes) or None)
+    qty = Decimal(str(boxes_n)) if boxes_n is not None else None
+
+    db.add(OrderItem(
+        id=uuid.uuid4(),
+        order_id=order.id,
+        name=f"Сборный груз {payload.shipment_ref.strip()}",
+        quantity=qty,
+        unit="кор.",
+        weight_kg=weight,
+        volume_m3=volume,
+        density_kg_m3=density,
+        price_per_kg=price_per_kg,
+        price_per_kg_currency=ppk_ccy,
+        places_count=boxes_n,
+    ))
     await db.flush()
 
 
