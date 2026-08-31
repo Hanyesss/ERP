@@ -169,6 +169,7 @@ export default function OrderDetailPage() {
 
   const isLogistics = order.business_type_code === "logistics";
   const isService = order.business_type_code === "services";
+  const isExchange = order.business_type_code === "currency_exchange";
   const isNet = order.source === "net";
   const expensesCny = order.expenses_cny ?? 0;
   const totalCostCny = order.total_cost_cny ?? 0;
@@ -342,6 +343,25 @@ export default function OrderDetailPage() {
                 {order.tracking_number && (
                   <Descriptions.Item label={t("order.tracking_number")}>{order.tracking_number}</Descriptions.Item>
                 )}
+              </Descriptions>
+            </>
+          )}
+
+          {isExchange && (
+            <>
+              <Divider>{t("order.exchange")}</Divider>
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label={t("order.exchange_amount")}>
+                  {Number(order.exchange_amount ?? 0).toLocaleString("ru-RU")} {order.exchange_buy_currency}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("order.exchange_sell_currency")}>{order.exchange_sell_currency}</Descriptions.Item>
+                <Descriptions.Item label={t("order.exchange_buy_rate")}>{order.exchange_buy_rate}</Descriptions.Item>
+                <Descriptions.Item label={t("order.exchange_sell_rate")}>{order.exchange_sell_rate}</Descriptions.Item>
+                <Descriptions.Item label={t("order.exchange_profit")} span={2}>
+                  <Text strong type={(order.exchange_profit ?? 0) >= 0 ? "success" : "danger"} style={{ fontSize: 16 }}>
+                    {Number(order.exchange_profit ?? 0).toLocaleString("ru-RU", { minimumFractionDigits: 2 })} {order.exchange_sell_currency}
+                  </Text>
+                </Descriptions.Item>
               </Descriptions>
             </>
           )}
@@ -934,7 +954,9 @@ export default function OrderDetailPage() {
       </Row>
 
       <Tabs items={[
-        ...(isService ? tabItems.filter((ti) => ti.key !== "purchases") : tabItems),
+        ...(isExchange
+          ? tabItems.filter((ti) => ti.key !== "purchases" && ti.key !== "items")
+          : isService ? tabItems.filter((ti) => ti.key !== "purchases") : tabItems),
         ...(isNet ? [{
           key: "cargo",
           label: t("order.cargo_movement"),

@@ -74,6 +74,12 @@ class OrderCreate(BaseModel):
     tracking_number: Optional[str] = None
     warehouse_id: Optional[uuid.UUID] = None
     excluded_from_accounting: bool = False
+    # Обмен валют
+    exchange_amount: Optional[Decimal] = None
+    exchange_buy_currency: Optional[str] = None
+    exchange_sell_currency: Optional[str] = None
+    exchange_buy_rate: Optional[Decimal] = None
+    exchange_sell_rate: Optional[Decimal] = None
 
 
 class OrderUpdate(BaseModel):
@@ -92,6 +98,12 @@ class OrderUpdate(BaseModel):
     tracking_number: Optional[str] = None
     warehouse_id: Optional[uuid.UUID] = None
     excluded_from_accounting: Optional[bool] = None
+    # Обмен валют
+    exchange_amount: Optional[Decimal] = None
+    exchange_buy_currency: Optional[str] = None
+    exchange_sell_currency: Optional[str] = None
+    exchange_buy_rate: Optional[Decimal] = None
+    exchange_sell_rate: Optional[Decimal] = None
 
 
 # ── Item response (role-aware) ─────────────────────────────────────────────────
@@ -237,6 +249,12 @@ class OrderResponseManager(BaseModel):
     cargo_status: Optional[str] = None
     cargo_status_label: Optional[str] = None
     cargo_status_at: Optional[datetime] = None
+    exchange_amount: Optional[Decimal] = None
+    exchange_buy_currency: Optional[str] = None
+    exchange_sell_currency: Optional[str] = None
+    exchange_buy_rate: Optional[Decimal] = None
+    exchange_sell_rate: Optional[Decimal] = None
+    exchange_profit: Optional[Decimal] = None
 
 
 class OrderResponseFull(BaseModel):
@@ -285,6 +303,12 @@ class OrderResponseFull(BaseModel):
     cargo_status: Optional[str] = None
     cargo_status_label: Optional[str] = None
     cargo_status_at: Optional[datetime] = None
+    exchange_amount: Optional[Decimal] = None
+    exchange_buy_currency: Optional[str] = None
+    exchange_sell_currency: Optional[str] = None
+    exchange_buy_rate: Optional[Decimal] = None
+    exchange_sell_rate: Optional[Decimal] = None
+    exchange_profit: Optional[Decimal] = None
 
 
 # Alias for imports that still use OrderResponse

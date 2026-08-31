@@ -223,6 +223,12 @@ async def _load_order_detail(
             cargo_status=order.cargo_status,
             cargo_status_label=order.cargo_status_label,
             cargo_status_at=order.cargo_status_at,
+            exchange_amount=order.exchange_amount,
+            exchange_buy_currency=order.exchange_buy_currency,
+            exchange_sell_currency=order.exchange_sell_currency,
+            exchange_buy_rate=order.exchange_buy_rate,
+            exchange_sell_rate=order.exchange_sell_rate,
+            exchange_profit=_exchange_profit(order),
         )
 
     # pi_by_item already loaded above (before is_manager_only branch)
@@ -296,7 +302,53 @@ async def _load_order_detail(
         cargo_status=order.cargo_status,
         cargo_status_label=order.cargo_status_label,
         cargo_status_at=order.cargo_status_at,
+        exchange_amount=order.exchange_amount,
+        exchange_buy_currency=order.exchange_buy_currency,
+        exchange_sell_currency=order.exchange_sell_currency,
+        exchange_buy_rate=order.exchange_buy_rate,
+        exchange_sell_rate=order.exchange_sell_rate,
+        exchange_profit=_exchange_profit(order),
     )
+
+
+async def _lenient_rate_to_cny(db: AsyncSession, currency: str, on_date: date) -> Decimal:
+    """Курс валюты→CNY: самый свежий на/до даты, иначе самый ранний, иначе 1."""
+    if not currency or currency == "CNY":
+        return Decimal("1")
+    r = (await db.execute(
+        select(ExchangeRate)
+        .where(ExchangeRate.currency == currency, ExchangeRate.rate_date <= on_date)
+        .order_by(ExchangeRate.rate_date.desc()).limit(1)
+    )).scalar_one_or_none()
+    if not r:
+        r = (await db.execute(
+            select(ExchangeRate)
+            .where(ExchangeRate.currency == currency)
+            .order_by(ExchangeRate.rate_date.asc()).limit(1)
+        )).scalar_one_or_none()
+    return r.rate_to_cny if r else Decimal("1")
+
+
+async def _compute_exchange_totals(db, order_date, amount, buy_rate, sell_rate, sell_currency):
+    """Обмен валют: прибыль = сумма×(курс_прод−курс_закуп) в валюте продажи;
+    total_sale/cost в CNY, чтобы маржа = прибыль."""
+    amount = Decimal(str(amount or 0))
+    buy_rate = Decimal(str(buy_rate or 0))
+    sell_rate = Decimal(str(sell_rate or 0))
+    buy_total = amount * buy_rate      # в валюте продажи
+    sell_total = amount * sell_rate
+    profit = (sell_total - buy_total).quantize(Decimal("0.01"))
+    rate_cny = await _lenient_rate_to_cny(db, sell_currency, order_date)
+    total_sale_cny = (sell_total * rate_cny).quantize(Decimal("0.01"))
+    total_cost_cny = (buy_total * rate_cny).quantize(Decimal("0.01"))
+    return total_sale_cny, total_cost_cny, profit
+
+
+def _exchange_profit(order) -> Optional[Decimal]:
+    """Прибыль сделки обмена в валюте продажи (для отображения)."""
+    if order.exchange_amount is None or order.exchange_buy_rate is None or order.exchange_sell_rate is None:
+        return None
+    return (order.exchange_amount * (order.exchange_sell_rate - order.exchange_buy_rate)).quantize(Decimal("0.01"))
 
 
 def _collect_currencies(items_data, charges_data) -> set[str]:
@@ -395,6 +447,13 @@ async def get_next_number(
         code = client_code or "XXX"
         places = places_count or 0
         return {"order_number": f"IRS-{code}-{ddmm}-{places}"}
+    elif business_type_code == "currency_exchange":
+        yyyy = order_date.strftime("%Y")
+        prefix = f"EX{yyyy}{ddmm}-"
+        count = (await db.execute(
+            select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
+        )).scalar_one()
+        return {"order_number": f"{prefix}{count + 1}"}
     else:
         yyyy = order_date.strftime("%Y")
         prefix = f"PI{yyyy}{ddmm}-"
@@ -643,10 +702,16 @@ async def create_order(
 
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == body.business_type_id))).scalar_one_or_none()
     is_logistics = bt and bt.code == "logistics"
+    is_exchange = bt and bt.code == "currency_exchange"
 
     # Склад обязателен для логистики: иначе заказ выпадает из разбивки по складам в отчёте тоннажа
     if is_logistics and not body.warehouse_id:
         raise HTTPException(422, "Для логистического заказа необходимо указать склад")
+
+    if is_exchange and (body.exchange_amount is None or not body.exchange_buy_currency
+                        or not body.exchange_sell_currency or body.exchange_buy_rate is None
+                        or body.exchange_sell_rate is None):
+        raise HTTPException(422, "Для обмена валют укажите сумму, валюты и курсы")
 
     order = Order(
         id=uuid.uuid4(),
@@ -670,24 +735,37 @@ async def create_order(
         warehouse_id=body.warehouse_id,
         created_by=current_user.id,
         excluded_from_accounting=body.excluded_from_accounting,
+        exchange_amount=body.exchange_amount if is_exchange else None,
+        exchange_buy_currency=body.exchange_buy_currency if is_exchange else None,
+        exchange_sell_currency=body.exchange_sell_currency if is_exchange else None,
+        exchange_buy_rate=body.exchange_buy_rate if is_exchange else None,
+        exchange_sell_rate=body.exchange_sell_rate if is_exchange else None,
     )
     db.add(order)
     await db.flush()
 
-    rates = await _save_items_and_charges(db, order.id, body.order_date, body.items, body.charges, is_logistics)
-    await db.flush()
-
-    if is_logistics:
-        total_sale = _calc_logistics_totals(body.items, body.charges, rates)
+    if is_exchange:
+        total_sale, total_cost, _profit = await _compute_exchange_totals(
+            db, body.order_date, body.exchange_amount, body.exchange_buy_rate,
+            body.exchange_sell_rate, body.exchange_sell_currency,
+        )
+        order.total_sale_cny = total_sale
+        order.total_cost_cny = total_cost
     else:
-        total_sale = _calc_trade_totals(body.items, rates)
+        rates = await _save_items_and_charges(db, order.id, body.order_date, body.items, body.charges, is_logistics)
+        await db.flush()
 
-    order.total_sale_cny = total_sale
-    order.total_cost_cny = Decimal("0")
+        if is_logistics:
+            total_sale = _calc_logistics_totals(body.items, body.charges, rates)
+        else:
+            total_sale = _calc_trade_totals(body.items, rates)
 
-    # Авто-создание плана платежа (ожидаемый входящий от клиента)
-    from app.services.payment_plans import create_plan_for_order
-    await create_plan_for_order(db, order, current_user.id)
+        order.total_sale_cny = total_sale
+        order.total_cost_cny = Decimal("0")
+
+        # Авто-создание плана платежа (ожидаемый входящий от клиента)
+        from app.services.payment_plans import create_plan_for_order
+        await create_plan_for_order(db, order, current_user.id)
 
     await write_audit(db, current_user.id, "order", order.id, AuditActionEnum.create,
                       {"order_number": order.order_number, "total_sale_cny": str(total_sale)})
@@ -756,6 +834,7 @@ async def update_order(
     bt_id = update_data.get("business_type_id", order.business_type_id)
     bt = (await db.execute(select(BusinessType).where(BusinessType.id == bt_id))).scalar_one_or_none()
     is_logistics = bt and bt.code == "logistics"
+    is_exchange = bt and bt.code == "currency_exchange"
 
     # Склад обязателен для логистики — в т.ч. нельзя очистить его при редактировании
     if is_logistics and not update_data.get("warehouse_id", order.warehouse_id):
@@ -848,6 +927,13 @@ async def update_order(
 
     for field, value in update_data.items():
         setattr(order, field, value)
+
+    # Обмен валют: пересчёт итогов из (обновлённых) полей сделки
+    if is_exchange:
+        order.total_sale_cny, order.total_cost_cny, _ = await _compute_exchange_totals(
+            db, order.order_date, order.exchange_amount, order.exchange_buy_rate,
+            order.exchange_sell_rate, order.exchange_sell_currency,
+        )
 
     # Синхронизируем ожидаемую сумму плана платежа с новой суммой заказа
     from app.services.payment_plans import sync_plan_for_order

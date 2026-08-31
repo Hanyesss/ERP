@@ -12,6 +12,7 @@ BUSINESS_TYPES = [
     {"code": "trade", "name": "Торговля", "name_cn": "贸易"},
     {"code": "logistics", "name": "Логистика", "name_cn": "物流"},
     {"code": "services", "name": "Услуги", "name_cn": "服务"},
+    {"code": "currency_exchange", "name": "Обмен валют", "name_cn": "货币兑换"},
 ]
 
 WAREHOUSES = [

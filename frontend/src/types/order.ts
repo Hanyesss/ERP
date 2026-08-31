@@ -128,6 +128,13 @@ export interface Order {
   cargo_status?: string;
   cargo_status_label?: string;
   cargo_status_at?: string;
+  // Обмен валют
+  exchange_amount?: number;
+  exchange_buy_currency?: string;
+  exchange_sell_currency?: string;
+  exchange_buy_rate?: number;
+  exchange_sell_rate?: number;
+  exchange_profit?: number;
 }
 
 export interface NetStatusEvent {
@@ -191,6 +198,11 @@ export interface OrderFormData {
   arrival_date?: string;
   tracking_number?: string;
   excluded_from_accounting?: boolean;
+  exchange_amount?: number;
+  exchange_buy_currency?: string;
+  exchange_sell_currency?: string;
+  exchange_buy_rate?: number;
+  exchange_sell_rate?: number;
 }
 
 export interface AvailableForPurchaseItem {

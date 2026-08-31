@@ -17,6 +17,7 @@ import { getWarehouses } from "../api/warehouses";
 import OrderItemsEditor, { type PendingItemPhotos } from "../components/orders/OrderItemsEditor";
 import LogisticsItemsEditor from "../components/orders/LogisticsItemsEditor";
 import ServiceItemEditor from "../components/orders/ServiceItemEditor";
+import ExchangeEditor from "../components/orders/ExchangeEditor";
 import ChargesEditor from "../components/orders/ChargesEditor";
 import OrderFilesTab from "../components/orders/OrderFilesTab";
 import ItemPhotosEditor from "../components/orders/ItemPhotosEditor";
@@ -195,6 +196,7 @@ export default function OrderFormPage({ user }: Props) {
 
   const isLogistics = businessTypeCode === "logistics";
   const isService = businessTypeCode === "services";
+  const isExchange = businessTypeCode === "currency_exchange";
 
   const clientCode = useMemo(() => {
     if (!clientId || !clients) return undefined;
@@ -321,6 +323,11 @@ export default function OrderFormPage({ user }: Props) {
         arrival_date: existingOrder.arrival_date ? dayjs(existingOrder.arrival_date) : null,
         tracking_number: existingOrder.tracking_number,
         warehouse_id: existingOrder.warehouse_id || undefined,
+        exchange_amount: (existingOrder as any).exchange_amount != null ? Number((existingOrder as any).exchange_amount) : undefined,
+        exchange_buy_currency: (existingOrder as any).exchange_buy_currency || undefined,
+        exchange_sell_currency: (existingOrder as any).exchange_sell_currency || undefined,
+        exchange_buy_rate: (existingOrder as any).exchange_buy_rate != null ? Number((existingOrder as any).exchange_buy_rate) : undefined,
+        exchange_sell_rate: (existingOrder as any).exchange_sell_rate != null ? Number((existingOrder as any).exchange_sell_rate) : undefined,
         items: existingOrder.items.map((i: any) => ({
           id: i.id,          // ← передаём id для корректного upsert на бэке
           name: i.name, name_cn: i.name_cn,
@@ -476,7 +483,7 @@ export default function OrderFormPage({ user }: Props) {
 
   const handleSubmit = (values: any) => {
     const missingRates = rateCheck?.missing ?? [];
-    if (!isLogistics && missingRates.length > 0) {
+    if (!isLogistics && !isExchange && missingRates.length > 0) {
       message.error(t("order.missing_rate_warning", { currencies: missingRates.join(", "), date: dateStr }));
       return;
     }
@@ -722,11 +729,11 @@ export default function OrderFormPage({ user }: Props) {
 
         {/* Items */}
         <Card
-          title={isLogistics ? t("order.cargo_details") : isService ? t("order.service") : t("order.items")}
+          title={isExchange ? t("order.exchange") : isLogistics ? t("order.cargo_details") : isService ? t("order.service") : t("order.items")}
           style={{ marginBottom: 16 }}
           extra={
             <Space size="large">
-              {usedCurrencies.map(cur => (
+              {!isExchange && usedCurrencies.map(cur => (
                 <Text key={cur} type={rates[cur] ? undefined : "danger"}>
                   {cur}/CNY: {rates[cur] ? rates[cur].toFixed(4) : "⚠ нет курса"}
                 </Text>
@@ -734,7 +741,9 @@ export default function OrderFormPage({ user }: Props) {
             </Space>
           }
         >
-          {isLogistics ? (
+          {isExchange ? (
+            <ExchangeEditor form={form} />
+          ) : isLogistics ? (
             <LogisticsItemsEditor
               form={form}
               rates={rates}
@@ -771,7 +780,7 @@ export default function OrderFormPage({ user }: Props) {
                 ))}
               </Row>
             </>
-          ) : !isLogistics ? (
+          ) : (!isLogistics && !isExchange) ? (
             <Row gutter={24} style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
               <Col><Statistic title={`${t("order.total_sale")} (CNY)`} value={totalSale.toFixed(2)} /></Col>
             </Row>
