@@ -35,5 +35,23 @@ export const deletePurchase = (id: string) =>
 export const getAvailableForPurchase = (orderId: string) =>
   apiClient.get<AvailableForPurchaseItem[]>(`/api/orders/${orderId}/available-for-purchase`);
 
+export interface StockItem {
+  id: string;
+  name: string;
+  name_cn?: string;
+  unit?: string;
+  quantity: number;
+  remaining_quantity: number;
+  cost_price: number;
+  cost_price_cny: number;
+  currency: string;
+  purchase_id: string;
+  purchase_number: string;
+  purchase_date: string;
+}
+
+export const getStockItems = (params: { search?: string; only_available?: boolean } = {}) =>
+  apiClient.get<StockItem[]>("/api/purchases/stock-items", { params });
+
 export const requestPayment = (id: string) =>
   apiClient.post<Purchase>(`/api/purchases/${id}/request-payment`);

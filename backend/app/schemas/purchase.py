@@ -6,9 +6,12 @@ from pydantic import BaseModel
 
 
 class PurchaseItemCreate(BaseModel):
-    order_item_id: uuid.UUID
+    order_item_id: Optional[uuid.UUID] = None   # None → складская позиция (по name)
     quantity: Decimal
     cost_price: Decimal
+    name: Optional[str] = None                   # для складской позиции
+    name_cn: Optional[str] = None
+    unit: Optional[str] = None
 
 
 class PurchaseCreate(BaseModel):
@@ -38,12 +41,31 @@ class PurchaseUpdate(BaseModel):
 
 class PurchaseItemResponse(BaseModel):
     id: uuid.UUID
-    order_item_id: uuid.UUID
+    order_item_id: Optional[uuid.UUID] = None
     order_item_name: Optional[str] = None
     order_number: Optional[str] = None
     quantity: Decimal
     cost_price: Decimal
     cost_amount: Decimal
+    name: Optional[str] = None
+    is_stock: bool = False
+    remaining_quantity: Optional[Decimal] = None
+
+
+class StockItemResponse(BaseModel):
+    """Складская позиция с остатком (для выбора при продаже)."""
+    id: uuid.UUID
+    name: str
+    name_cn: Optional[str] = None
+    unit: Optional[str] = None
+    quantity: Decimal
+    remaining_quantity: Decimal
+    cost_price: Decimal
+    cost_price_cny: Decimal
+    currency: str
+    purchase_id: uuid.UUID
+    purchase_number: str
+    purchase_date: date
 
 
 class PurchaseResponse(BaseModel):

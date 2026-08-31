@@ -34,6 +34,9 @@ export default function PurchaseFormPage() {
   const [form] = Form.useForm();
   const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(preselectedOrderId);
   const [itemRows, setItemRows] = useState<ItemRow[]>([]);
+  const [stockMode, setStockMode] = useState(false);
+  const [stockRows, setStockRows] = useState<{ key: number; name: string; quantity: number; cost_price: number }[]>([]);
+  const stockKeyRef = useRef(1);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const purchaseNumberEditedRef = useRef(false);
@@ -235,6 +238,23 @@ export default function PurchaseFormPage() {
   });
 
   const handleSubmit = (values: any) => {
+    if (stockMode) {
+      const items = stockRows
+        .filter(r => r.name.trim() && r.quantity > 0 && r.cost_price > 0)
+        .map(r => ({ name: r.name.trim(), quantity: r.quantity, cost_price: r.cost_price }));
+      if (items.length === 0) { message.error(t("purchase.no_items_selected")); return; }
+      createMutation.mutate({
+        purchase_number: values.purchase_number,
+        supplier_id: values.supplier_id,
+        purchase_date: values.purchase_date.format("YYYY-MM-DD"),
+        currency: values.currency,
+        rate_to_cny: values.rate_to_cny ?? 1,
+        notes: values.notes,
+        items: items as any,
+        excluded_from_accounting: values.excluded_from_accounting ?? false,
+      } as any);
+      return;
+    }
     if (isLogistics) {
       if (!selectedOrderId) {
         message.error(t("purchase.select_order"));
@@ -381,8 +401,18 @@ export default function PurchaseFormPage() {
                   onSearch={setOrderSearch}
                   placeholder={t("purchase.select_order")}
                   allowClear
+                  disabled={stockMode}
                 />
               </Form.Item>
+              <Checkbox
+                checked={stockMode}
+                onChange={e => {
+                  setStockMode(e.target.checked);
+                  if (e.target.checked) { setSelectedOrderId(undefined); setItemRows([]); }
+                }}
+              >
+                {t("purchase.stock_mode")}
+              </Checkbox>
             </Col>
           </Row>
 
@@ -446,8 +476,61 @@ export default function PurchaseFormPage() {
           </Row>
         </Card>
 
+        {/* Stock mode: free-form stock items (no order) */}
+        {stockMode && (
+          <Card title={t("purchase.stock_items")} style={{ marginBottom: 16 }}>
+            <Table scroll={{ x: "max-content" }}
+              dataSource={stockRows}
+              rowKey="key"
+              size="small"
+              pagination={false}
+              columns={[
+                {
+                  title: t("order.item_name"), key: "name",
+                  render: (_, row) => (
+                    <Input size="small" value={row.name}
+                      placeholder={t("order.item_name")}
+                      onChange={e => setStockRows(rows => rows.map(r => r.key === row.key ? { ...r, name: e.target.value } : r))} />
+                  ),
+                },
+                {
+                  title: t("order.item_quantity"), key: "qty", width: 130,
+                  render: (_, row) => (
+                    <InputNumber size="small" min={0} value={row.quantity} style={{ width: "100%" }}
+                      onChange={v => setStockRows(rows => rows.map(r => r.key === row.key ? { ...r, quantity: Number(v ?? 0) } : r))} />
+                  ),
+                },
+                {
+                  title: `${t("purchase.cost_price")} (${currency})`, key: "cost", width: 150,
+                  render: (_, row) => (
+                    <InputNumber size="small" min={0} value={row.cost_price} style={{ width: "100%" }}
+                      onChange={v => setStockRows(rows => rows.map(r => r.key === row.key ? { ...r, cost_price: Number(v ?? 0) } : r))} />
+                  ),
+                },
+                {
+                  title: `${t("purchase.total")} (${currency})`, key: "total", align: "right", width: 120,
+                  render: (_, row) => (row.quantity * row.cost_price).toFixed(2),
+                },
+                {
+                  title: "", key: "del", width: 40,
+                  render: (_, row) => (
+                    <Button size="small" danger
+                      onClick={() => setStockRows(rows => rows.filter(r => r.key !== row.key))}>✕</Button>
+                  ),
+                },
+              ]}
+              footer={() => (
+                <Button type="dashed" block
+                  onClick={() => setStockRows(rows => [...rows, { key: stockKeyRef.current++, name: "", quantity: 1, cost_price: 0 }])}>
+                  + {t("order.add_item")}
+                </Button>
+              )}
+            />
+          </Card>
+        )}
+
         {/* Trade/services: per-item table */}
-        {!isLogistics && itemRows.length > 0 && (
+        {!stockMode && !isLogistics && itemRows.length > 0 && (
           <Card title={t("purchase.items")} style={{ marginBottom: 16 }}>
             <Table scroll={{ x: "max-content" }}
               dataSource={itemRows}

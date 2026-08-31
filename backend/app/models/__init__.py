@@ -15,7 +15,7 @@ from app.models.expense import Expense, LinkTypeEnum, ReimburseStatusEnum
 from app.models.audit_log import AuditLog, AuditActionEnum
 from app.models.session import Session
 from app.models.purchase import Purchase, PurchaseCurrency, PurchasePaymentStatus
-from app.models.purchase_item import PurchaseItem
+from app.models.purchase_item import PurchaseItem, StockAllocation
 from app.models.purchase_payment_link import PurchasePaymentLink
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox, BoxItem, PackingList, BoxStatus
@@ -38,7 +38,7 @@ __all__ = [
     "AuditLog", "AuditActionEnum",
     "Session",
     "Purchase", "PurchaseCurrency", "PurchasePaymentStatus",
-    "PurchaseItem", "PurchasePaymentLink",
+    "PurchaseItem", "StockAllocation", "PurchasePaymentLink",
     "Warehouse", "WarehouseBox", "BoxItem", "PackingList", "BoxStatus",
     "PartnerPayout",
     "QuoteRequest", "SupplierQuote", "PriceUnitEnum",

@@ -19,7 +19,7 @@ from app.models.counterparty import Counterparty, CounterpartyType
 from app.models.business_type import BusinessType
 from app.models.exchange_rate import ExchangeRate
 from app.models.company import Company
-from app.models.purchase_item import PurchaseItem
+from app.models.purchase_item import PurchaseItem, StockAllocation
 from app.models.purchase import Purchase
 from app.models.payment import Payment
 from app.models.payment_allocation import PaymentAllocation
@@ -389,6 +389,31 @@ def _calc_logistics_totals(items_data, charges_data, rates: dict[str, Decimal]) 
     return total_sale.quantize(Decimal("0.01"))
 
 
+async def _allocate_stock(db: AsyncSession, order_item_id: uuid.UUID, stock_item_id: uuid.UUID, quantity) -> None:
+    """Списать `quantity` со складской позиции в позицию заказа (с проверкой остатка)."""
+    stock = (await db.execute(
+        select(PurchaseItem).where(PurchaseItem.id == stock_item_id, PurchaseItem.is_stock == True)
+    )).scalar_one_or_none()
+    if not stock:
+        raise HTTPException(422, "Складская позиция не найдена")
+    qty = Decimal(str(quantity or 0))
+    if qty <= 0:
+        return
+    used = (await db.execute(
+        select(func.coalesce(func.sum(StockAllocation.quantity), Decimal("0")))
+        .where(StockAllocation.purchase_item_id == stock_item_id)
+    )).scalar_one() or Decimal("0")
+    remaining = (stock.quantity or Decimal("0")) - used
+    if qty > remaining:
+        raise HTTPException(422, f"На складе недостаточно «{stock.name}»: остаток {remaining}, запрошено {qty}")
+    per_unit_cny = (stock.cost_amount / stock.quantity) if stock.quantity else Decimal("0")
+    cost_cny = (qty * per_unit_cny).quantize(Decimal("0.01"))
+    db.add(StockAllocation(
+        id=uuid.uuid4(), purchase_item_id=stock_item_id, order_item_id=order_item_id,
+        quantity=qty, cost_amount_cny=cost_cny,
+    ))
+
+
 async def _save_items_and_charges(
     db: AsyncSession, order_id: uuid.UUID, order_date: date,
     items_data, charges_data, is_logistics: bool,
@@ -400,8 +425,9 @@ async def _save_items_and_charges(
         if item_data.weight_kg and item_data.volume_m3 and item_data.volume_m3 != 0:
             density = (item_data.weight_kg / item_data.volume_m3).quantize(Decimal("0.01"))
 
+        oi_id = uuid.uuid4()
         db.add(OrderItem(
-            id=uuid.uuid4(),
+            id=oi_id,
             order_id=order_id,
             name=item_data.name, name_cn=item_data.name_cn,
             model=getattr(item_data, "model", None) if not is_logistics else None,
@@ -415,6 +441,11 @@ async def _save_items_and_charges(
             cargo_value=item_data.cargo_value, cargo_value_currency=item_data.cargo_value_currency,
             places_count=item_data.places_count,
         ))
+
+        stock_item_id = getattr(item_data, "stock_item_id", None)
+        if stock_item_id:
+            await db.flush()
+            await _allocate_stock(db, oi_id, stock_item_id, item_data.quantity)
 
     for charge_data in charges_data:
         r = rates.get(charge_data.currency or "CNY", Decimal("1"))
@@ -761,7 +792,10 @@ async def create_order(
             total_sale = _calc_trade_totals(body.items, rates)
 
         order.total_sale_cny = total_sale
-        order.total_cost_cny = Decimal("0")
+        # Себестоимость: списания со склада (закупки появятся позже — тогда пересчёт)
+        from app.api.purchases import _recalc_order_cost
+        await db.flush()
+        await _recalc_order_cost(db, order.id)
 
         # Авто-создание плана платежа (ожидаемый входящий от клиента)
         from app.services.payment_plans import create_plan_for_order
@@ -935,6 +969,12 @@ async def update_order(
             order.exchange_sell_rate, order.exchange_sell_currency,
         )
 
+    # Пересчёт себестоимости (в т.ч. складские списания) при изменении позиций
+    if items_data is not None and not is_exchange:
+        from app.api.purchases import _recalc_order_cost
+        await db.flush()
+        await _recalc_order_cost(db, order.id)
+
     # Синхронизируем ожидаемую сумму плана платежа с новой суммой заказа
     from app.services.payment_plans import sync_plan_for_order
     await db.flush()
@@ -1010,6 +1050,15 @@ async def cancel_order(
 
     order.status = OrderStatus.cancelled
     order.cancel_reason = body.reason
+
+    # Отмена продажи возвращает товар на склад: снимаем складские списания этого заказа
+    await db.execute(
+        delete(StockAllocation).where(
+            StockAllocation.order_item_id.in_(
+                select(OrderItem.id).where(OrderItem.order_id == order_id)
+            )
+        )
+    )
 
     # Синхронизация отмены на irsway.com
     if order.sync_status == "synced" and order.external_shipment_number:

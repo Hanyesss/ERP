@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Form, Input, InputNumber, Select, Button, Row, Col, Typography, Popover, Tooltip } from "antd";
-import { DeleteOutlined, PlusOutlined, FileTextOutlined } from "@ant-design/icons";
+import { Form, Input, InputNumber, Select, Button, Row, Col, Typography, Popover, Tooltip, Tag, Space } from "antd";
+import { DeleteOutlined, PlusOutlined, FileTextOutlined, InboxOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import type { FormInstance } from "antd";
 import CounterpartySelect from "../common/CounterpartySelect";
 import ItemPhotosPicker, { type LocalPhoto } from "./ItemPhotosPicker";
 import ItemPhotosEditor from "./ItemPhotosEditor";
+import { getStockItems } from "../../api/purchases";
 
 const { Text } = Typography;
 const CURRENCIES = ["CNY", "RUB", "USDT", "USD"];
@@ -69,6 +71,12 @@ export default function OrderItemsEditor({
   purchasedItemIds,
 }: Props) {
   const { t } = useTranslation();
+  const [stockSearch, setStockSearch] = useState("");
+
+  const { data: stockItems } = useQuery({
+    queryKey: ["stock-items", stockSearch],
+    queryFn: () => getStockItems({ search: stockSearch || undefined, only_available: true }).then(r => r.data),
+  });
 
   return (
     <Form.List name="items">
@@ -100,7 +108,13 @@ export default function OrderItemsEditor({
             return (
               <Row key={key} gutter={4} align="top" style={{ marginBottom: 8 }}>
                 <Form.Item name={[name, "id"]} hidden noStyle><Input /></Form.Item>
+                <Form.Item name={[name, "stock_item_id"]} hidden noStyle><Input /></Form.Item>
                 <Col span={3}>
+                  <Form.Item noStyle shouldUpdate>
+                    {() => form.getFieldValue(["items", name, "stock_item_id"])
+                      ? <Tag color="blue" style={{ fontSize: 10, lineHeight: "16px", marginBottom: 2 }}>📦 {t("order.from_stock")}</Tag>
+                      : null}
+                  </Form.Item>
                   <Form.Item name={[name, "name"]} rules={[{ required: true, message: "" }]} style={{ margin: 0 }}>
                     <Input size="small" placeholder={t("order.item_name")} />
                   </Form.Item>
@@ -179,13 +193,35 @@ export default function OrderItemsEditor({
             );
           })}
 
-          <Button
-            type="dashed" icon={<PlusOutlined />}
-            onClick={() => add({ sale_currency: clientCurrency || "CNY" })}
-            style={{ width: "100%", marginTop: 8 }}
-          >
-            {t("order.add_item")}
-          </Button>
+          <Space style={{ marginTop: 8, width: "100%" }} wrap>
+            <Button
+              type="dashed" icon={<PlusOutlined />}
+              onClick={() => add({ sale_currency: clientCurrency || "CNY" })}
+            >
+              {t("order.add_item")}
+            </Button>
+            <Select
+              showSearch filterOption={false} onSearch={setStockSearch}
+              value={undefined} allowClear
+              style={{ minWidth: 300 }}
+              suffixIcon={<InboxOutlined />}
+              placeholder={t("order.add_from_stock")}
+              notFoundContent={t("order.no_stock")}
+              options={(stockItems || []).map(s => ({
+                value: s.id,
+                label: `${s.name} · ${t("order.stock_remaining")} ${s.remaining_quantity}${s.unit ? " " + s.unit : ""} · ${s.cost_price} ${s.currency} (${s.purchase_number})`,
+                data: s,
+              }))}
+              onChange={(_v, opt: any) => {
+                const s = opt?.data;
+                if (s) add({
+                  name: s.name, name_cn: s.name_cn, unit: s.unit,
+                  quantity: 1, stock_item_id: s.id,
+                  sale_currency: clientCurrency || "CNY",
+                });
+              }}
+            />
+          </Space>
         </div>
       )}
     </Form.List>

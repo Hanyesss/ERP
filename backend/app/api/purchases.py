@@ -12,7 +12,7 @@ from app.database import get_db
 from app.core.deps import require_roles
 from app.models.user import User
 from app.models.purchase import Purchase, PurchasePaymentStatus
-from app.models.purchase_item import PurchaseItem
+from app.models.purchase_item import PurchaseItem, StockAllocation
 from app.models.order_item import OrderItem
 from app.models.order import Order
 from app.models.counterparty import Counterparty, CounterpartyType
@@ -22,7 +22,7 @@ from app.models.purchase_payment_link import PurchasePaymentLink
 from app.models.audit_log import AuditActionEnum
 from app.schemas.purchase import (
     PurchaseCreate, PurchaseUpdate, PurchaseResponse, PurchaseItemResponse,
-    PurchaseListItem, PurchaseListResponse,
+    PurchaseListItem, PurchaseListResponse, StockItemResponse,
 )
 from app.utils.audit import write_audit
 from app.services.notifications import on_purchase_created, on_purchase_payment_requested
@@ -97,17 +97,29 @@ async def _load_purchase(db: AsyncSession, purchase_id: uuid.UUID) -> PurchaseRe
 
     items_stmt = (
         select(PurchaseItem, OrderItem.name.label("item_name"), Order.order_number, Order.id.label("order_id_col"))
-        .join(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
-        .join(Order, OrderItem.order_id == Order.id)
+        .outerjoin(OrderItem, PurchaseItem.order_item_id == OrderItem.id)
+        .outerjoin(Order, OrderItem.order_id == Order.id)
         .where(PurchaseItem.purchase_id == purchase_id)
     )
     item_rows = (await db.execute(items_stmt)).all()
 
+    stock_ids = [r[0].id for r in item_rows if r[0].is_stock]
+    used_by_item: dict = {}
+    if stock_ids:
+        used_rows = (await db.execute(
+            select(StockAllocation.purchase_item_id, func.sum(StockAllocation.quantity))
+            .where(StockAllocation.purchase_item_id.in_(stock_ids))
+            .group_by(StockAllocation.purchase_item_id)
+        )).all()
+        used_by_item = {pid: q for pid, q in used_rows}
+
     items = [
         PurchaseItemResponse(
             id=r[0].id, order_item_id=r[0].order_item_id,
-            order_item_name=r[1], order_number=r[2],
+            order_item_name=(r[0].name if r[0].is_stock else r[1]), order_number=r[2],
             quantity=r[0].quantity, cost_price=r[0].cost_price, cost_amount=r[0].cost_amount,
+            name=r[0].name, is_stock=r[0].is_stock,
+            remaining_quantity=(r[0].quantity - (used_by_item.get(r[0].id) or Decimal("0"))) if r[0].is_stock else None,
         )
         for r in item_rows
     ]
@@ -183,7 +195,14 @@ async def _recalc_order_cost(db: AsyncSession, order_id: uuid.UUID) -> None:
         .where(Purchase.order_id == order_id, Purchase.is_deleted == False)
     )).scalar_one() or Decimal("0")
 
-    total_cost = items_cost + logistics_cost
+    # Себестоимость продаж со склада (списания из складских закупок)
+    stock_cost = (await db.execute(
+        select(func.sum(StockAllocation.cost_amount_cny))
+        .join(OrderItem, StockAllocation.order_item_id == OrderItem.id)
+        .where(OrderItem.order_id == order_id)
+    )).scalar_one() or Decimal("0")
+
+    total_cost = items_cost + logistics_cost + stock_cost
     order = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
     if order:
         order.total_cost_cny = total_cost
@@ -325,6 +344,52 @@ async def get_next_purchase_number(
     return {"purchase_number": f"{prefix}{count + 1:04d}"}
 
 
+@router.get("/stock-items", response_model=list[StockItemResponse])
+async def list_stock_items(
+    search: Optional[str] = Query(None),
+    only_available: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(*_ALLOWED)),
+):
+    """Складские позиции (закупки-остатки) с остатком для продажи."""
+    alloc_sq = (
+        select(
+            StockAllocation.purchase_item_id,
+            func.coalesce(func.sum(StockAllocation.quantity), Decimal("0")).label("used"),
+        )
+        .group_by(StockAllocation.purchase_item_id)
+        .subquery()
+    )
+    stmt = (
+        select(
+            PurchaseItem, Purchase.purchase_number, Purchase.purchase_date,
+            Purchase.currency, Purchase.rate_to_cny,
+            func.coalesce(alloc_sq.c.used, Decimal("0")).label("used"),
+        )
+        .join(Purchase, PurchaseItem.purchase_id == Purchase.id)
+        .outerjoin(alloc_sq, alloc_sq.c.purchase_item_id == PurchaseItem.id)
+        .where(PurchaseItem.is_stock == True, Purchase.is_deleted == False)
+    )
+    if search:
+        stmt = stmt.where(PurchaseItem.name.ilike(f"%{search}%"))
+    rows = (await db.execute(stmt.order_by(Purchase.purchase_date.desc()))).all()
+
+    result: list[StockItemResponse] = []
+    for pi, pnum, pdate, ccy, rate, used in rows:
+        remaining = (pi.quantity or Decimal("0")) - (used or Decimal("0"))
+        if only_available and remaining <= 0:
+            continue
+        result.append(StockItemResponse(
+            id=pi.id, name=pi.name or "", name_cn=pi.name_cn, unit=pi.unit,
+            quantity=pi.quantity, remaining_quantity=remaining,
+            cost_price=pi.cost_price,
+            cost_price_cny=(pi.cost_price * (rate or Decimal("1"))).quantize(Decimal("0.01")),
+            currency=str(ccy.value if hasattr(ccy, "value") else ccy),
+            purchase_id=pi.purchase_id, purchase_number=pnum, purchase_date=pdate,
+        ))
+    return result
+
+
 @router.get("/{purchase_id}", response_model=PurchaseResponse)
 async def get_purchase(
     purchase_id: uuid.UUID,
@@ -396,6 +461,10 @@ async def create_purchase(
 
     # ── Logistics mode: no items, direct order link + total amount ──────────────
     is_logistics = not body.items and body.order_id is not None
+    # ── Stock mode: items без order_item_id и без заказа → складские позиции ──────
+    is_stock = bool(body.items) and body.order_id is None and all(
+        i.order_item_id is None for i in body.items
+    )
 
     if is_logistics:
         if not body.total_amount or body.total_amount <= 0:
@@ -426,6 +495,49 @@ async def create_purchase(
         await _flush_purchase_with_retry(db, purchase, _auto_number, prefix)
         purchase_number = purchase.purchase_number
         affected_order_ids.add(body.order_id)
+
+    elif is_stock:
+        # ── Stock mode: складская закупка (без заказа) ──────────────────────────
+        for i in body.items:
+            if not i.name:
+                raise HTTPException(422, "Складская позиция требует наименование")
+            if i.quantity is None or i.quantity <= 0:
+                raise HTTPException(422, "Складская позиция требует количество")
+
+        total_amount = sum(i.quantity * i.cost_price for i in body.items)
+        total_amount_cny = (total_amount * rate).quantize(Decimal("0.01"))
+
+        purchase = Purchase(
+            id=uuid.uuid4(),
+            purchase_number=purchase_number,
+            company_id=company.id,
+            supplier_id=body.supplier_id,
+            purchase_date=body.purchase_date,
+            currency=body.currency,
+            total_amount=total_amount.quantize(Decimal("0.01")),
+            rate_to_cny=rate,
+            total_amount_cny=total_amount_cny,
+            payment_status=PurchasePaymentStatus.unpaid,
+            notes=body.notes,
+            created_by=current_user.id,
+            excluded_from_accounting=body.excluded_from_accounting,
+        )
+        await _flush_purchase_with_retry(db, purchase, _auto_number, prefix)
+        purchase_number = purchase.purchase_number
+
+        for i in body.items:
+            cost_amount_cny = (i.quantity * i.cost_price * rate).quantize(Decimal("0.01"))
+            db.add(PurchaseItem(
+                id=uuid.uuid4(),
+                purchase_id=purchase.id,
+                order_item_id=None,
+                is_stock=True,
+                name=i.name, name_cn=i.name_cn, unit=i.unit,
+                quantity=i.quantity,
+                cost_price=i.cost_price,
+                cost_amount=cost_amount_cny,
+            ))
+        await db.flush()
 
     else:
         # ── Trade/services mode: per-item purchases ─────────────────────────────

@@ -55,6 +55,8 @@ class OrderItemCreate(BaseModel):
     cargo_value: Optional[Decimal] = None
     cargo_value_currency: Optional[str] = None
     places_count: Optional[int] = None
+    # Продажа со склада: id складской позиции (purchase_item), из которой списываем
+    stock_item_id: Optional[uuid.UUID] = None
 
 
 class OrderCreate(BaseModel):
